@@ -92,6 +92,16 @@ The backend image now defines a healthcheck against the database-backed login CA
 
 The CI smoke test builds the production backend Docker image, runs it alongside the disposable MySQL service, and requires healthy status plus a successful login readiness API response.
 
+## Custom Caddy HTTPS port, including 2095
+
+Use `tms domain panel.example.com --https-port 2095` to move the panel's HTTPS listener off 443. The original standalone installer can also run `domain ... --https-port 2095 --install-dir /opt/tms`. The saved Caddy site address preserves its HTTPS port through panel updates and repeated domain setup; a new domain still defaults to 443. `tms info` and domain status show the full HTTPS URL.
+
+Frontend HTTP 2095 and Caddy HTTPS 2095 cannot bind the same panel-host socket. To keep public HTTPS on 2095, change `FRONTEND_PORT` in the original `.env` to an unused HTTP backup port such as 8080, run the latest installer `update`, then configure Caddy with `--https-port 2095`. Keep the original API port and credentials. New installations can use `--port 8080 --domain panel.example.com --https-port 2095` directly. HTTPS ports 80/2019 are reserved for Caddy's HTTP validation/admin listeners.
+
+Caddy publishes TCP 80 and the selected HTTPS port only. For nonstandard HTTPS ports, TLS-ALPN validation is disabled and certificates use HTTP validation on TCP 80; keep port 80 externally accessible for issuance/renewal. Reality may then use TCP 443 on the same host. Browser access must include `https://panel.example.com:2095`; DNS alone does not remove the need for that port suffix. Subscription links generated through this origin include 2095, while proxy connection ports retain their independent Reality setting.
+
+Existing Caddy bindings are distinguished from other occupied Docker/service ports. Conflicts fail before replacing configuration. The candidate is validated by Caddy before the old container is removed; startup failure attempts to restore the previous file/container binding. Certificate/data volumes remain retained. Regression checks cover legacy/default 443, custom 2095, conflicts, persistence and rollback. CI validates the actual Caddyfile and serves HTTPS 2095 with a separate TCP service occupying 443, using local test certificates instead of issuing public certificates.
+
 ## Configure Reality
 
 In protocol management, create VLESS-Reality and choose its node. The listening port field starts at **443**. Enter **8443** if desired. One-click and relay creation also expose the field. Submit the form; frontend and backend both enforce integer ports 1–65535. The backend checks database reservations and asks the selected remote node to probe TCP availability before applying the configuration.

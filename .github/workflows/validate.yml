@@ -83,6 +83,39 @@ jobs:
           bash -n panel_install.sh install.sh tms-hybrid.sh
           bash tests/installer_test.sh
           bash tests/node_installer_test.sh
+          bash tests/domain_test.sh
+      - name: Custom Caddy HTTPS port validation
+        run: |
+          export TMS_CADDY_FIXTURE_DIR="$RUNNER_TEMP/tms-caddy-test"
+          bash tests/domain_test.sh
+          docker run --rm -v "$TMS_CADDY_FIXTURE_DIR/Caddyfile":/etc/caddy/Caddyfile:ro \
+            caddy:2-alpine caddy adapt --config /etc/caddy/Caddyfile --validate > "$TMS_CADDY_FIXTURE_DIR/config.json"
+          jq -e '.apps.http.servers[].listen | index(":2095") != null' "$TMS_CADDY_FIXTURE_DIR/config.json"
+          jq -e '[.apps.http.servers[].listen[]] | index(":443") == null' "$TMS_CADDY_FIXTURE_DIR/config.json"
+          # Use local test certificates so CI never requests a public certificate.
+          sed '/    tls {/,/^    }/d;s/    encode gzip/    tls internal\n    encode gzip/' \
+            "$TMS_CADDY_FIXTURE_DIR/Caddyfile" > "$TMS_CADDY_FIXTURE_DIR/Caddyfile.local"
+          docker network create tms-caddy-test
+          docker run -d --name frontend --network tms-caddy-test nginx:alpine
+          docker run -d --name reality-port-fixture -p 443:80 nginx:alpine
+          docker run -d --name tms-caddy-test --network tms-caddy-test -p 80:80 -p 2095:2095 \
+            -v "$TMS_CADDY_FIXTURE_DIR/Caddyfile.local":/etc/caddy/Caddyfile:ro caddy:2-alpine
+          for attempt in $(seq 1 20); do
+            if curl --noproxy '*' -fkSs --resolve panel.example.test:2095:127.0.0.1 \
+                https://panel.example.test:2095/ > "$TMS_CADDY_FIXTURE_DIR/response"; then
+              grep -q 'Welcome to nginx' "$TMS_CADDY_FIXTURE_DIR/response"
+              curl --noproxy '*' -fsS http://127.0.0.1:443/ > /dev/null
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs tms-caddy-test
+          exit 1
+      - name: Clean up Caddy smoke containers
+        if: always()
+        run: |
+          docker rm -f tms-caddy-test frontend reality-port-fixture 2>/dev/null || true
+          docker network rm tms-caddy-test 2>/dev/null || true
       - name: Docker Compose validation
         run: |
           for compose in docker-compose-v4.yml docker-compose-v6.yml docker-compose-hybrid.yml; do

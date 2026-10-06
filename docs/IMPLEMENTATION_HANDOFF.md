@@ -217,3 +217,10 @@ This pre-publication snapshot covers modified tracked files only; the new files 
 - `.github/workflows/release-gost.yml`: include checksums in manually tagged agent releases too.
 - `tests/node_installer_test.sh`: check default download URLs, absence of source downloads, checksums, retained executable on failure, staging cleanup and exit status.
 - Validation workflow and deployment/README instructions include these regressions and the new defaults.
+
+## Custom panel HTTPS port follow-up
+
+- `panel_install.sh`: add `--https-port`, preserve/read the configured Caddy port, validate conflicts, generate HTTP-validation-only TLS for nonstandard ports, validate candidates and restore prior bindings on startup failure.
+- `tests/domain_test.sh`: cover 2095 with occupied 443, legacy 443, saved ports, frontend/other-service conflicts and rollback.
+- Validation workflow: parse the real Caddy config and test HTTPS 2095 while a separate container occupies TCP 443.
+- README/deployment guide: explain moving the frontend HTTP backup to 8080 and leaving API 6365/Reality 443 independent.

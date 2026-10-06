@@ -254,6 +254,33 @@ tms domain panel.example.com
 >
 > ⚠️ 配了域名后,**已经发出去的旧订阅(IP 版)不会自动更新**,要让车友重新拉一次。所以建议装好就配,人越少越好办。
 
+### 面板 HTTPS 用 2095，同机 Reality 用 443
+
+可以把 Caddy 的 HTTPS 改到 **2095**。当前前端 HTTP 入口默认也占用 2095，所以应先将 HTTP 备用入口移到另一个空闲端口（以下示例为 8080）。保持后端 API 为原来的 6365。
+
+在面板 VPS 上执行（示例使用默认目录 `/opt/tms`，自定义目录请替换）：
+
+```bash
+cp -p /opt/tms/.env /opt/tms/.env.before-https-port
+sed -i 's/^FRONTEND_PORT=.*/FRONTEND_PORT=8080/' /opt/tms/.env
+curl -fLsS https://raw.githubusercontent.com/ThatYT/Tms_EN/main/panel_install.sh -o /tmp/tms.sh
+bash /tmp/tms.sh update --install-dir /opt/tms
+bash /tmp/tms.sh domain panel.example.com --https-port 2095 --install-dir /opt/tms
+```
+
+请将 `panel.example.com` 替换为你的域名，并先确认 TCP 8080/2095 在面板机器上可用。云安全组和防火墙需要放行 **TCP 80、2095**：80 用于证书申请与续期，2095 用于面板 HTTPS。此时 Caddy 不占用 443，你可以在同机创建/编辑 Reality 使用 TCP 443。
+
+| 服务 | 端口 | 访问方式 |
+|---|---|---|
+| Caddy / 面板 HTTPS | 2095 | `https://panel.example.com:2095` |
+| 前端 HTTP 备用入口 | 8080 | `http://服务器IP:8080` |
+| 后端 API | 6365 | 保持原节点对接地址 |
+| 同机 Reality | 443 | VLESS 客户端连接 |
+
+安装好最新版脚本后，也可以用 `tms domain panel.example.com --https-port 2095`。不指定新端口重新配置同一个域名时，会保留已选端口；普通新域名仍默认 HTTPS 443。新安装可以同时指定 `--port 8080 --domain panel.example.com --https-port 2095`。
+
+通过新 HTTPS 地址登录后，面板生成的订阅链接会包含 `:2095`。已分发的旧订阅地址需要更新；订阅下载端口与 Reality 的实际连接端口是两个独立设置。配置通过验证后才重启 Caddy，启动失败时尝试恢复旧配置；已有证书卷和数据库保留。
+
 ### 二、给转发机配域名(不让车友看到你的 IP)
 
 车友拿到订阅后,能在客户端里看到每个节点的地址。默认显示的是**转发机的真实 IP**。
