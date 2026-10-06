@@ -94,7 +94,7 @@ The CI smoke test builds the production backend Docker image, runs it alongside 
 
 ## Custom Caddy HTTPS port, including 2095
 
-Use `tms domain panel.example.com --https-port 2095` to move the panel's HTTPS listener off 443. The original standalone installer can also run `domain ... --https-port 2095 --install-dir /opt/tms`. The saved Caddy site address preserves its HTTPS port through panel updates and repeated domain setup; a new domain still defaults to 443. `tms info` and domain status show the full HTTPS URL.
+Use `tms domain panel.example.com --https-port 2095` to move the panel's HTTPS listener off 443. For an existing configured domain, `tms domain --https-port 2095` reuses its hostname. The original standalone installer can also run `domain ... --https-port 2095 --install-dir /opt/tms`. The saved Caddy site address preserves its HTTPS port through panel updates and repeated domain setup; a new domain still defaults to 443. `tms info` and domain status show the full HTTPS URL.
 
 Frontend HTTP 2095 and Caddy HTTPS 2095 cannot bind the same panel-host socket. To keep public HTTPS on 2095, change `FRONTEND_PORT` in the original `.env` to an unused HTTP backup port such as 8080, run the latest installer `update`, then configure Caddy with `--https-port 2095`. Keep the original API port and credentials. New installations can use `--port 8080 --domain panel.example.com --https-port 2095` directly. HTTPS ports 80/2019 are reserved for Caddy's HTTP validation/admin listeners.
 

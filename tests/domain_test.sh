@@ -36,6 +36,8 @@ grep -q 'https://panel.example.com:2095/' "$workspace/curls"
 # Reapplying the same domain retains its selected HTTPS port.
 setup_domain panel.example.com > /dev/null
 [ "$(current_https_port)" = 2095 ]
+setup_domain "" 2095 > /dev/null
+[ "$(current_domain)" = panel.example.com ]
 cp "$CADDY_FILE" expected
 if setup_domain panel.example.com 65536 >/dev/null 2>&1; then exit 1; fi
 cmp expected "$CADDY_FILE"

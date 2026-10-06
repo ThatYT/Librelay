@@ -90,7 +90,7 @@ jobs:
           bash tests/domain_test.sh
           docker run --rm -v "$TMS_CADDY_FIXTURE_DIR/Caddyfile":/etc/caddy/Caddyfile:ro \
             caddy:2-alpine caddy adapt --config /etc/caddy/Caddyfile --validate > "$TMS_CADDY_FIXTURE_DIR/config.json"
-          jq -e '.apps.http.servers[].listen | index(":2095") != null' "$TMS_CADDY_FIXTURE_DIR/config.json"
+          jq -e '[.apps.http.servers[].listen[]] | index(":2095") != null' "$TMS_CADDY_FIXTURE_DIR/config.json"
           jq -e '[.apps.http.servers[].listen[]] | index(":443") == null' "$TMS_CADDY_FIXTURE_DIR/config.json"
           # Use local test certificates so CI never requests a public certificate.
           sed '/    tls {/,/^    }/d;s/    encode gzip/    tls internal\n    encode gzip/' \

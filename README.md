@@ -277,7 +277,7 @@ bash /tmp/tms.sh domain panel.example.com --https-port 2095 --install-dir /opt/t
 | 后端 API | 6365 | 保持原节点对接地址 |
 | 同机 Reality | 443 | VLESS 客户端连接 |
 
-安装好最新版脚本后，也可以用 `tms domain panel.example.com --https-port 2095`。不指定新端口重新配置同一个域名时，会保留已选端口；普通新域名仍默认 HTTPS 443。新安装可以同时指定 `--port 8080 --domain panel.example.com --https-port 2095`。
+安装好最新版脚本后，也可以用 `tms domain panel.example.com --https-port 2095`。已有域名时，`tms domain --https-port 2095` 会直接使用原域名。不指定新端口重新配置同一个域名时，会保留已选端口；普通新域名仍默认 HTTPS 443。新安装可以同时指定 `--port 8080 --domain panel.example.com --https-port 2095`。
 
 通过新 HTTPS 地址登录后，面板生成的订阅链接会包含 `:2095`。已分发的旧订阅地址需要更新；订阅下载端口与 Reality 的实际连接端口是两个独立设置。配置通过验证后才重启 Caddy，启动失败时尝试恢复旧配置；已有证书卷和数据库保留。
 

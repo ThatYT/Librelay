@@ -1545,8 +1545,13 @@ setup_domain() {
   fi
 
   if [ -z "$domain" ]; then
-    show_domain_status
-    return 0
+    if [ -n "${2:-}" ]; then
+      domain=$(current_domain)
+      [ -n "$domain" ] || { echo "No existing domain; supply domain DOMAIN with --https-port." >&2; return 1; }
+    else
+      show_domain_status
+      return 0
+    fi
   fi
   if [ "$domain" = "off" ] || [ "$domain" = "关闭" ]; then
     domain_off
