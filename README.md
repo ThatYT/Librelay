@@ -379,5 +379,3 @@ ufw delete <编号>        # 逐条删
 
 ---
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Teminuosi/Tms&type=Date)](https://www.star-history.com/#Teminuosi/Tms&Date)
-
