@@ -20,6 +20,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go-gost/go.mod
+          cache-dependency-path: |
+            go-gost/go.sum
+            go-gost/x/go.sum
       - name: Backend tests and build
         run: mvn -B -f springboot-backend/pom.xml test package
       - name: Frontend tests and production build
@@ -35,11 +38,14 @@ jobs:
           go test ./socket ./handler/socks/v5 ./config/parsing/service
           cd ..
           CGO_ENABLED=0 go build -mod=mod -o /tmp/tms-gost .
-      - name: Installer and Compose validation
+      - name: Installer syntax and regression
         run: |
           bash -n panel_install.sh install.sh tms-hybrid.sh
           bash tests/installer_test.sh
+      - name: Docker Compose validation
+        run: |
           for compose in docker-compose-v4.yml docker-compose-v6.yml docker-compose-hybrid.yml; do
             docker compose --env-file .env.example -f "$compose" config --quiet
           done
-          git diff --check
+      - name: Diff whitespace validation
+        run: git diff --check

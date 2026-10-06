@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# GitHub Actions supplies GITHUB_REF=refs/heads/main; installer settings use
+# a download branch/tag name. Keep these tests independent of the runner's env.
+export GITHUB_REPO=example/tms GITHUB_REF=main
 repo_dir=$(cd "$(dirname "$0")/.." && pwd)
 source "$repo_dir/panel_install.sh"
 workspace=$(mktemp -d)
