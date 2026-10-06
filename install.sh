@@ -7,40 +7,96 @@ fi
 GITHUB_REPO="${GITHUB_REPO:-Teminuosi/Tms}"
 GITHUB_REF="${GITHUB_REF:-main}"
 [[ "$GITHUB_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ && "$GITHUB_REF" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "Invalid repository identity" >&2; exit 1; }
-[ "$(id -u)" -eq 0 ] && [ "$(uname -s)" = Linux ] || { echo "Run as root on Linux." >&2; exit 1; }
 
 prepare_node_tools() {
-  if ! command -v curl >/dev/null || ! command -v jq >/dev/null; then
-    if command -v apt-get >/dev/null; then apt-get update && apt-get install -y curl ca-certificates jq tar gzip
-    elif command -v dnf >/dev/null; then dnf install -y curl ca-certificates jq tar gzip
-    elif command -v yum >/dev/null; then yum install -y curl ca-certificates jq tar gzip
+  if ! command -v curl >/dev/null || ! command -v jq >/dev/null || ! command -v sha256sum >/dev/null || ! command -v tar >/dev/null || ! command -v gzip >/dev/null; then
+    if command -v apt-get >/dev/null; then apt-get update && apt-get install -y curl ca-certificates jq tar gzip coreutils
+    elif command -v dnf >/dev/null; then dnf install -y curl ca-certificates jq tar gzip coreutils
+    elif command -v yum >/dev/null; then yum install -y curl ca-certificates jq tar gzip coreutils
     else echo "Unsupported distribution" >&2; exit 1; fi
   fi
 }
-prepare_node_tools
-
-download_agent() {
-  local destination="$1" staging architecture
-  if [ -n "${TMS_NODE_RELEASE:-}" ]; then
-    curl -fLsS --retry 3 "$DOWNLOAD_URL" -o "$destination" || return 1
-    chmod +x "$destination"
-    "$destination" -V >/dev/null || return 1
-    return 0
+check_node_space() {
+  local directory="$1" needed="$2" available
+  available=$(df -Pk "$directory" | awk 'NR==2 {print $4}')
+  if [[ ! "$available" =~ ^[0-9]+$ ]] || [ "$available" -lt "$needed" ]; then
+    echo "Insufficient free space at $directory (need at least $((needed / 1024)) MiB). Check df -h; existing node files are retained." >&2
+    return 1
   fi
-  echo "Building node agent from $GITHUB_REPO ($GITHUB_REF)..."
-  staging=$(mktemp -d)
-  architecture=$(get_architecture)
+}
+
+node_asset_url() {
+  local url="https://github.com/${GITHUB_REPO}/releases/download/$1/$2"
+  [ "${COUNTRY:-}" != CN ] || url="${GH_MIRROR}${url}"
+  printf '%s\n' "$url"
+}
+
+download_prebuilt_agent() {
+  local destination="$1" staging="$2" architecture release revision expected actual
+  architecture=$(get_architecture) || return 1
+  release=${TMS_NODE_RELEASE:-}
+  if [ -z "$release" ]; then
+    curl -fLsS --retry 3 --max-time 30 "https://api.github.com/repos/${GITHUB_REPO}/commits/${GITHUB_REF}" -o "$staging/revision.json" || return 1
+    revision=$(jq -r '.sha // empty' "$staging/revision.json")
+    [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "Cannot resolve the node source revision." >&2; return 1; }
+    release="node-${revision}"
+  elif [ "$release" = latest ]; then
+    curl -fLsS --retry 3 --max-time 30 "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" -o "$staging/revision.json" || return 1
+    release=$(jq -r '.tag_name // empty' "$staging/revision.json")
+  fi
+  [[ "$release" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "Invalid node release tag." >&2; return 1; }
+  echo "Downloading prebuilt node agent: $release ($architecture)..."
+  if ! curl -fLsS --retry 2 --max-time 60 "$(node_asset_url "$release" checksums.sha256)" -o "$staging/checksums.sha256"; then
+    echo "Prebuilt node release/checksums not available yet. Wait for the Node binaries workflow: https://github.com/${GITHUB_REPO}/actions" >&2
+    echo "Source compilation is optional: TMS_NODE_SOURCE=1 (requires at least 3 GiB free build space)." >&2
+    return 1
+  fi
+  expected=$(awk -v file="gost-${architecture}" '$2 == file {print $1}' "$staging/checksums.sha256")
+  [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || { echo "Missing or invalid node SHA-256 checksum." >&2; return 1; }
+  curl -fLsS --retry 3 --max-time 180 "$(node_asset_url "$release" "gost-${architecture}")" -o "$destination" || return 1
+  actual=$(sha256sum "$destination" | awk '{print $1}')
+  [ "$actual" = "$expected" ] || { echo "Node SHA-256 verification failed; existing executable retained." >&2; return 1; }
+  chmod +x "$destination"
+  "$destination" -V >/dev/null || return 1
+}
+
+build_source_agent() {
+  local destination="$1" staging architecture build_parent
+  build_parent=${TMS_NODE_BUILD_DIR:-/var/tmp}
+  [ -d "$build_parent" ] || { echo "Node build directory must already exist: $build_parent" >&2; return 1; }
+  check_node_space "$build_parent" 3145728 || return 1
+  staging=$(mktemp -d "$build_parent/tms-node-build.XXXXXX") || return 1
+  architecture=$(get_architecture) || { rm -rf "$staging"; return 1; }
+  echo "Building node agent from $GITHUB_REPO ($GITHUB_REF) with one compiler worker..."
   if ! curl -fLsS --retry 3 "https://codeload.github.com/${GITHUB_REPO}/tar.gz/${GITHUB_REF}" -o "$staging/source.tar.gz" \
       || ! curl -fLsS --retry 3 "https://go.dev/dl/go1.23.4.linux-${architecture}.tar.gz" -o "$staging/go.tar.gz"; then
     rm -rf "$staging"; return 1
   fi
-  mkdir "$staging/source"
+  mkdir "$staging/source" "$staging/work"
   tar -xzf "$staging/source.tar.gz" --strip-components=1 -C "$staging/source" || { rm -rf "$staging"; return 1; }
   tar -xzf "$staging/go.tar.gz" -C "$staging" || { rm -rf "$staging"; return 1; }
-  if ! (cd "$staging/source/go-gost" && PATH="$staging/go/bin:$PATH" GOCACHE="$staging/cache" GOPATH="$staging/modules" CGO_ENABLED=0 "$staging/go/bin/go" build -mod=mod -trimpath -ldflags '-s -w' -o "$destination" .); then
+  if ! (cd "$staging/source/go-gost" && PATH="$staging/go/bin:$PATH" GOTMPDIR="$staging/work" \
+    GOCACHE="$staging/cache" GOPATH="$staging/modules" GOMAXPROCS=1 GOMEMLIMIT=256MiB CGO_ENABLED=0 \
+    "$staging/go/bin/go" build -p 1 -mod=mod -trimpath -ldflags '-s -w' -o "$destination" .); then
     rm -rf "$staging"; return 1
   fi
   rm -rf "$staging"
+}
+
+download_agent() {
+  local destination="$1" staging result=1
+  check_node_space "$(dirname "$destination")" 131072 || return 1
+  staging=$(mktemp -d "$(dirname "$destination")/.node-download.XXXXXX") || return 1
+  if [ "${TMS_NODE_SOURCE:-0}" = 1 ]; then
+    if build_source_agent "$staging/gost"; then result=0; fi
+  else
+    if download_prebuilt_agent "$staging/gost" "$staging"; then result=0; fi
+  fi
+  if [ "$result" = 0 ]; then
+    mv "$staging/gost" "$destination" || result=1
+  fi
+  rm -rf "$staging"
+  return "$result"
 }
 
 # 获取系统架构
@@ -58,12 +114,6 @@ get_architecture() {
             return 1
             ;;
     esac
-}
-
-# 构建下载地址
-build_download_url() {
-    local ARCH=$(get_architecture)
-    echo "https://github.com/${GITHUB_REPO}/releases/${TMS_NODE_RELEASE:-latest}/download/gost-${ARCH}"
 }
 
 INSTALL_DIR="/etc/gost"
@@ -183,28 +233,6 @@ get_config_params() {
   fi
 }
 
-# 解析命令行参数
-while getopts "a:s:c" opt; do
-  case $opt in
-    a) SERVER_ADDR="$OPTARG" ;;
-    s) SECRET="$OPTARG" ;;
-    c) FORCE_CN=1 ;;
-    *) echo "❌ 无效参数"; exit 1 ;;
-  esac
-done
-
-# 计算 gost 下载地址(国内或 -c 时走镜像;ipinfo 检测加超时,避免无网时卡死)
-DOWNLOAD_URL=$(build_download_url)
-if [ "$FORCE_CN" = "1" ]; then
-  COUNTRY="CN"
-else
-  COUNTRY=$(curl -s --max-time 5 https://ipinfo.io/country 2>/dev/null || echo "")
-fi
-if [ "$COUNTRY" = "CN" ]; then
-  DOWNLOAD_URL="${GH_MIRROR}${DOWNLOAD_URL}"
-  echo "🌏 使用国内镜像: ${GH_MIRROR}"
-fi
-
 # 安装功能
 install_gost() {
   echo "🚀 开始安装 GOST..."
@@ -283,6 +311,7 @@ EOF
   else
     echo "❌ gost服务启动失败，请执行以下命令查看日志："
     echo "journalctl -u gost -f"
+    return 1
   fi
 }
 
@@ -295,7 +324,7 @@ update_gost() {
     return 1
   fi
   
-  echo "📥 使用下载地址: $DOWNLOAD_URL"
+  echo "📥 下载当前仓库对应版本的节点代理..."
   
   # 检查并安装 tcpkill
   check_and_install_tcpkill
@@ -323,7 +352,7 @@ update_gost() {
 
   # 重启服务
   echo "🔄 重启服务..."
-  systemctl start gost
+  systemctl start gost || return 1
   
   echo "✅ 更新完成，服务已重新启动。"
 }
@@ -388,7 +417,7 @@ main() {
   # 如果提供了命令行参数，直接执行安装
   if [[ -n "$SERVER_ADDR" && -n "$SECRET" ]]; then
     install_gost
-    exit 0
+    exit $?
   fi
 
   # 显示交互式菜单
@@ -399,11 +428,11 @@ main() {
     case $choice in
       1)
         install_gost
-            exit 0
+            exit $?
         ;;
       2)
         update_gost
-            exit 0
+            exit $?
         ;;
       3)
         uninstall_gost
@@ -425,5 +454,20 @@ main() {
   done
 }
 
-# 执行主函数
-main
+# Sourcing exposes helpers to regression tests without installing packages/services.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  [ "$(id -u)" -eq 0 ] && [ "$(uname -s)" = Linux ] || { echo "Run as root on Linux." >&2; exit 1; }
+  prepare_node_tools
+  while getopts "a:s:c" opt; do
+    case "$opt" in
+      a) SERVER_ADDR="$OPTARG" ;;
+      s) SECRET="$OPTARG" ;;
+      c) FORCE_CN=1 ;;
+      *) echo "Invalid node installer option" >&2; exit 1 ;;
+    esac
+  done
+  COUNTRY=""
+  if [ "$FORCE_CN" = 1 ]; then COUNTRY=CN
+  else COUNTRY=$(curl -s --max-time 5 https://ipinfo.io/country 2>/dev/null || true); fi
+  main
+fi

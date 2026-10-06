@@ -1,0 +1,50 @@
+name: Node binaries
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go-gost/go.mod
+          cache-dependency-path: |
+            go-gost/go.sum
+            go-gost/x/go.sum
+      - name: Build version-matched Linux agents
+        working-directory: go-gost
+        run: |
+          mkdir -p ../dist
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=mod -trimpath -ldflags '-s -w' -o ../dist/gost-amd64 .
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -mod=mod -trimpath -ldflags '-s -w' -o ../dist/gost-arm64 .
+          ../dist/gost-amd64 -V
+          cd ../dist
+          sha256sum gost-amd64 gost-arm64 > checksums.sha256
+      - name: Publish immutable commit release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release="node-${GITHUB_SHA}"
+          if gh release view "$release" >/dev/null 2>&1; then
+            echo "Node release already published: $release"
+          else
+            gh release create "$release" --target "$GITHUB_SHA" --prerelease \
+              --title "Node agent ${GITHUB_SHA:0:7}" \
+              --notes "Linux node agents built from commit ${GITHUB_SHA}. The installer verifies checksums.sha256 before replacing an existing node executable." \
+              dist/gost-amd64 dist/gost-arm64 dist/checksums.sha256
+          fi
+      - name: Verify installer downloads the published binary
+        run: |
+          export GITHUB_REPO="$GITHUB_REPOSITORY" GITHUB_REF=main
+          export TMS_NODE_RELEASE="node-${GITHUB_SHA}"
+          source install.sh
+          COUNTRY=US
+          candidate_dir=$(mktemp -d)
+          trap 'rm -rf "$candidate_dir"' EXIT
+          download_agent "$candidate_dir/gost"
+          "$candidate_dir/gost" -V

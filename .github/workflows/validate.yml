@@ -82,6 +82,7 @@ jobs:
         run: |
           bash -n panel_install.sh install.sh tms-hybrid.sh
           bash tests/installer_test.sh
+          bash tests/node_installer_test.sh
       - name: Docker Compose validation
         run: |
           for compose in docker-compose-v4.yml docker-compose-v6.yml docker-compose-hybrid.yml; do

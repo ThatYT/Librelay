@@ -105,7 +105,15 @@ bash <(curl -Ls "https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_REF}/
 <br>
 
 > [!NOTE]
-> 节点默认从面板指定的仓库源码构建代理程序，以确保远程端口检查和面板版本一致。需要访问 GitHub、Go 下载站和模块依赖源。网络受限时请先配置可用的下载网络；旧版 `-c` 镜像参数不能保证加速所有源码构建依赖。
+> 节点默认下载 GitHub CI 为所选仓库分支提交构建的 Linux amd64 / arm64 二进制，替换前校验 SHA-256；无需在 VPS 上安装 Go 或编译依赖。刚推送新提交时，请等待「Node binaries」workflow 发布完成再装节点。网络受限时仍需保证 GitHub API 和 Release 文件可以访问。
+
+#### 节点安装提示磁盘不足或编译进程被杀死
+
+旧脚本默认在 VPS 的临时目录编译，可能出现 `no space left on device` 或 `signal: killed`。最新版默认使用预编译文件，检查目标盘至少有 128 MiB 空闲空间；下载或校验失败不会替换现有代理和配置，也不会自动退回源码编译。
+
+先用 `df -h / /tmp /var/tmp` 和 `free -h` 检查资源，再重新执行面板生成的节点安装命令（它会下载最新脚本）。不要删除面板 MySQL 数据卷或节点 `/etc/gost` 来腾空间。
+
+如确需源码编译，在安装命令前设置 `TMS_NODE_SOURCE=1`。默认构建目录为 `/var/tmp`，可用 `TMS_NODE_BUILD_DIR` 指向已有目录；脚本检查至少 3 GiB 空闲，限制编译并发为 1，并把构建缓存和工作文件放在该目录。`TMS_NODE_RELEASE` 可固定到包含校验清单的 Release 标签。
 
 <details>
 <summary>手动装节点端(不推荐)</summary>

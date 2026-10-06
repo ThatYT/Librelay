@@ -209,3 +209,11 @@ This pre-publication snapshot covers modified tracked files only; the new files 
 - Installer checks the configured backend API for code 0 and handles absent legacy health metadata without incorrectly reporting a missing container.
 - Installer regressions cover absent health metadata, application-level failures, unreachable APIs and exited containers.
 - CI builds/runs the actual backend image beside MySQL and checks both Docker health and the login API.
+
+## Node resource usage follow-up
+
+- `install.sh`: download commit-matched prebuilt binaries by default, verify SHA-256, check disk space, remove temporary downloads on failure and propagate failure status. Source compilation is explicit and uses bounded parallelism/work directories.
+- `.github/workflows/node-binaries.yml`: publish Linux amd64/arm64 binaries and checksums for every main commit.
+- `.github/workflows/release-gost.yml`: include checksums in manually tagged agent releases too.
+- `tests/node_installer_test.sh`: check default download URLs, absence of source downloads, checksums, retained executable on failure, staging cleanup and exit status.
+- Validation workflow and deployment/README instructions include these regressions and the new defaults.
