@@ -31,10 +31,43 @@ output=$(main -p 8443 --install-dir "$workspace/custom")
 source "$repo_dir/panel_install.sh"
 unset FRONTEND_PORT
 printf 'FRONTEND_PORT=6366\nDB_PASSWORD=existing-test-value\n' > .env
+chmod 600 .env
 cp .env expected.env
 show_access_info() { :; }
 check_docker() { echo 'Repeat install attempted Docker mutation'; return 1; }
 install_panel
 cmp .env expected.env
 [ "$(get_frontend_port)" = 6366 ]
+# The installer protects .env with umask 077. Schema SQL must still be readable
+# by the unprivileged MySQL container user after download_source copies it.
+mkdir source-fixture
+cp "$repo_dir/gost.sql" source-fixture/gost.sql
+cp "$repo_dir/docker-compose-hybrid.yml" source-fixture/docker-compose-hybrid.yml
+tar -czf source-fixture.tar.gz -C source-fixture .
+fixture_archive="$workspace/source-fixture.tar.gz"
+curl() {
+  while [ $# -gt 0 ]; do
+    if [ "$1" = -o ]; then cp "$fixture_archive" "$2"; return; fi
+    shift
+  done
+  return 1
+}
+compose_validate() { :; }
+DOCKER_CMD=compose_validate
+rm -f gost.sql
+(
+  umask 077
+  download_source
+  mode=$(ls -l gost.sql | cut -c1-10)
+  [ "$mode" = '-rw-r--r--' ]
+  [ "$(ls -l .env | cut -c1-10)" != '-rw-r--r--' ]
+)
+# A live MySQL server with missing tables must not count as a successful install.
+docker() { echo 12; }
+verify_database_schema
+docker() { echo 0; }
+sleep() { :; }
+if verify_database_schema >/dev/null 2>&1; then
+  echo 'Accepted incomplete database schema'; exit 1
+fi
 printf 'Installer regression checks passed\n'

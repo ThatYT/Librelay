@@ -169,6 +169,21 @@ bash /tmp/tms.sh update --install-dir /PATH/TO/EXISTING/TMS
 
 创建或转换为新公开监听模式的 Reality 条目依赖新版后端和节点代理；之后直接降级到旧版不受支持。完整备份与兼容性说明见 [部署与升级说明](docs/DEPLOYMENT.md)。
 
+## 登录报错：`vite_config` 表不存在
+
+这说明 MySQL 已启动，但初始化 SQL 没有完成。已修复安装时 SQL 文件权限导致容器无法读取的问题：`.env` 保持仅 root 可读，公开的 `gost.sql` 允许 MySQL 进程读取。安装器还会检查全部必要表，而不是只确认数据库进程存活。
+
+新版后端可自动补齐缺失表；完整数据库不会重新初始化。已有账号、密码、节点、订阅和协议端口保持不变；只有空的用户表才会生成初始管理员。不要通过删除数据库卷来修复。
+
+如果你已遇到此错误，请保留原 `.env` 和 MySQL 卷，下载新脚本并升级（替换下方原安装目录）：
+
+```bash
+curl -fLsS https://raw.githubusercontent.com/ThatYT/Tms_EN/main/panel_install.sh -o /tmp/tms.sh
+bash /tmp/tms.sh update --install-dir /PATH/TO/EXISTING/TMS
+```
+
+若仍然失败，检查 `docker logs gost-mysql --tail 80` 和 `docker logs springboot-backend --tail 80`。不要公开数据库密码或 `.env` 内容。
+
 ## VLESS-Reality 自定义端口
 
 在「协议管理」中创建 VLESS-Reality，选择要运行协议的节点。监听端口默认为 **443**，也可以输入 **8443** 等端口。一键创建和中转创建同样提供该字段；点击已有 Reality 条目的端口可以修改。

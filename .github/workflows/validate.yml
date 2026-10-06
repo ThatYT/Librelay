@@ -8,6 +8,22 @@ permissions:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    services:
+      schema-mysql:
+        image: mysql:5.7
+        env:
+          MYSQL_DATABASE: tms_schema_test
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_ROOT_HOST: '%'
+        ports:
+          - 127.0.0.1:3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    env:
+      TMS_SCHEMA_TEST_URL: jdbc:mysql://127.0.0.1:3306/tms_schema_test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4

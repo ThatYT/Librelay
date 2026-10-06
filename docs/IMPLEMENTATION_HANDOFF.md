@@ -191,3 +191,14 @@ This pre-publication snapshot covers modified tracked files only; the new files 
  vite-frontend/src/utils/partial-success.ts         |   3 +-
  73 files changed, 2201 insertions(+), 2083 deletions(-)
 ```
+
+## Database initialization recovery follow-up
+
+- `panel_install.sh`: make SQL readable to MySQL while keeping `.env` private; require all twelve tables before install/update succeeds.
+- `DatabaseBootstrap.java`: detect interrupted schemas, add missing tables and finish missing base-table keys without replacing existing rows.
+- `db/bootstrap.sql`: provide the complete additive schema and seeds guarded by existing data.
+- `SchemaMigration.java`: guard missing certificate/landing columns after interrupted imports.
+- `DatabaseBootstrapTest.java` and `DatabaseBootstrapMysqlTest.java`: cover intact schemas, fresh/partial initialization, preserved passwords/limits and legacy Reality ports.
+- `tests/installer_test.sh`: regress schema-file permissions under umask 077 and reject incomplete database health.
+- `.github/workflows/validate.yml`: run schema regressions against a disposable localhost-only MySQL 5.7 service.
+- README/deployment guide: document recovery through nondestructive update.

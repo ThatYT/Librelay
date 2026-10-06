@@ -68,6 +68,14 @@ An existing frontend port such as 6366 stays 6366. To change it, verify the new 
 
 Normal install/update paths never remove the MySQL volume. Existing explicit destructive management commands such as `purge` remain destructive and are not part of this upgrade procedure.
 
+## Recover a missing login configuration table
+
+`Table 'gost.vite_config' doesn't exist` means the database server is reachable but its initial schema is incomplete. The installer previously copied `gost.sql` under its secret-protecting `umask 077`, leaving the SQL file unreadable by MySQL's unprivileged container process. Schema files now receive mode 0644 while `.env` remains private. Installation/update also checks for all twelve required tables before reporting success.
+
+Do not delete the MySQL volume. Download the latest panel installer and run `update` against the original installation directory, keeping `.env`. The updated backend runs an additive bootstrap before column migrations: it creates missing tables, completes primary keys/auto-increment if an old import stopped before those ALTERs, and retains existing rows. Complete databases are left alone. The default administrator is seeded only when the user table is empty; existing account credentials, quotas, protocol ports and configuration values are never replaced. Missing node certificate fields and inbound landing fields are added through guarded column migrations.
+
+MySQL's container entrypoint does not retry initial SQL against an already initialized volume; restarting the old backend alone will not fix the missing table. If update still fails, inspect both MySQL and backend logs. The bundled recovery schema is `springboot-backend/src/main/resources/db/bootstrap.sql` and is covered by an isolated MySQL 5.7 CI regression.
+
 ## Configure Reality
 
 In protocol management, create VLESS-Reality and choose its node. The listening port field starts at **443**. Enter **8443** if desired. One-click and relay creation also expose the field. Submit the form; frontend and backend both enforce integer ports 1–65535. The backend checks database reservations and asks the selected remote node to probe TCP availability before applying the configuration.

@@ -61,6 +61,9 @@ download_source() {
   mv "$staging" .source
   mv docker-compose.yml.new docker-compose.yml
   if [ ! -f gost.sql ]; then cp .source/gost.sql gost.sql; fi
+  # .env stays private, but MySQL's unprivileged init process must read this
+  # public schema file. The install-wide umask 077 otherwise makes it mode 600.
+  chmod 644 gost.sql
   rm -rf .source.previous
 }
 
@@ -501,6 +504,22 @@ get_config_params() {
   JWT_SECRET=$(openssl rand -hex 48)
 }
 
+# mysqladmin ping only proves the server is alive, not that init SQL succeeded.
+verify_database_schema() {
+  local count attempt
+  for attempt in {1..30}; do
+    count=$(docker exec gost-mysql sh -c '
+      export MYSQL_PWD="$MYSQL_PASSWORD"
+      exec mysql --user="$MYSQL_USER" --database="$MYSQL_DATABASE" --batch --skip-column-names -e "$1"
+    ' sh "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('forward','node','speed_limit','statistics_flow','tunnel','user','user_tunnel','vite_config','inbound','inbound_user','landing','inbound_line')" 2>/dev/null) || count=""
+    if [ "$count" = 12 ]; then return 0; fi
+    sleep 2
+  done
+  echo "Database schema initialization failed. Check: docker logs gost-mysql --tail 80" >&2
+  echo "Keep the existing .env and MySQL volume; update the backend to recover missing tables." >&2
+  return 1
+}
+
 # 安装功能
 install_panel() {
   echo "🚀 开始安装面板..."
@@ -541,6 +560,7 @@ EOF
     exit 1
   fi
   echo "      ✔ 三个容器已启动"
+  verify_database_schema || return 1
 
   # 自动写入「面板后端地址」(转发机对接要用),省得登录后再手动到网站配置里填
   echo "[4/4] 检测公网IP并配置面板后端地址..."
@@ -610,6 +630,7 @@ update_panel() {
   # Build before touching running containers. Named volumes and .env are unchanged.
   $DOCKER_CMD build
   $DOCKER_CMD up -d
+  verify_database_schema || return 1
 
   # 等待服务启动
   echo "⏳ 等待服务启动..."
