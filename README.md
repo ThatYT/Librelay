@@ -1,6 +1,6 @@
-# TMS 面板
+# TMS EN · 多节点代理面板
 
-> 一个面板同时搞定**翻墙协议**、**转发中转**、以及**每用户限速 / 流量 / 到期**。
+> 基于 [Teminuosi/Tms](https://github.com/Teminuosi/Tms) 的 fork，支持多节点管理、自定义 VLESS-Reality 端口、中文/English 界面及浅色/深色主题。
 
 <p>
   <a href="https://3yuedaohang.com">站长博客</a> ·
@@ -10,11 +10,16 @@
 
 ---
 
-## 此 fork 的部署与升级
+## 本 fork 的主要变化
 
-新建 VLESS-Reality 默认为 **443/TCP**，支持自定义端口；旧条目与订阅端口保持不变。
-面板默认 **2095**，后端 API 默认 **6365**。界面支持中文/English，主题仅保留浅色/深色。
-完整安装、旧版升级、数据库兼容和验证说明见 [部署与升级说明](docs/DEPLOYMENT.md)。
+- 新建 VLESS-Reality 默认监听 **443/TCP**，创建和编辑时可以选择 **1–65535** 的端口。
+- sing-box、订阅以及 v2rayN / v2rayNG / Clash / Mihomo 导出使用同一个实际监听端口。
+- 旧 Reality 条目保留原端口；其他协议继续使用原来的自动分配方式。
+- 新装面板默认 **2095/TCP**，后端 API 默认 **6365/TCP**；旧安装保留 `.env` 中的端口。
+- 一条命令从本仓库安装，支持端口、域名和安装目录参数；更新保留数据库和配置。
+- 界面支持 **中文 / English**，主题仅保留 **浅色 / 深色**，选择会保存到浏览器。
+
+完整架构、升级步骤、数据库迁移和验证范围见 [部署与升级说明](docs/DEPLOYMENT.md)，逐文件改动见 [实现交接说明](docs/IMPLEMENTATION_HANDOFF.md)。
 
 ## 能做什么
 
@@ -45,17 +50,46 @@
 
 ### 第一步 · 装面板端
 
-找一台机器执行:
+在面板 VPS 上以 **root** 执行。支持 Debian / Ubuntu / Raspbian、Fedora、CentOS / RHEL / Rocky / AlmaLinux；需要能够访问 GitHub 和构建依赖源。
 
 ```bash
-export GITHUB_REPO="OWNER/REPO"  # 改为你的 fork
-bash <(curl -Ls "https://raw.githubusercontent.com/${GITHUB_REPO}/main/panel_install.sh")
+bash <(curl -Ls https://raw.githubusercontent.com/ThatYT/Tms_EN/main/panel_install.sh)
 ```
 
-装完会打印访问地址。默认账号 **admin_user** / **admin_user**。
+如果系统尚未安装 curl，先用系统包管理器安装 curl。脚本会检查并安装其他必要工具、Docker 和 Docker Compose 插件，然后从本仓库下载源码并构建面板。默认安装目录为 `/opt/tms`，首次构建需要一定的时间和内存。
 
-> [!WARNING]
-> 首次登录后**立刻改密码**。面板是公网可访问的,默认口令等于没有口令。
+交互安装时会提示：
+
+```text
+Panel port [2095]:
+```
+
+直接回车使用 **2095**，也可以输入其他未被占用的 TCP 端口。安装结束会打印访问地址 `http://服务器IP:面板端口`。默认账号和密码均为 **admin_user**，首次登录后请立即修改密码。
+
+#### 指定端口、域名与目录
+
+```bash
+curl -fLsS https://raw.githubusercontent.com/ThatYT/Tms_EN/main/panel_install.sh -o /tmp/tms.sh
+bash /tmp/tms.sh --port 8080 --install-dir /opt/tms --domain panel.example.com
+```
+
+| 参数 | 作用 | 默认值 |
+|---|---|---|
+| `--port PORT` / `-p PORT` | 新安装的面板公开端口，范围 1–65535 | `2095` |
+| `--domain DOMAIN` | 安装后配置面板 HTTPS 域名 | 不设置 |
+| `--install-dir PATH` | 面板安装目录 | `/opt/tms` |
+
+指定域名前，需要将域名解析到面板 VPS，并确保该机器的 TCP 80/443 空闲。面板公开端口和后端 API 端口必须不同；配置 Caddy 时，也不能占用它需要的 80/443。
+
+如果部署自己的另一个 fork，统一设置仓库变量：
+
+```bash
+export GITHUB_REPO="OWNER/REPO"
+export GITHUB_REF="main"
+bash <(curl -Ls "https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_REF}/panel_install.sh")
+```
+
+仓库信息会保存到 `.env`，并用于后续更新和面板生成的节点安装命令。
 
 <br>
 
@@ -76,21 +110,8 @@ bash <(curl -Ls "https://raw.githubusercontent.com/${GITHUB_REPO}/main/panel_ins
 
 <br>
 
-> [!IMPORTANT]
-> **国内机器(阿里云 / 腾讯云 / 华为云等)看这里**
->
-> 直连 GitHub 会超时,表现是卡在下载那一步不动,或者装完面板报
-> 「sing-box 未运行」。用镜像加速,并加 `-c` 强制内部下载也走国内镜像:
->
-> ```bash
-> curl -L https://ghfast.top/https://raw.githubusercontent.com/Teminuosi/Tms/main/install.sh -o install.sh && chmod +x install.sh && ./install.sh -c -a 面板地址:端口 -s 你的密钥
-> ```
->
-> `面板地址` 和 `密钥` 就从上面「点安装」弹出的那条命令里抄。
->
-> **镜像失效了怎么办**:把命令里的 `ghfast.top` 整体换成下面任一个,
-> 并在命令最前面加 `GH_MIRROR=https://新镜像/`(让内部下载 gost 也走它):
-> `gh-proxy.com` · `ghproxy.net` · `mirror.ghproxy.com`
+> [!NOTE]
+> 节点默认从面板指定的仓库源码构建代理程序，以确保远程端口检查和面板版本一致。需要访问 GitHub、Go 下载站和模块依赖源。网络受限时请先配置可用的下载网络；旧版 `-c` 镜像参数不能保证加速所有源码构建依赖。
 
 <details>
 <summary>手动装节点端(不推荐)</summary>
@@ -101,7 +122,8 @@ bash <(curl -Ls "https://raw.githubusercontent.com/${GITHUB_REPO}/main/panel_ins
 (密钥同样得先在面板「转发机监控」新增该转发机才有):
 
 ```bash
-curl -L https://raw.githubusercontent.com/Teminuosi/Tms/main/install.sh -o install.sh && chmod +x install.sh && ./install.sh
+curl -fLsS https://raw.githubusercontent.com/ThatYT/Tms_EN/main/install.sh -o /tmp/tms-node.sh
+GITHUB_REPO=ThatYT/Tms_EN bash /tmp/tms-node.sh
 ```
 
 </details>
@@ -132,6 +154,59 @@ tms
 
 ---
 
+## 旧安装升级
+
+先备份数据库，再下载本 fork 的新脚本。将下方 `/PATH/TO/EXISTING/TMS` 替换为原安装目录。第一次切换到本版本时，请不要依赖旧版 `tms update` 脚本。
+
+```bash
+tms export
+curl -fLsS https://raw.githubusercontent.com/ThatYT/Tms_EN/main/panel_install.sh -o /tmp/tms.sh
+bash /tmp/tms.sh update --install-dir /PATH/TO/EXISTING/TMS
+```
+
+- 使用原来的安装目录，保留 `.env` 和 MySQL 数据卷。不要用 `.env.example` 覆盖现有数据库凭据或 JWT 密钥。
+- 如果 `.env` 已有 `GITHUB_REPO`，请确认其指向 `ThatYT/Tms_EN` 或你实际使用的 fork。
+- 更新不会删除用户、节点、协议、订阅或限额设置，也不会将旧面板端口 6366 自动改成 2095。
+- 数据库启动迁移只添加缺失的 `inbound.public_listen` 和 `inbound.egress_port` 列，旧记录保留原来的监听和订阅端口。
+- 更新面板后，在面板中重新复制各节点的安装命令，更新远程节点代理，再使用新 Reality 监听功能。
+- 后续更新可以直接运行 `tms update`。重复执行安装不会覆盖已有 `.env`，而会提示使用更新命令。
+
+要修改已有面板的公开端口，先确认新端口在面板 VPS 上空闲，再修改原 `.env` 的 `FRONTEND_PORT` 并执行 `tms update`。`--port` / `-p` 仅用于新安装。
+
+创建或转换为新公开监听模式的 Reality 条目依赖新版后端和节点代理；之后直接降级到旧版不受支持。完整备份与兼容性说明见 [部署与升级说明](docs/DEPLOYMENT.md)。
+
+## VLESS-Reality 自定义端口
+
+在「协议管理」中创建 VLESS-Reality，选择要运行协议的节点。监听端口默认为 **443**，也可以输入 **8443** 等端口。一键创建和中转创建同样提供该字段；点击已有 Reality 条目的端口可以修改。
+
+| 选择的端口 | sing-box 实际监听 | 订阅 / 客户端导出 |
+|---|---|---|
+| `443` | TCP 443 | `443` |
+| `8443` | TCP 8443 | `8443` |
+
+前端和后端都验证整数及范围。端口占用由**所选节点**检查：同节点同端口 TCP/TCP 或 UDP/UDP 冲突，TCP 443 和 UDP 443 可以共存。需要在节点防火墙及安全组放行所选 TCP 端口。
+
+**面板服务器与节点可以是不同机器：**
+
+```text
+面板 VPS：443/TCP → Caddy，2095/TCP → 面板，6365/TCP → API
+美国节点：443/TCP → VLESS-Reality
+香港节点：8443/TCP → VLESS-Reality
+```
+
+以上部署合法，面板 Caddy 的 443 不会阻止远程节点使用 Reality 443。Reality 监听端口与转发机端口范围是独立设置；内部计量端口不改变公开订阅端口。单纯升级不会转换旧条目，只有显式修改旧 Reality 端口才会切换到新公开监听模式。
+
+## 语言与主题
+
+界面通过语言选择器切换 **中文 / English**。浏览器语言为中文时默认中文，其他语言默认 English；手动选择保存在 localStorage，刷新后继续生效。主要页面、表单、弹窗、表头、状态、验证和通知使用 React i18next 翻译，资源位于 `vite-frontend/src/locales/`。
+
+主题选择器只提供 **浅色 / Light** 和 **深色 / Dark**。两种主题均为中性背景，保留原组件布局，选择会保存；旧装饰主题自动映射为对应的浅色或深色。原始引擎诊断和外部动态验证内容可能仍使用来源语言。
+
+## 构建与验证
+
+已通过后端 8 项测试、前端 5 项测试、Go socket 4 项测试、后端/前端生产构建、Linux 节点构建、浏览器语言与主题切换、sing-box 配置检查、安装脚本回归及三种 Compose 配置验证。[GitHub Actions](https://github.com/ThatYT/Tms_EN/actions) 会继续执行自动检查。
+
+本地环境没有 Docker daemon，尚未验证真实 VPS 安装、生产 MySQL 升级和 Docker 重启后的数据持久性；ShellCheck 也未在本地运行。建议先在测试 VPS 完成安装和重启验证，再升级生产环境。完整的 12 项场景验证范围见 [部署与升级说明](docs/DEPLOYMENT.md)。
 
 ## 域名配置
 
@@ -139,7 +214,7 @@ tms
 
 ### 一、给面板套域名(HTTPS)
 
-默认只能 `http://IP:2095` 访问,浏览器会标"不安全"。配了域名之后走 HTTPS,**订阅链接也会跟着变成域名**。
+新安装默认通过 `http://IP:2095` 访问（自定义端口或旧安装使用 `.env` 中的实际端口）,浏览器会标"不安全"。配了域名之后走 HTTPS,**订阅链接也会跟着变成域名**。
 
 ```bash
 tms domain panel.example.com
@@ -152,7 +227,7 @@ tms domain panel.example.com
 - 80 和 443 端口空闲(装了宝塔的话先停掉它的 nginx)
 - 云服务器安全组放行 80、443
 
-> 💡 原来的 `IP:2095` 会保留作为备用入口,域名出问题时还能进得去。
+> 💡 原来的 `IP:面板端口` 会保留作为备用入口,域名出问题时还能进得去。
 >
 > ⚠️ 配了域名后,**已经发出去的旧订阅(IP 版)不会自动更新**,要让车友重新拉一次。所以建议装好就配,人越少越好办。
 
@@ -199,10 +274,11 @@ tms purge
 
 删除所有容器、镜像、数据卷、网络、配置文件和 `tms` 管理命令。也可以直接输入 `tms` 打开菜单选「彻底清理」。
 
-如果 `tms` 命令不在了(比如当初就没装成功),用一次性脚本:
+如果 `tms` 命令不在了(比如当初就没装成功)，下载本 fork 的脚本，并将 `/PATH/TO/EXISTING/TMS` 替换为原安装目录：
 
 ```bash
-curl -L https://raw.githubusercontent.com/Teminuosi/Tms/main/panel_install.sh -o /tmp/tms.sh && bash /tmp/tms.sh purge
+curl -fLsS https://raw.githubusercontent.com/ThatYT/Tms_EN/main/panel_install.sh -o /tmp/tms.sh
+bash /tmp/tms.sh purge --install-dir /PATH/TO/EXISTING/TMS
 ```
 
 > 💡 最好 **cd 到当初安装面板的目录**再执行。不在那个目录时,脚本会从 `/usr/local/bin/tms` 里读回安装目录并自动切过去;
@@ -217,7 +293,7 @@ curl -L https://raw.githubusercontent.com/Teminuosi/Tms/main/panel_install.sh -o
 tms purge
 ```
 
-或者输入 `tms` 打开菜单选「7) 彻底卸载」。它会删掉容器、**本地构建的镜像**、数据卷(含数据库数据)、
+或者输入 `tms` 打开菜单选择对应的「彻底清理」操作。它会删掉容器、**本地构建的镜像**、数据卷(含数据库数据)、
 网络和 `tms` 命令;**源码目录会保留**,确认不要了自己 `rm -rf` 即可。
 
 ### 二、卸载节点机(转发机)
@@ -249,7 +325,8 @@ echo "✅ 节点已卸载(gost + sing-box + 配置 + 证书)"
 也可以重新下节点脚本走菜单(选 `3` 卸载):
 
 ```bash
-curl -L https://raw.githubusercontent.com/Teminuosi/Tms/main/install.sh -o /tmp/n.sh && chmod +x /tmp/n.sh && /tmp/n.sh
+curl -fLsS https://raw.githubusercontent.com/ThatYT/Tms_EN/main/install.sh -o /tmp/n.sh
+GITHUB_REPO=ThatYT/Tms_EN bash /tmp/n.sh
 ```
 
 > 💡 **国内机器**(阿里云等)大概率下不动 GitHub,直接用上面那段命令。
