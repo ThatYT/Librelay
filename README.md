@@ -2,12 +2,6 @@
 
 > 基于 [Teminuosi/Tms](https://github.com/Teminuosi/Tms) 的 fork，支持多节点管理、自定义 VLESS-Reality 端口、中文/English 界面及浅色/深色主题。
 
-<p>
-  <a href="https://3yuedaohang.com">站长博客</a> ·
-  <a href="https://www.youtube.com/@zhanzhang3yue">YouTube</a> ·
-  <a href="https://3yuedaohang.com/cn2/banwagong">机器推荐</a>
-</p>
-
 ---
 
 ## 本 fork 的主要变化
