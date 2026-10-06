@@ -10,6 +10,12 @@
 
 ---
 
+## 此 fork 的部署与升级
+
+新建 VLESS-Reality 默认为 **443/TCP**，支持自定义端口；旧条目与订阅端口保持不变。
+面板默认 **2095**，后端 API 默认 **6365**。界面支持中文/English，主题仅保留浅色/深色。
+完整安装、旧版升级、数据库兼容和验证说明见 [部署与升级说明](docs/DEPLOYMENT.md)。
+
 ## 能做什么
 
 | | 说明 |
@@ -42,7 +48,8 @@
 找一台机器执行:
 
 ```bash
-curl -L https://raw.githubusercontent.com/Teminuosi/Tms/main/panel_install.sh -o panel_install.sh && chmod +x panel_install.sh && ./panel_install.sh
+export GITHUB_REPO="OWNER/REPO"  # 改为你的 fork
+bash <(curl -Ls "https://raw.githubusercontent.com/${GITHUB_REPO}/main/panel_install.sh")
 ```
 
 装完会打印访问地址。默认账号 **admin_user** / **admin_user**。
@@ -132,7 +139,7 @@ tms
 
 ### 一、给面板套域名(HTTPS)
 
-默认只能 `http://IP:6366` 访问,浏览器会标"不安全"。配了域名之后走 HTTPS,**订阅链接也会跟着变成域名**。
+默认只能 `http://IP:2095` 访问,浏览器会标"不安全"。配了域名之后走 HTTPS,**订阅链接也会跟着变成域名**。
 
 ```bash
 tms domain panel.example.com
@@ -145,7 +152,7 @@ tms domain panel.example.com
 - 80 和 443 端口空闲(装了宝塔的话先停掉它的 nginx)
 - 云服务器安全组放行 80、443
 
-> 💡 原来的 `IP:6366` 会保留作为备用入口,域名出问题时还能进得去。
+> 💡 原来的 `IP:2095` 会保留作为备用入口,域名出问题时还能进得去。
 >
 > ⚠️ 配了域名后,**已经发出去的旧订阅(IP 版)不会自动更新**,要让车友重新拉一次。所以建议装好就配,人越少越好办。
 

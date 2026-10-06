@@ -16,7 +16,7 @@ import java.util.Map;
  * sing-box 配置生成 + 下发(合体面板 · 协议侧)。
  * 与 GostUtil 对称:GostUtil 管转发/限速的下发,SingboxUtil 管协议的下发。
  * 节点端 x/socket/singbox.go 收到 SetSingboxConfig 后写文件 + systemd 起 sing-box。
- * 约束:入站一律 listen 127.0.0.1,公网口交给 gost 转发并限速。
+ * Legacy listeners bind loopback; public Reality routes through private per-user gost meters.
  */
 public class SingboxUtil {
 
@@ -127,6 +127,31 @@ public class SingboxUtil {
                     continue;
                 }
                 inboundArr.add(inboundJson);
+                String routingTag = in.getTag();
+                if (Boolean.TRUE.equals(in.getPublicListen())) {
+                    String gatewayTag = "egress-" + in.getId();
+                    JSONObject gateway = new JSONObject();
+                    gateway.put("type", "socks"); gateway.put("tag", gatewayTag);
+                    gateway.put("listen", "127.0.0.1"); gateway.put("listen_port", in.getEgressPort());
+                    inboundArr.add(gateway);
+                    routingTag = gatewayTag;
+                    if (users != null) for (InboundUser user : users) {
+                        if (user.getEgressPort() == null || user.getUuid() == null) continue;
+                        String tag = "meter-" + user.getId();
+                        JSONObject outbound = new JSONObject();
+                        outbound.put("type", "socks"); outbound.put("tag", tag);
+                        outbound.put("server", "127.0.0.1"); outbound.put("server_port", user.getEgressPort());
+                        outbound.put("version", "5"); outbounds.add(outbound);
+                        JSONObject rule = new JSONObject();
+                        rule.put("inbound", java.util.Collections.singletonList(in.getTag()));
+                        rule.put("auth_user", java.util.Collections.singletonList(user.getUuid()));
+                        rule.put("outbound", tag); routeRules.add(rule);
+                    }
+                    // Fail closed if an assigned user has no metering route.
+                    JSONObject reject = new JSONObject();
+                    reject.put("inbound", java.util.Collections.singletonList(in.getTag()));
+                    reject.put("action", "reject"); routeRules.add(reject);
+                }
 
                 // 中转:该入站有落地 → 加落地出站(去重)+ 路由(该入站 tag → 落地出站)
                 Long lid = in.getLandingId();
@@ -140,7 +165,7 @@ public class SingboxUtil {
                     }
                     JSONObject rule = new JSONObject();
                     JSONArray inTags = new JSONArray();
-                    inTags.add(in.getTag());
+                    inTags.add(routingTag);
                     rule.put("inbound", inTags);
                     rule.put("outbound", tag);
                     routeRules.add(rule);
@@ -232,7 +257,7 @@ public class SingboxUtil {
         JSONObject inbound = new JSONObject();
         inbound.put("type", "vless");
         inbound.put("tag", in.getTag());
-        inbound.put("listen", "127.0.0.1");
+        inbound.put("listen", Boolean.TRUE.equals(in.getPublicListen()) ? "::" : "127.0.0.1");
         inbound.put("listen_port", in.getListenPort());
 
         JSONArray userArr = new JSONArray();
@@ -243,6 +268,7 @@ public class SingboxUtil {
                 JSONObject uj = new JSONObject();
                 uj.put("uuid", u.getUuid());
                 uj.put("flow", "xtls-rprx-vision");
+                if (Boolean.TRUE.equals(in.getPublicListen())) uj.put("name", u.getUuid());
                 userArr.add(uj);
             }
         }

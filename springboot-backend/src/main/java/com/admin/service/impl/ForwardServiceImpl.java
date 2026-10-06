@@ -160,7 +160,16 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         }
 
         // 2. 分配端口(留空则自动排下一个可用)
-        PortAllocation portAllocation = allocatePorts(tunnel, forwardDto.getInPort());
+        PortAllocation portAllocation;
+        if (forwardDto.getRemoteAddr() != null && forwardDto.getRemoteAddr().startsWith("tms-socks://127.0.0.1:")) {
+            // Node-internal metering listeners are independent of public transfer-machine ranges.
+            Integer port = forwardDto.getInPort();
+            if (port == null || port < 1 || port > 65535 || getAllUsedPortsOnNode(tunnel.getInNodeId(), null).contains(port))
+                return R.err("Private accounting port is invalid or already in use");
+            portAllocation = PortAllocation.success(port, null);
+        } else {
+            portAllocation = allocatePorts(tunnel, forwardDto.getInPort());
+        }
         if (portAllocation.isHasError()) {
             return R.err(portAllocation.getErrorMessage());
         }
@@ -1629,6 +1638,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         //    (转发公网口 0.0.0.0:X 会和 sing-box 127.0.0.1:X 同机 OS 级冲突)
         List<Inbound> inbounds = inboundMapper.selectList(new QueryWrapper<Inbound>().eq("node_id", nodeId));
         for (Inbound inbound : inbounds) {
+            if (inbound.getEgressPort() != null) usedPorts.add(inbound.getEgressPort());
             if (inbound.getListenPort() != null) {
                 usedPorts.add(inbound.getListenPort());
             }
@@ -1648,14 +1658,19 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
 
 
     public void updateForwardA(Forward forward) {
+        updateInboundForward(forward);
+    }
+
+    @Override
+    public R updateInboundForward(Forward forward) {
         Tunnel tunnel = validateTunnel(forward.getTunnelId());
         if (tunnel == null) {
-            return;
+            return R.err("Node or tunnel unavailable");
         }
         UserTunnel userTunnel = getUserTunnel(forward.getUserId(), tunnel.getId().intValue());
         NodeInfo nodeInfo = getRequiredNodes(tunnel);
         if (nodeInfo.isHasError()) {
-            return;
+            return R.err("Node or tunnel unavailable");
         }
         Integer limiter;
         if (userTunnel == null) {
@@ -1663,7 +1678,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         } else {
             limiter = userTunnel.getSpeedId();
         }
-        updateGostServices(forward, tunnel, resolveLimiter(forward, limiter), nodeInfo, userTunnel);
+        return updateGostServices(forward, tunnel, resolveLimiter(forward, limiter), nodeInfo, userTunnel);
     }
 
 

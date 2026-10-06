@@ -257,3 +257,5 @@ gitee/
 doraemon.jks
 device.id
 commit.sh
+# Local dependency/test caches
+.pnpm-store/

@@ -5,17 +5,17 @@
 # 而且经常直接挂(内存、原生模块编译)。
 # 而前端产物就是一堆 HTML/JS/CSS 静态文件,跟 CPU 架构毫无关系,
 # 只有下面的 nginx 运行阶段才需要分架构。
-FROM --platform=$BUILDPLATFORM node:20.19.0 AS builder
+FROM --platform=$BUILDPLATFORM node:22.16.0 AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
-# 该项目存在 React/HeroUI peer 依赖冲突且未提交 lockfile,不加此参 npm install 会 ERESOLVE 失败
-RUN npm install --legacy-peer-deps
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN npm install -g pnpm@11.19.0
+RUN pnpm install --frozen-lockfile
 
 COPY . .
 # vite build 吃内存,小内存 VPS 上会 JS heap OOM;调大 Node 老生代堆上限
-RUN NODE_OPTIONS=--max-old-space-size=2048 npm run build
+RUN NODE_OPTIONS=--max-old-space-size=2048 pnpm run build
 
 # 生产阶段
 FROM nginx:stable-alpine AS production-stage

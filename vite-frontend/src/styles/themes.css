@@ -1,22 +1,6 @@
-/* P2 多主题:每套皮肤 = 挂在 <html> 上的一层固定渐变背景。
-   用 !important 压过 HeroUI 的暗底,并强制 body/#root 透明,让渐变透出来。
-   切皮肤 = 换 <html> 的类(applySkin)。 */
-
-/* body / #root 一律透明,别用不透明底盖住 html 的渐变 */
-html[class] body,
-html[class] #root { background-color: transparent !important; }
-
-html.aurora   { background: linear-gradient(135deg, #1f1c3d 0%, #302b63 45%, #7c3aed 100%) fixed !important; }
-html.mesh     { background: linear-gradient(135deg, #c2e9fb 0%, #e0c3fc 50%, #fbc2eb 100%) fixed !important; }
-html.deepsea  { background: linear-gradient(135deg, #04223b 0%, #0e3a5f 50%, #2196c9 100%) fixed !important; }
-html.sunrise  { background: linear-gradient(135deg, #ffd3a5 0%, #ffaa96 45%, #b4a0ff 100%) fixed !important; }
-html.cyber    { background: linear-gradient(135deg, #2a0a3a 0%, #ec4899 55%, #22d3ee 100%) fixed !important; }
-html.mint     { background: linear-gradient(135deg, #a7f3d0 0%, #bae6fd 100%) fixed !important; }
-html.midnight { background: linear-gradient(135deg, #0b0e14 0%, #111827 60%, #1f2937 100%) fixed !important; }
-html.clean    { background: linear-gradient(135deg, #f8fafc 0%, #eef2f7 60%, #e5e7eb 100%) fixed !important; }
-html.forest   { background: linear-gradient(135deg, #04231f 0%, #065f46 55%, #10b981 100%) fixed !important; }
-html.lava     { background: linear-gradient(135deg, #240a0a 0%, #b91c1c 55%, #f97316 100%) fixed !important; }
-html.sakura   { background: linear-gradient(135deg, #ffe4ef 0%, #fbcfe8 50%, #e9d5ff 100%) fixed !important; }
-html.grape    { background: linear-gradient(135deg, #1e1030 0%, #6d28d9 55%, #db2777 100%) fixed !important; }
-html.sand     { background: linear-gradient(135deg, #fef3e2 0%, #fde8c8 55%, #f5d0a9 100%) fixed !important; }
-html.steel    { background: linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #475569 100%) fixed !important; }
+/* Neutral backgrounds; HeroUI's built-in Light and Dark tokens supply component colors. */
+html.light { background: #ffffff; color-scheme: light; }
+html.dark { background: #111111; color-scheme: dark; }
+body, #root { min-height: 100vh; background: inherit; }
+html.light { --toaster-bg: #ffffff; --toaster-color: #111111; --toaster-border: #e5e7eb; }
+html.dark { --toaster-bg: #171717; --toaster-color: #fafafa; --toaster-border: #404040; }

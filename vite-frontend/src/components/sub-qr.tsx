@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 import { useState } from "react";
 import { Button } from "@heroui/button";
 import { QRCodeSVG } from "qrcode.react";
@@ -12,13 +14,14 @@ import { QRCodeSVG } from "qrcode.react";
  * 会变成"黑底白码",不少手机相机扫不出来(反色码不是所有解码器都认)。
  */
 export function SubQr({ url, size = 200 }: { url: string; size?: number }) {
+  useTranslation();
   if (!url) return null;
   return (
     <div className="flex flex-col items-center gap-2">
       <div className="bg-white p-3 rounded-lg shadow-sm">
         <QRCodeSVG value={url} size={size} level="M" bgColor="#ffffff" fgColor="#000000" />
       </div>
-      <div className="text-xs text-default-400">手机客户端扫这个码直接添加订阅</div>
+      <div className="text-xs text-default-400">{t("m998bc8444b0f")}</div>
     </div>
   );
 }
@@ -29,12 +32,13 @@ export function SubQr({ url, size = 200 }: { url: string; size?: number }) {
  * 不用弹窗——那两处本身就在弹窗里,嵌套弹窗容易出焦点问题。
  */
 export function SubQrToggle({ url, size = 180 }: { url: string; size?: number }) {
+  useTranslation();
   const [open, setOpen] = useState(false);
   if (!url) return null;
   return (
     <div className="flex flex-col gap-2 items-start">
       <Button size="sm" variant="flat" onPress={() => setOpen(!open)}>
-        {open ? "收起二维码" : "📱 扫码"}
+        {open ? t("m4aaec9acce3f") : t("m6a1f4f732b8a")}
       </Button>
       {open && <SubQr url={url} size={size} />}
     </div>

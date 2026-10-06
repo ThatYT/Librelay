@@ -13,6 +13,23 @@ import java.util.Objects;
 public class GostUtil {
 
 
+    private static GostDto ensureSocksChain(Long nodeId, String name, String gateway) {
+        JSONObject connector = new JSONObject(); connector.put("type", "socks5");
+        JSONObject connectorMetadata = new JSONObject(); connectorMetadata.put("notls", true); connector.put("metadata", connectorMetadata);
+        JSONObject dialer = new JSONObject(); dialer.put("type", "tcp");
+        JSONObject node = new JSONObject(); node.put("name", "gateway"); node.put("addr", gateway);
+        node.put("connector", connector); node.put("dialer", dialer);
+        JSONArray nodes = new JSONArray(); nodes.add(node);
+        JSONObject hop = new JSONObject(); hop.put("name", "gateway-hop"); hop.put("nodes", nodes);
+        JSONArray hops = new JSONArray(); hops.add(hop);
+        JSONObject chain = new JSONObject(); chain.put("name", name + "_chains"); chain.put("hops", hops);
+        JSONObject update = new JSONObject(); update.put("chain", chain.getString("name")); update.put("data", chain);
+        GostDto result = WebSocketServer.send_msg(nodeId, update, "UpdateChains");
+        if (result == null || !"OK".equals(result.getMsg()))
+            result = WebSocketServer.send_msg(nodeId, chain, "AddChains");
+        return result;
+    }
+
     public static GostDto AddLimiters(Long node_id, Long name, String speed, Integer mode, String total) {
         JSONObject data = createLimiterData(name, speed, mode, total);
         return WebSocketServer.send_msg(node_id, data, "AddLimiters");
@@ -34,7 +51,12 @@ public class GostUtil {
 
     public static GostDto AddService(Long node_id, String name, Integer in_port, Integer limiter, String remoteAddr, Integer fow_type, Tunnel tunnel, String strategy, String interfaceName) {
         JSONArray services = new JSONArray();
-        String[] protocols = {"tcp", "udp"};
+        if (remoteAddr != null && remoteAddr.startsWith("tms-socks://")) {
+            GostDto chain = ensureSocksChain(node_id, name, remoteAddr.substring("tms-socks://".length()));
+            if (chain == null || !"OK".equals(chain.getMsg())) return chain;
+        }
+        String[] protocols = remoteAddr != null && remoteAddr.startsWith("tms-socks://")
+                ? new String[]{"tcp"} : new String[]{"tcp", "udp"};
         for (String protocol : protocols) {
             JSONObject service = createServiceConfig(name, in_port, limiter, remoteAddr, protocol, fow_type, tunnel, strategy, interfaceName);
             services.add(service);
@@ -44,7 +66,12 @@ public class GostUtil {
 
     public static GostDto UpdateService(Long node_id, String name, Integer in_port, Integer limiter, String remoteAddr, Integer fow_type, Tunnel tunnel, String strategy, String interfaceName) {
         JSONArray services = new JSONArray();
-        String[] protocols = {"tcp", "udp"};
+        if (remoteAddr != null && remoteAddr.startsWith("tms-socks://")) {
+            GostDto chain = ensureSocksChain(node_id, name, remoteAddr.substring("tms-socks://".length()));
+            if (chain == null || !"OK".equals(chain.getMsg())) return chain;
+        }
+        String[] protocols = remoteAddr != null && remoteAddr.startsWith("tms-socks://")
+                ? new String[]{"tcp"} : new String[]{"tcp", "udp"};
         for (String protocol : protocols) {
             JSONObject service = createServiceConfig(name, in_port, limiter, remoteAddr, protocol, fow_type, tunnel, strategy, interfaceName);
             services.add(service);
@@ -58,7 +85,9 @@ public class GostUtil {
         services.add(name + "_tcp");
         services.add(name + "_udp");
         data.put("services", services);
-        return WebSocketServer.send_msg(node_id, data, "DeleteService");
+        GostDto result = WebSocketServer.send_msg(node_id, data, "DeleteService");
+        if (result != null && "OK".equals(result.getMsg())) DeleteChains(node_id, name);
+        return result;
     }
 
     public static GostDto AddRemoteService(Long node_id, String name, Integer out_port, String remoteAddr,  String protocol, String strategy, String interfaceName) {
@@ -316,6 +345,24 @@ public class GostUtil {
     private static JSONObject createServiceConfig(String name, Integer in_port, Integer limiter, String remoteAddr, String protocol, Integer fow_type, Tunnel tunnel, String strategy, String interfaceName) {
         JSONObject service = new JSONObject();
         service.put("name", name + "_" + protocol);
+        if (remoteAddr != null && remoteAddr.startsWith("tms-socks://")) {
+            service.put("addr", "127.0.0.1:" + in_port);
+            JSONObject serviceMetadata = new JSONObject(); serviceMetadata.put("tms.privateEgress", true);
+            service.put("metadata", serviceMetadata);
+            JSONObject handler = new JSONObject();
+            handler.put("type", "socks5");
+            if (limiter != null) handler.put("limiter", limiter.toString());
+            handler.put("chain", name + "_chains");
+            JSONObject metadata = new JSONObject();
+            metadata.put("udp", true);
+            metadata.put("notls", true);
+            handler.put("metadata", metadata);
+            service.put("handler", handler);
+            JSONObject listener = new JSONObject();
+            listener.put("type", "tcp");
+            service.put("listener", listener);
+            return service;
+        }
         if (Objects.equals(protocol, "tcp")){
             service.put("addr", tunnel.getTcpListenAddr() + ":" + in_port);
         }else {

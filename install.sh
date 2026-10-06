@@ -1,5 +1,48 @@
 #!/bin/bash
 
+if [ -z "${GITHUB_REPO:-}" ] && [ -r /etc/gost/repository.conf ]; then
+  GITHUB_REPO=$(sed -n 's/^GITHUB_REPO=//p' /etc/gost/repository.conf | head -1)
+  GITHUB_REF=$(sed -n 's/^GITHUB_REF=//p' /etc/gost/repository.conf | head -1)
+fi
+GITHUB_REPO="${GITHUB_REPO:-Teminuosi/Tms}"
+GITHUB_REF="${GITHUB_REF:-main}"
+[[ "$GITHUB_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ && "$GITHUB_REF" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "Invalid repository identity" >&2; exit 1; }
+[ "$(id -u)" -eq 0 ] && [ "$(uname -s)" = Linux ] || { echo "Run as root on Linux." >&2; exit 1; }
+
+prepare_node_tools() {
+  if ! command -v curl >/dev/null || ! command -v jq >/dev/null; then
+    if command -v apt-get >/dev/null; then apt-get update && apt-get install -y curl ca-certificates jq tar gzip
+    elif command -v dnf >/dev/null; then dnf install -y curl ca-certificates jq tar gzip
+    elif command -v yum >/dev/null; then yum install -y curl ca-certificates jq tar gzip
+    else echo "Unsupported distribution" >&2; exit 1; fi
+  fi
+}
+prepare_node_tools
+
+download_agent() {
+  local destination="$1" staging architecture
+  if [ -n "${TMS_NODE_RELEASE:-}" ]; then
+    curl -fLsS --retry 3 "$DOWNLOAD_URL" -o "$destination" || return 1
+    chmod +x "$destination"
+    "$destination" -V >/dev/null || return 1
+    return 0
+  fi
+  echo "Building node agent from $GITHUB_REPO ($GITHUB_REF)..."
+  staging=$(mktemp -d)
+  architecture=$(get_architecture)
+  if ! curl -fLsS --retry 3 "https://codeload.github.com/${GITHUB_REPO}/tar.gz/${GITHUB_REF}" -o "$staging/source.tar.gz" \
+      || ! curl -fLsS --retry 3 "https://go.dev/dl/go1.23.4.linux-${architecture}.tar.gz" -o "$staging/go.tar.gz"; then
+    rm -rf "$staging"; return 1
+  fi
+  mkdir "$staging/source"
+  tar -xzf "$staging/source.tar.gz" --strip-components=1 -C "$staging/source" || { rm -rf "$staging"; return 1; }
+  tar -xzf "$staging/go.tar.gz" -C "$staging" || { rm -rf "$staging"; return 1; }
+  if ! (cd "$staging/source/go-gost" && PATH="$staging/go/bin:$PATH" GOCACHE="$staging/cache" GOPATH="$staging/modules" CGO_ENABLED=0 "$staging/go/bin/go" build -mod=mod -trimpath -ldflags '-s -w' -o "$destination" .); then
+    rm -rf "$staging"; return 1
+  fi
+  rm -rf "$staging"
+}
+
 # 获取系统架构
 get_architecture() {
     ARCH=$(uname -m)
@@ -11,7 +54,8 @@ get_architecture() {
             echo "arm64"
             ;;
         *)
-            echo "amd64"  # 默认使用 amd64
+            echo "Unsupported architecture: $ARCH" >&2
+            return 1
             ;;
     esac
 }
@@ -19,7 +63,7 @@ get_architecture() {
 # 构建下载地址
 build_download_url() {
     local ARCH=$(get_architecture)
-    echo "https://github.com/Teminuosi/Tms/releases/latest/download/gost-${ARCH}"
+    echo "https://github.com/${GITHUB_REPO}/releases/${TMS_NODE_RELEASE:-latest}/download/gost-${ARCH}"
 }
 
 INSTALL_DIR="/etc/gost"
@@ -172,25 +216,11 @@ install_gost() {
 
   mkdir -p "$INSTALL_DIR"
 
-  # 停止并禁用已有服务
-  if systemctl list-units --full -all | grep -Fq "gost.service"; then
-    echo "🔍 检测到已存在的gost服务"
-    systemctl stop gost 2>/dev/null && echo "🛑 停止服务"
-    systemctl disable gost 2>/dev/null && echo "🚫 禁用自启"
-  fi
-
-  # 删除旧文件
-  [[ -f "$INSTALL_DIR/gost" ]] && echo "🧹 删除旧文件 gost" && rm -f "$INSTALL_DIR/gost"
-
-  # 下载 gost
-  echo "⬇️ 下载 gost 中..."
-  curl -L "$DOWNLOAD_URL" -o "$INSTALL_DIR/gost"
-  if [[ ! -f "$INSTALL_DIR/gost" || ! -s "$INSTALL_DIR/gost" ]]; then
-    echo "❌ 下载失败，请检查网络或下载链接。"
-    exit 1
-  fi
+  # Build/download first; a failed download never removes the existing executable or settings.
+  download_agent "$INSTALL_DIR/gost.new" || { echo "Node build/download failed; existing installation preserved." >&2; return 1; }
+  systemctl stop gost 2>/dev/null || true
+  mv "$INSTALL_DIR/gost.new" "$INSTALL_DIR/gost"
   chmod +x "$INSTALL_DIR/gost"
-  echo "✅ 下载完成"
 
   # 打印版本
   echo "🔎 gost 版本：$($INSTALL_DIR/gost -V)"
@@ -198,12 +228,16 @@ install_gost() {
   # 写入 config.json (安装时总是创建新的)
   CONFIG_FILE="$INSTALL_DIR/config.json"
   echo "📄 创建新配置: config.json"
-  cat > "$CONFIG_FILE" <<EOF
-{
-  "addr": "$SERVER_ADDR",
-  "secret": "$SECRET"
-}
-EOF
+  umask 077
+  if [ -f "$CONFIG_FILE" ]; then
+    jq --arg addr "$SERVER_ADDR" --arg secret "$SECRET" '.addr=$addr | .secret=$secret' "$CONFIG_FILE" > "$CONFIG_FILE.new" || return 1
+  else
+    jq -n --arg addr "$SERVER_ADDR" --arg secret "$SECRET" '{addr:$addr,secret:$secret}' > "$CONFIG_FILE.new" || return 1
+  fi
+  mv "$CONFIG_FILE.new" "$CONFIG_FILE"
+  chmod 600 "$CONFIG_FILE"
+  printf '%s\n' "GITHUB_REPO=$GITHUB_REPO" "GITHUB_REF=$GITHUB_REF" > "$INSTALL_DIR/repository.conf"
+
 
   # 写入 gost.json
   GOST_CONFIG="$INSTALL_DIR/gost.json"
@@ -268,7 +302,7 @@ update_gost() {
   
   # 先下载新版本
   echo "⬇️ 下载最新版本..."
-  curl -L "$DOWNLOAD_URL" -o "$INSTALL_DIR/gost.new"
+  download_agent "$INSTALL_DIR/gost.new" || { echo "Node build/download failed; old executable retained." >&2; return 1; }
   if [[ ! -f "$INSTALL_DIR/gost.new" || ! -s "$INSTALL_DIR/gost.new" ]]; then
     echo "❌ 下载失败。"
     return 1
@@ -354,7 +388,6 @@ main() {
   # 如果提供了命令行参数，直接执行安装
   if [[ -n "$SERVER_ADDR" && -n "$SECRET" ]]; then
     install_gost
-    delete_self
     exit 0
   fi
 
@@ -366,28 +399,23 @@ main() {
     case $choice in
       1)
         install_gost
-        delete_self
-        exit 0
+            exit 0
         ;;
       2)
         update_gost
-        delete_self
-        exit 0
+            exit 0
         ;;
       3)
         uninstall_gost
-        delete_self
-        exit 0
+            exit 0
         ;;
       4)
         block_protocol
-        delete_self
-        exit 0
+            exit 0
         ;;
       5)
         echo "👋 退出脚本"
-        delete_self
-        exit 0
+            exit 0
         ;;
       *)
         echo "❌ 无效选项，请输入 1-5"

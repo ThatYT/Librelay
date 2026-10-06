@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 import React, { useState, useEffect } from 'react';
 import { Card, CardBody } from "@heroui/card";
 import { Button } from "@heroui/button";
@@ -26,6 +28,7 @@ interface MenuItem {
 }
 
 export default function ProfilePage() {
+  useTranslation();
   const navigate = useNavigate();
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
   const [username, setUsername] = useState('');
@@ -63,80 +66,80 @@ export default function ProfilePage() {
   const adminMenuItems: MenuItem[] = [
     {
       path: '/relay',
-      label: '中转',
+      label: t("m7f785150a8e2"),
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M12.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
         </svg>
       ),
       color: 'bg-cyan-100 dark:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400',
-      description: '通过前置节点中转到落地'
+      description: t("m8d51a63b0e8a")
     },
     {
       path: '/tunnel',
-      label: '隧道管理',
+      label: t("me920f47d0c05"),
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd" />
         </svg>
       ),
       color: 'bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400',
-      description: '端口转发与隧道转发'
+      description: t("m935477bfaf95")
     },
     {
       path: '/my-sub',
-      label: '我的订阅',
+      label: t("m79aad303b15f"),
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 5a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1V9zm9 0a1 1 0 011-1h3a1 1 0 011 1v1a1 1 0 01-1 1h-3a1 1 0 01-1-1V9zm0 5a1 1 0 011-1h3a1 1 0 011 1v1a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1z" clipRule="evenodd" />
         </svg>
       ),
       color: 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400',
-      description: '自己的订阅链接'
+      description: t("m84f55b010575")
     },
     {
       path: '/guide',
-      label: '使用说明',
+      label: t("mcb4ba40bf823"),
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
         </svg>
       ),
       color: 'bg-slate-100 dark:bg-slate-500/20 text-slate-600 dark:text-slate-400',
-      description: '面板使用说明'
+      description: t("mbb54201ccaf3")
     },
     {
       path: '/limit',
-      label: '限速管理',
+      label: t("me39e26d1fc54"),
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
         </svg>
       ),
       color: 'bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400',
-      description: '管理用户限速策略'
+      description: t("md27879557862")
     },
     {
       path: '/user',
-      label: '用户管理',
+      label: t("mfbf413d429bd"),
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
           <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
         </svg>
       ),
       color: 'bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400',
-      description: '管理系统用户'
+      description: t("mca0c00518528")
     },
     {
       path: '/config',
-      label: '网站配置',
+      label: t("m0910d1f1e847"),
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
         </svg>
       ),
       color: 'bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400',
-      description: '配置网站设置'
+      description: t("m35b7eb23e9e5")
     }
   ];
 
@@ -149,27 +152,27 @@ export default function ProfilePage() {
   // 密码表单验证
   const validatePasswordForm = (): boolean => {
     if (!passwordForm.newUsername.trim()) {
-      toast.error('请输入新用户名');
+      toast.error(t("m12fdbbcc066a"));
       return false;
     }
     if (passwordForm.newUsername.length < 3) {
-      toast.error('用户名长度至少3位');
+      toast.error(t("md0931223450f"));
       return false;
     }
     if (!passwordForm.currentPassword) {
-      toast.error('请输入当前密码');
+      toast.error(t("mf1790d3384d0"));
       return false;
     }
     if (!passwordForm.newPassword) {
-      toast.error('请输入新密码');
+      toast.error(t("mba3c8c79cda3"));
       return false;
     }
     if (passwordForm.newPassword.length < 6) {
-      toast.error('新密码长度不能少于6位');
+      toast.error(t("m305e75f814f9"));
       return false;
     }
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      toast.error('两次输入密码不一致');
+      toast.error(t("mcf385c568f54"));
       return false;
     }
     return true;
@@ -183,15 +186,15 @@ export default function ProfilePage() {
     try {
       const response = await updatePassword(passwordForm);
       if (response.code === 0) {
-        toast.success('密码修改成功，请重新登录');
+        toast.success(t("maeae7438cbd9"));
         onOpenChange();
         handleLogout();
       } else {
-        toast.error(response.msg || '密码修改失败');
+        toast.error(response.msg || t("m878b622b47ad"));
       }
     } catch (error) {
-      toast.error('修改密码时发生错误');
-      console.error('修改密码错误:', error);
+      toast.error(t("mc7955ad9b527"));
+      console.error(t("mb38d48b11765"), error);
     } finally {
       setPasswordLoading(false);
     }
@@ -228,7 +231,7 @@ export default function ProfilePage() {
                       ? 'bg-primary-100 dark:bg-primary-500/20 text-primary-700 dark:text-primary-300' 
                       : 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300'
                   }`}>
-                    {isAdmin ? '管理员' : '普通用户'}
+                    {isAdmin ? t("me19796712f1c") : t("mf6a2faaac200")}
                   </span>
                   <span className="text-xs text-default-500">
                     {new Date().toLocaleDateString('zh-CN')}
@@ -267,7 +270,7 @@ export default function ProfilePage() {
                     <path fillRule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z" clipRule="evenodd" />
                   </svg>
                 </div>
-                <span className="text-xs text-foreground text-center">修改密码</span>
+                <span className="text-xs text-foreground text-center">{t("m08d008062411")}</span>
               </button>
               
               {/* 退出登录 */}
@@ -280,7 +283,7 @@ export default function ProfilePage() {
                     <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
                   </svg>
                 </div>
-                <span className="text-xs text-foreground text-center">退出登录</span>
+                <span className="text-xs text-foreground text-center">{t("m3ab8cc15939f")}</span>
               </button>
             </div>
           </CardBody>
@@ -316,36 +319,36 @@ export default function ProfilePage() {
         <ModalContent>
           {(onClose: () => void) => (
             <>
-              <ModalHeader className="flex flex-col gap-1">修改密码</ModalHeader>
+              <ModalHeader className="flex flex-col gap-1">{t("m08d008062411")}</ModalHeader>
               <ModalBody>
                 <div className="space-y-4">
                   <Input
-                    label="新用户名"
-                    placeholder="请输入新用户名（至少3位）"
+                    label={t("m0ccf18acc1c8")}
+                    placeholder={t("me12c044dc03e")}
                     value={passwordForm.newUsername}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPasswordForm(prev => ({ ...prev, newUsername: e.target.value }))}
                     variant="bordered"
                   />
                   <Input
-                    label="当前密码"
+                    label={t("ma114cfb687e6")}
                     type="password"
-                    placeholder="请输入当前密码"
+                    placeholder={t("mf1790d3384d0")}
                     value={passwordForm.currentPassword}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPasswordForm(prev => ({ ...prev, currentPassword: e.target.value }))}
                     variant="bordered"
                   />
                   <Input
-                    label="新密码"
+                    label={t("m515e9c7cf7b2")}
                     type="password"
-                    placeholder="请输入新密码（至少6位）"
+                    placeholder={t("medef5df61d32")}
                     value={passwordForm.newPassword}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))}
                     variant="bordered"
                   />
                   <Input
-                    label="确认密码"
+                    label={t("m81b17bc0c362")}
                     type="password"
-                    placeholder="请再次输入新密码"
+                    placeholder={t("m322ded8bb2cc")}
                     value={passwordForm.confirmPassword}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
                     variant="bordered"
@@ -353,16 +356,12 @@ export default function ProfilePage() {
                 </div>
               </ModalBody>
               <ModalFooter>
-                <Button color="default" variant="light" onPress={onClose}>
-                  取消
-                </Button>
+                <Button color="default" variant="light" onPress={onClose}> {t("m2cd0f3be8738")} </Button>
                 <Button 
                   color="primary" 
                   onPress={handlePasswordSubmit}
                   isLoading={passwordLoading}
-                >
-                  确定
-                </Button>
+                > {t("mfac2a67ad878")} </Button>
               </ModalFooter>
             </>
           )}

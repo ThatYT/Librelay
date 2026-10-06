@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 /**
  * Reality「伪装域名」候选(借壳 SNI)。
  *
@@ -14,7 +15,7 @@
  *    sing-box 拿它当借壳域名必然握不上手(已经踩过一次,VLESS/Trojan 全 -1)。
  */
 export const SNI_PRESETS = [
-  { value: "www.apple.com", label: "www.apple.com", desc: "默认,最稳" },
+  { value: "www.apple.com", label: "www.apple.com", get desc() { return t("m1c98269108b9"); } },
   { value: "www.icloud.com", label: "www.icloud.com", desc: "" },
   { value: "www.bing.com", label: "www.bing.com", desc: "" },
   { value: "www.cloudflare.com", label: "www.cloudflare.com", desc: "" },

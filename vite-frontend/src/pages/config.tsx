@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@heroui/button";
@@ -7,7 +9,7 @@ import { Spinner } from "@heroui/spinner";
 import { Divider } from "@heroui/divider";
 import { Switch } from "@heroui/switch";
 import { Select, SelectItem } from "@heroui/select";
-import toast from 'react-hot-toast';
+import toast from '@/utils/toast';
 import { updateConfigs } from '@/api';
 import { SettingsIcon } from '@/components/icons';
 
@@ -46,56 +48,56 @@ interface ConfigItem {
 const CONFIG_ITEMS: ConfigItem[] = [
   {
     key: 'ip',
-    label: '面板后端地址',
-    placeholder: '请输入面板后端IP:PORT',
-    description: '格式“ip:port”,用于对接转发机时使用,ip是你安装面板服务器的公网ip,端口是安装脚本内输入的后端端口。不要套CDN,不支持https,通讯数据有加密',
+    get label() { return t("mc9dc5f2cb409"); },
+    get placeholder() { return t("mdccaacef689c"); },
+    get description() { return t("m67b36ffcd2a8"); },
     type: 'input'
   },
   {
     key: 'app_name',
-    label: '应用名称',
-    placeholder: '请输入应用名称',
-    description: '在浏览器标签页和导航栏显示的应用名称',
+    get label() { return t("me4569e38b854"); },
+    get placeholder() { return t("m54481c3bc581"); },
+    get description() { return t("me289e9c45567"); },
     type: 'input'
   },
   {
     key: 'captcha_enabled',
-    label: '启用验证码',
-    description: '开启后，用户登录时需要完成验证码验证',
+    get label() { return t("me490fa85ce8e"); },
+    get description() { return t("m82189d5ae861"); },
     type: 'switch'
   },
   {
     key: 'captcha_type',
-    label: '验证码类型',
-    description: '选择验证码的显示类型，不同类型有不同的安全级别',
+    get label() { return t("m7c4c99dd3407"); },
+    get description() { return t("m95a8f22f754e"); },
     type: 'select',
     dependsOn: 'captcha_enabled',
     dependsValue: 'true',
     options: [
       { 
-        label: '随机类型', 
+        get label() { return t("m6dc87ca3b101"); },
         value: 'RANDOM', 
-        description: '系统随机选择验证码类型' 
+        get description() { return t("m6097227993b1"); }
       },
       { 
-        label: '滑块验证码', 
+        get label() { return t("mbab844fbc50d"); },
         value: 'SLIDER', 
-        description: '拖动滑块完成拼图验证' 
+        get description() { return t("m8f70232ffdf1"); }
       },
       { 
-        label: '文字点选验证码', 
+        get label() { return t("mc022693f8c7e"); },
         value: 'WORD_IMAGE_CLICK', 
-        description: '按顺序点击指定文字' 
+        get description() { return t("m961a299ef254"); }
       },
       { 
-        label: '旋转验证码', 
+        get label() { return t("m44d2ed4e795b"); },
         value: 'ROTATE', 
-        description: '旋转图片到正确角度' 
+        get description() { return t("m453050df9af0"); }
       },
       { 
-        label: '拼图验证码', 
+        get label() { return t("m46f39eb6726e"); },
         value: 'CONCAT', 
-        description: '拖动滑块完成图片拼接' 
+        get description() { return t("m9616a2989f5d"); }
       }
     ]
   }
@@ -122,6 +124,7 @@ const getInitialConfigs = (): Record<string, string> => {
 };
 
 export default function ConfigPage() {
+  useTranslation();
   const navigate = useNavigate();
   const initialConfigs = getInitialConfigs();
   const [configs, setConfigs] = useState<Record<string, string>>(initialConfigs);
@@ -133,7 +136,7 @@ export default function ConfigPage() {
   // 权限检查
   useEffect(() => {
     if (!isAdmin()) {
-      toast.error('权限不足，只有管理员可以访问此页面');
+      toast.error(t("ma7c41f1105ef"));
       navigate('/dashboard', { replace: true });
       return;
     }
@@ -163,7 +166,7 @@ export default function ConfigPage() {
     } catch (error) {
       // 只有在没有缓存数据时才显示错误
       if (!hasInitialData) {
-        toast.error('加载配置出错，请重试');
+        toast.error(t("m6b7651e280e3"));
       }
     } finally {
       setLoading(false);
@@ -207,7 +210,7 @@ export default function ConfigPage() {
     try {
       const response = await updateConfigs(configs);
       if (response.code === 0) {
-        toast.success('配置保存成功');
+        toast.success(t("m9bf71a347b49"));
         
         // 清除所有配置缓存，强制下次重新获取
         clearConfigCache();
@@ -230,10 +233,10 @@ export default function ConfigPage() {
           detail: { changedKeys } 
         }));
       } else {
-        toast.error('保存配置失败: ' + response.msg);
+        toast.error(t("meb777ddb828a") + response.msg);
       }
     } catch (error) {
-      toast.error('保存配置出错，请重试');
+      toast.error(t("m7f7164b67cee"));
     } finally {
       setSaving(false);
     }
@@ -283,7 +286,7 @@ export default function ConfigPage() {
             }}
           >
             <span className="text-sm text-gray-700 dark:text-gray-300">
-              {configs[item.key] === 'true' ? '已启用' : '已禁用'}
+              {configs[item.key] === 'true' ? t("mdfb802238b38") : t("mbc5a87a757a5")}
             </span>
           </Switch>
         );
@@ -298,7 +301,7 @@ export default function ConfigPage() {
                 handleConfigChange(item.key, selectedKey);
               }
             }}
-            placeholder="请选择验证码类型"
+            placeholder={t("me6f1e025ff46")}
             variant="bordered"
             size="md"
             classNames={{
@@ -327,7 +330,7 @@ export default function ConfigPage() {
     return (
       
         <div className="flex items-center justify-center min-h-[400px]">
-          <Spinner size="lg" label="加载配置中..." />
+          <Spinner size="lg" label={t("me91619c7f703")} />
         </div>
       
     );
@@ -340,10 +343,8 @@ export default function ConfigPage() {
         <div className="flex items-center gap-3 mb-6">
           <SettingsIcon className="w-8 h-8 text-primary" />
           <div>
-            <h1 className="text-2xl font-bold">网站配置</h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              管理网站的基本信息和显示设置
-            </p>
+            <h1 className="text-2xl font-bold">{t("m0910d1f1e847")}</h1>
+            <p className="text-gray-600 dark:text-gray-400"> {t("me73e963637dc")} </p>
           </div>
         </div>
 
@@ -351,10 +352,8 @@ export default function ConfigPage() {
           <CardHeader className="pb-4">
             <div className="flex justify-between items-center w-full">
               <div>
-                <h2 className="text-xl font-semibold">基本设置</h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  配置网站的基本信息，这些设置会影响网站的显示效果
-                </p>
+                <h2 className="text-xl font-semibold">{t("mf3f905f2853a")}</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400"> {t("mb9f830b9af27")} </p>
               </div>
               <div className="flex gap-2">
 
@@ -365,7 +364,7 @@ export default function ConfigPage() {
                   isLoading={saving}
                   disabled={!hasChanges}
                 >
-                  {saving ? '保存中...' : '保存配置'}
+                  {saving ? t("m917b1c1f18d0") : t("m6e584e3d5ce6")}
                 </Button>
               </div>
             </div>
@@ -416,9 +415,7 @@ export default function ConfigPage() {
             <CardBody className="py-3">
               <div className="flex items-center gap-2 text-warning-700 dark:text-warning-300">
                 <div className="w-2 h-2 bg-warning-500 rounded-full animate-pulse" />
-                <span className="text-sm">
-                  检测到配置变更，请记得保存您的修改
-                </span>
+                <span className="text-sm"> {t("m7bf7d54ce664")} </span>
               </div>
             </CardBody>
           </Card>
@@ -426,4 +423,4 @@ export default function ConfigPage() {
       </div>
     
   );
-} 
+}

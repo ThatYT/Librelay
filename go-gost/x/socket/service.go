@@ -167,6 +167,9 @@ func deleteServices(req deleteServicesRequest) error {
 
 		svc := registry.ServiceRegistry().Get(name)
 		if svc == nil {
+			if isSocksUDPCompanion(name) {
+				continue
+			}
 			return errors.New("service " + name + " not found")
 		}
 
@@ -226,6 +229,9 @@ func pauseServices(req pauseServicesRequest) error {
 
 		svc := registry.ServiceRegistry().Get(name)
 		if svc == nil {
+			if isSocksUDPCompanion(name) {
+				continue
+			}
 			return errors.New(fmt.Sprintf("service %s not found", name))
 		}
 
@@ -338,6 +344,9 @@ func resumeServices(req resumeServicesRequest) error {
 		// 检查服务是否存在
 		svc := registry.ServiceRegistry().Get(name)
 		if svc == nil {
+			if isSocksUDPCompanion(name) {
+				continue
+			}
 			return errors.New(fmt.Sprintf("service %s not found", name))
 		}
 
@@ -522,4 +531,18 @@ type updateServicesRequest struct {
 
 type createServicesRequest struct {
 	Data []config.ServiceConfig `json:"data"`
+}
+
+// Existing APIs address TCP/UDP pairs; SOCKS5 egress has only a TCP listener.
+func isSocksUDPCompanion(name string) bool {
+	if !strings.HasSuffix(name, "_udp") {
+		return false
+	}
+	companion := strings.TrimSuffix(name, "_udp") + "_tcp"
+	for _, service := range config.Global().Services {
+		if service.Name == companion && service.Handler != nil && service.Handler.Type == "socks5" {
+			return true
+		}
+	}
+	return false
 }

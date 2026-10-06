@@ -330,6 +330,9 @@ func ParseService(cfg *config.ServiceConfig) (service.Service, error) {
 		return nil, fmt.Errorf("unknown handler: %s", cfg.Handler.Type)
 	}
 
+	if receiver, ok := h.(interface{ SetServiceStats(stats.Stats) }); ok {
+		receiver.SetServiceStats(pStats)
+	}
 	if forwarder, ok := h.(handler.Forwarder); ok {
 		hop, err := parseForwarder(cfg.Forwarder, log)
 		if err != nil {
@@ -357,7 +360,12 @@ func ParseService(cfg *config.ServiceConfig) (service.Service, error) {
 		observer = registry.ObserverRegistry().Get("console")
 	}
 
+	internalTransport := false
+	if cfg.Metadata != nil {
+		internalTransport = mdutil.GetBool(metadata.NewMetadata(cfg.Metadata), "tms.privateEgress")
+	}
 	s := xservice.NewService(cfg.Name, ln, h,
+		xservice.InternalTransportOption(internalTransport),
 		xservice.AdmissionOption(xadmission.AdmissionGroup(admissions...)),
 		xservice.PreUpOption(preUp),
 		xservice.PreDownOption(preDown),

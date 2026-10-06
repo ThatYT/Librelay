@@ -38,6 +38,12 @@ public class Inbound implements Serializable {
     /** sing-box 本机监听口(127.0.0.1) */
     private Integer listenPort;
 
+    /** New public Reality listener; false for all pre-upgrade rows. */
+    private Boolean publicListen;
+
+    /** Private SOCKS gateway back into sing-box (direct or landing outbound). */
+    private Integer egressPort;
+
     /** none/tls/reality */
     private String security;
 

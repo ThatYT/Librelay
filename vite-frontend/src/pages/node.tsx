@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 import { useState, useEffect, useRef } from "react";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Button } from "@heroui/button";
@@ -9,7 +11,7 @@ import { Switch } from "@heroui/switch";
 import { Spinner } from "@heroui/spinner";
 import { Alert } from "@heroui/alert";
 import { Progress } from "@heroui/progress";
-import toast from 'react-hot-toast';
+import toast from '@/utils/toast';
 import { copyTextToClipboard } from "@/utils/clipboard";
 import axios from 'axios';
 
@@ -71,6 +73,7 @@ interface NodeForm {
 }
 
 export default function NodePage() {
+  useTranslation();
   const [nodeList, setNodeList] = useState<Node[]>([]);
   const [loading, setLoading] = useState(false);
   const [dialogVisible, setDialogVisible] = useState(false);
@@ -128,10 +131,10 @@ export default function NodePage() {
           copyLoading: false
         })));
       } else {
-        toast.error(res.msg || '加载转发机列表失败');
+        toast.error(res.msg || t("ma5d155c725bb"));
       }
     } catch (error) {
-      toast.error('网络错误，请重试');
+      toast.error(t("mfa8326d4a0e5"));
     } finally {
       setLoading(false);
     }
@@ -327,11 +330,11 @@ export default function NodePage() {
     const minutes = Math.floor((seconds % 3600) / 60);
     
     if (days > 0) {
-      return `${days}天${hours}小时`;
+      return t("mca22ecc965dc", {v0: days, v1: hours});
     } else if (hours > 0) {
-      return `${hours}小时${minutes}分钟`;
+      return t("mf2dcbb87991e", {v0: hours, v1: minutes});
     } else {
-      return `${minutes}分钟`;
+      return t("mb18708c343cb", {v0: minutes});
     }
   };
 
@@ -384,23 +387,23 @@ export default function NodePage() {
     const newErrors: Record<string, string> = {};
     
     if (!form.name.trim()) {
-      newErrors.name = '请输入转发机名称';
+      newErrors.name = t("m276934a07b1a");
     } else if (form.name.trim().length < 2) {
-      newErrors.name = '转发机名称长度至少2位';
+      newErrors.name = t("m1357cb916693");
     } else if (form.name.trim().length > 50) {
-      newErrors.name = '转发机名称长度不能超过50位';
+      newErrors.name = t("m50281516b0ae");
     }
     
     if (!form.ipString.trim()) {
-      newErrors.ipString = '请输入入口IP地址';
+      newErrors.ipString = t("me079e13fbd8b");
     } else {
       const ips = form.ipString.split('\n').map(ip => ip.trim()).filter(ip => ip);
       if (ips.length === 0) {
-        newErrors.ipString = '请输入至少一个有效IP地址';
+        newErrors.ipString = t("mafe8427c9afd");
       } else {
         for (let i = 0; i < ips.length; i++) {
           if (!validateIp(ips[i])) {
-            newErrors.ipString = `第${i + 1}行IP地址格式错误: ${ips[i]}`;
+            newErrors.ipString = t("mb69e798e02cf", {v0: i + 1, v1: ips[i]});
             break;
           }
         }
@@ -408,29 +411,29 @@ export default function NodePage() {
     }
     
     if (!form.serverIp.trim()) {
-      newErrors.serverIp = '请输入服务器IP地址';
+      newErrors.serverIp = t("mc8cf0c7fea3d");
     } else if (!validateIp(form.serverIp.trim())) {
-      newErrors.serverIp = '请输入有效的IPv4、IPv6地址或域名';
+      newErrors.serverIp = t("m665a61f994cd");
     }
 
     // 连接域名是可选的:留空表示用 IP,填了才校验格式(且必须是域名,填 IP 没意义)
     const domain = form.domain.trim();
     if (domain) {
       if (/^[\d.]+$/.test(domain) || domain.includes(':') || domain.includes('/')) {
-        newErrors.domain = '这里只填域名,别填 IP、端口或带 http://';
+        newErrors.domain = t("m668c560e6f22");
       } else if (!validateIp(domain)) {
-        newErrors.domain = '域名格式不对,如 hk.example.com';
+        newErrors.domain = t("m51eef18ee867");
       }
     }
 
     if (!form.portSta || form.portSta < 1 || form.portSta > 65535) {
-      newErrors.portSta = '端口范围必须在1-65535之间';
+      newErrors.portSta = t("m621ff983ca35");
     }
     
     if (!form.portEnd || form.portEnd < 1 || form.portEnd > 65535) {
-      newErrors.portEnd = '端口范围必须在1-65535之间';
+      newErrors.portEnd = t("m621ff983ca35");
     } else if (form.portEnd < form.portSta) {
-      newErrors.portEnd = '结束端口不能小于起始端口';
+      newErrors.portEnd = t("mb2170aa02732");
     }
     
     setErrors(newErrors);
@@ -439,17 +442,17 @@ export default function NodePage() {
 
   // 新增转发机
   const handleAdd = () => {
-    setDialogTitle('新增转发机');
+    setDialogTitle(t("mfbd9d2bc95bb"));
     setIsEdit(false);
     setDialogVisible(true);
     resetForm();
     setProtocolDisabled(true);
-    setProtocolDisabledReason('转发机未在线，等待转发机上线后再设置');
+    setProtocolDisabledReason(t("mcf6be1f3fd48"));
   };
 
   // 编辑转发机
   const handleEdit = (node: Node) => {
-    setDialogTitle('编辑转发机');
+    setDialogTitle(t("m815c47206c77"));
     setIsEdit(true);
     setForm({
       id: node.id,
@@ -465,7 +468,7 @@ export default function NodePage() {
     });
     const offline = node.connectionStatus !== 'online';
     setProtocolDisabled(offline);
-    setProtocolDisabledReason(offline ? '转发机未在线，等待转发机上线后再设置' : '');
+    setProtocolDisabledReason(offline ? t("mcf6be1f3fd48") : '');
     setDialogVisible(true);
   };
 
@@ -482,15 +485,15 @@ export default function NodePage() {
     try {
       const res = await deleteNode(nodeToDelete.id);
       if (res.code === 0) {
-        toast.success('删除成功');
+        toast.success(t("m5223f91b9670"));
         setNodeList(prev => prev.filter(n => n.id !== nodeToDelete.id));
         setDeleteModalOpen(false);
         setNodeToDelete(null);
       } else {
-        toast.error(res.msg || '删除失败');
+        toast.error(res.msg || t("mc228558cf257"));
       }
     } catch (error) {
-      toast.error('网络错误，请重试');
+      toast.error(t("mfa8326d4a0e5"));
     } finally {
       setDeleteLoading(false);
     }
@@ -515,7 +518,7 @@ export default function NodePage() {
       }
       if (res.code === 0 && res.data) {
         if (await copyText(res.data)) {
-          toast.success('安装命令已复制到剪贴板');
+          toast.success(t("m209486f0c93e"));
         } else {
           // 复制失败，显示安装命令模态框让用户手动选择
           setInstallCommand(res.data);
@@ -523,10 +526,10 @@ export default function NodePage() {
           setInstallCommandModal(true);
         }
       } else {
-        toast.error(res.msg || '获取安装命令失败');
+        toast.error(res.msg || t("m40f46e631d28"));
       }
     } catch (error) {
-      toast.error('获取安装命令失败');
+      toast.error(t("m40f46e631d28"));
     } finally {
       setNodeList(prev => prev.map(n => 
         n.id === node.id ? { ...n, copyLoading: false } : n
@@ -537,10 +540,10 @@ export default function NodePage() {
   // 手动复制安装命令
   const handleManualCopy = async () => {
     if (await copyText(installCommand)) {
-      toast.success('安装命令已复制到剪贴板');
+      toast.success(t("m209486f0c93e"));
       setInstallCommandModal(false);
     } else {
-      toast.error('复制失败，请手动选择文本复制');
+      toast.error(t("mc883084221db"));
     }
   };
 
@@ -578,7 +581,7 @@ export default function NodePage() {
       
       const res = await apiCall(data);
       if (res.code === 0) {
-        toast.success(isEdit ? '更新成功' : '创建成功');
+        toast.success(isEdit ? t("m7c0d2664869c") : t("m1ab62884f4ee"));
         setDialogVisible(false);
         
         if (isEdit) {
@@ -600,10 +603,10 @@ export default function NodePage() {
           loadNodes();
         }
       } else {
-        toast.error(res.msg || (isEdit ? '更新失败' : '创建失败'));
+        toast.error(res.msg || (isEdit ? t("mec99e5c45d64") : t("m7e6a71efbf63")));
       }
     } catch (error) {
-      toast.error('网络错误，请重试');
+      toast.error(t("mfa8326d4a0e5"));
     } finally {
       setSubmitLoading(false);
     }
@@ -640,9 +643,7 @@ export default function NodePage() {
               color="primary"
               onPress={handleAdd}
              
-            >
-              新增
-            </Button>
+            > {t("m0006d696d8e1")} </Button>
      
         </div>
 
@@ -651,7 +652,7 @@ export default function NodePage() {
           <div className="flex items-center justify-center h-64">
             <div className="flex items-center gap-3">
               <Spinner size="sm" />
-              <span className="text-default-600">正在加载...</span>
+              <span className="text-default-600">{t("m7545b3950397")}</span>
             </div>
           </div>
         ) : nodeList.length === 0 ? (
@@ -664,8 +665,8 @@ export default function NodePage() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-foreground">暂无转发机配置</h3>
-                  <p className="text-default-500 text-sm mt-1">还没有创建任何转发机配置，点击上方按钮开始创建</p>
+                  <h3 className="text-lg font-semibold text-foreground">{t("m4d59230b4cda")}</h3>
+                  <p className="text-default-500 text-sm mt-1">{t("mc66263e89563")}</p>
                 </div>
               </div>
             </CardBody>
@@ -690,7 +691,7 @@ export default function NodePage() {
                         size="sm"
                         className="text-xs"
                       >
-                        {node.connectionStatus === 'online' ? '在线' : '离线'}
+                        {node.connectionStatus === 'online' ? t("mb9086662b1df") : t("mbe1b4f3c6c1c")}
                       </Chip>
                     </div>
                   </div>
@@ -702,26 +703,21 @@ export default function NodePage() {
                   {node.connectionStatus === 'online' && node.singboxRunning === false && (
                     node.singboxInstalling ? (
                       <div className="mb-3 rounded-lg border border-default-300 bg-default-100 px-2.5 py-2">
-                        <div className="text-xs font-medium text-default-600">⏳ sing-box 安装中</div>
-                        <div className="text-[11px] text-default-500 mt-0.5 leading-relaxed">
-                          首次建协议时会现下约 57MB,一般 1-2 分钟,装好自动恢复。
-                        </div>
+                        <div className="text-xs font-medium text-default-600">{t("m26dbc4e9118c")}</div>
+                        <div className="text-[11px] text-default-500 mt-0.5 leading-relaxed"> {t("m633889620782")} </div>
                       </div>
                     ) : (
                       <div className="mb-3 rounded-lg border border-danger/40 bg-danger/10 px-2.5 py-2">
                         <div className="text-xs font-semibold text-danger">
-                          ⚠️ sing-box {node.singboxInstallErr ? '安装失败' : '未运行'}
+                          ⚠️ sing-box {node.singboxInstallErr ? t("ma8581cc00ff3") : t("m62cdc8713bcf")}
                         </div>
                         <div className="text-[11px] text-default-500 mt-0.5 leading-relaxed">
                           {node.singboxInstallErr ? (
-                            <>这台机上的协议全部不可用。节点报的原因:<code className="font-mono break-all">{node.singboxInstallErr}</code>
-                            。多半是下载 GitHub 失败,国内机改用镜像版命令重跑节点安装脚本。</>
+                            <>{t("m9e3ab9890e5f")}<code className="font-mono break-all">{node.singboxInstallErr}</code> {t("mc6e83e690924")}</>
                           ) : node.singboxInstalled === false ? (
-                            <>这台机上的协议全部不可用。<span className="text-danger">sing-box 没装上</span>(装节点时下载 GitHub 失败,
-                            国内机常见)—— 在这台机器上重跑一次节点安装脚本即可。</>
+                            <>{t("mdfce9cc3fa7d")}<span className="text-danger">{t("m8446052e25b9")}</span>{t("m361c02d58aeb")}</>
                           ) : (
-                            <>这台机上的协议全部不可用。执行 <code className="font-mono">systemctl enable --now sing-box</code> 恢复;
-                            若提示 unit 不存在,说明没装上,重跑节点安装脚本。</>
+                            <>{t("m44e3695ade6d")} <code className="font-mono">systemctl enable --now sing-box</code> {t("mb70c4d95637d")}</>
                           )}
                         </div>
                       </div>
@@ -730,13 +726,12 @@ export default function NodePage() {
                   {/* 基础信息 */}
                   <div className="space-y-2 mb-4">
                     <div className="flex justify-between items-center text-sm min-w-0">
-                      <span className="text-default-600 flex-shrink-0">入口IP</span>
+                      <span className="text-default-600 flex-shrink-0">{t("m719a991b7f07")}</span>
                       <div className="text-right text-xs min-w-0 flex-1 ml-2">
                         {node.ip ? (
                           node.ip.split(',').length > 1 ? (
                             <span className="font-mono truncate block" title={node.ip.split(',')[0].trim()}>
-                              {node.ip.split(',')[0].trim()} +{node.ip.split(',').length - 1}个
-                            </span>
+                              {node.ip.split(',')[0].trim()} +{node.ip.split(',').length - 1}{t("m3a116815bc9d")} </span>
                           ) : (
                             <span className="font-mono truncate block" title={node.ip.trim()}>
                               {node.ip.trim()}
@@ -746,15 +741,15 @@ export default function NodePage() {
                       </div>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-default-600">端口</span>
+                      <span className="text-default-600">{t("me71ac32b544b")}</span>
                       <span className="text-xs">{node.portSta}-{node.portEnd}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-default-600">版本</span>
-                      <span className="text-xs">{node.version || '未知'}</span>
+                      <span className="text-default-600">{t("m5f76b2bf82dd")}</span>
+                      <span className="text-xs">{node.version || t("m4d8c1c5b4283")}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-default-600">开机时间</span>
+                      <span className="text-default-600">{t("m2a703dd5acd8")}</span>
                       <span className="text-xs">
                         {node.connectionStatus === 'online' && node.systemInfo 
                           ? formatUptime(node.systemInfo.uptime)
@@ -784,12 +779,12 @@ export default function NodePage() {
                             node.connectionStatus !== 'online'
                           )}
                           size="sm"
-                          aria-label="CPU使用率"
+                          aria-label={t("m4b849ef8677c")}
                         />
                       </div>
                       <div>
                         <div className="flex justify-between text-xs mb-1">
-                          <span>内存</span>
+                          <span>{t("m7d8f8c37ec78")}</span>
                           <span className="font-mono">
                             {node.connectionStatus === 'online' && node.systemInfo 
                               ? `${node.systemInfo.memoryUsage.toFixed(1)}%` 
@@ -804,14 +799,14 @@ export default function NodePage() {
                             node.connectionStatus !== 'online'
                           )}
                           size="sm"
-                          aria-label="内存使用率"
+                          aria-label={t("mace212ad8fd3")}
                         />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div className="text-center p-2 bg-default-50 dark:bg-default-100 rounded">
-                        <div className="text-default-600 mb-0.5">上传</div>
+                        <div className="text-default-600 mb-0.5">{t("m9e07e3c0532d")}</div>
                         <div className="font-mono">
                           {node.connectionStatus === 'online' && node.systemInfo 
                             ? formatSpeed(node.systemInfo.uploadSpeed) 
@@ -820,7 +815,7 @@ export default function NodePage() {
                         </div>
                       </div>
                       <div className="text-center p-2 bg-default-50 dark:bg-default-100 rounded">
-                        <div className="text-default-600 mb-0.5">下载</div>
+                        <div className="text-default-600 mb-0.5">{t("m4673a2306165")}</div>
                         <div className="font-mono">
                           {node.connectionStatus === 'online' && node.systemInfo 
                             ? formatSpeed(node.systemInfo.downloadSpeed) 
@@ -833,7 +828,7 @@ export default function NodePage() {
                     {/* 流量统计 */}
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div className="text-center p-2 bg-primary-50 dark:bg-primary-100/20 rounded border border-primary-200 dark:border-primary-300/20">
-                        <div className="text-primary-600 dark:text-primary-400 mb-0.5">↑ 上行流量</div>
+                        <div className="text-primary-600 dark:text-primary-400 mb-0.5">{t("m890e0c70baf6")}</div>
                         <div className="font-mono text-primary-700 dark:text-primary-300">
                           {node.connectionStatus === 'online' && node.systemInfo 
                             ? formatTraffic(node.systemInfo.uploadTraffic) 
@@ -842,7 +837,7 @@ export default function NodePage() {
                         </div>
                       </div>
                       <div className="text-center p-2 bg-success-50 dark:bg-success-100/20 rounded border border-success-200 dark:border-success-300/20">
-                        <div className="text-success-600 dark:text-success-400 mb-0.5">↓ 下行流量</div>
+                        <div className="text-success-600 dark:text-success-400 mb-0.5">{t("m22bb5eb6a911")}</div>
                         <div className="font-mono text-success-700 dark:text-success-300">
                           {node.connectionStatus === 'online' && node.systemInfo 
                             ? formatTraffic(node.systemInfo.downloadTraffic) 
@@ -863,27 +858,21 @@ export default function NodePage() {
                         onPress={() => handleCopyInstallCommand(node)}
                         isLoading={node.copyLoading}
                         className="flex-1 min-h-8"
-                      >
-                        安装命令
-                      </Button>
+                      > {t("mbdf7d59b3dc2")} </Button>
                       <Button
                         size="sm"
                         variant="flat"
                         color="primary"
                         onPress={() => handleEdit(node)}
                         className="flex-1 min-h-8"
-                      >
-                        编辑
-                      </Button>
+                      > {t("m051836569928")} </Button>
                       <Button
                         size="sm"
                         variant="flat"
                         color="danger"
                         onPress={() => handleDelete(node)}
                         className="flex-1 min-h-8"
-                      >
-                        删除
-                      </Button>
+                      > {t("m2f9daa828907")} </Button>
                     </div>
                   </div>
                 </CardBody>
@@ -906,8 +895,8 @@ export default function NodePage() {
             <ModalBody>
               <div className="space-y-4">
                 <Input
-                  label="转发机名称"
-                  placeholder="请输入转发机名称"
+                  label={t("m752e5decc425")}
+                  placeholder={t("m276934a07b1a")}
                   value={form.name}
                   onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
                   isInvalid={!!errors.name}
@@ -916,8 +905,8 @@ export default function NodePage() {
                 />
 
                 <Input
-                  label="服务器IP"
-                  placeholder="请输入服务器IP地址，如: 192.168.1.100 或 example.com"
+                  label={t("m5562218a9a7b")}
+                  placeholder={t("ma50d62ce2b4a")}
                   value={form.serverIp}
                   onChange={(e) => setForm(prev => ({
                     ...prev,
@@ -931,19 +920,19 @@ export default function NodePage() {
                 />
 
                 <Input
-                  label="连接域名(可选)"
-                  placeholder="如 hk.example.com,留空则给车友显示上面的 IP"
+                  label={t("m95ee4eccac94")}
+                  placeholder={t("m4e7ce1f18a8a")}
                   value={form.domain}
                   onChange={(e) => setForm(prev => ({ ...prev, domain: e.target.value }))}
                   isInvalid={!!errors.domain}
                   errorMessage={errors.domain}
                   variant="bordered"
-                  description="填了之后,车友订阅里的节点地址显示成这个域名,看不到你的服务器 IP。需要先把域名解析(A 记录)到上面那个 IP。注意:域名只是不直接显示 IP,对方 ping 一下还是查得到"
+                  description={t("mb051deb1adc9")}
                 />
 
                 <Textarea
-                  label="入口IP"
-                  placeholder="一行一个IP地址或域名，例如:&#10;192.168.1.100&#10;example.com"
+                  label={t("m719a991b7f07")}
+                  placeholder={t("meee5162634e6")}
                   value={form.ipString}
                   onChange={(e) => setForm(prev => ({ ...prev, ipString: e.target.value }))}
                   isInvalid={!!errors.ipString}
@@ -951,12 +940,12 @@ export default function NodePage() {
                   variant="bordered"
                   minRows={3}
                   maxRows={5}
-                  description="默认自动和服务器IP一致，一般不用管；套CDN/域名/多IP时才改（支持多个，每行一个）"
+                  description={t("m99f2968bb3db")}
                 />
 
                 <div className="grid grid-cols-2 gap-4">
                   <Input
-                    label="起始端口"
+                    label={t("m48457146631e")}
                     type="number"
                     placeholder="1000"
                     value={form.portSta.toString()}
@@ -969,7 +958,7 @@ export default function NodePage() {
                   />
 
                   <Input
-                    label="结束端口"
+                    label={t("mee67a40bbf68")}
                     type="number"
                     placeholder="65535"
                     value={form.portEnd.toString()}
@@ -984,13 +973,13 @@ export default function NodePage() {
 
                 {/* 屏蔽协议 */}
                 <div className="mt-1">
-                  <div className="text-sm font-medium text-default-700">屏蔽协议</div>
-                  <div className="text-xs text-default-500 mb-2">开启开关以屏蔽对应协议</div>
+                  <div className="text-sm font-medium text-default-700">{t("mec21dc2300dd")}</div>
+                  <div className="text-xs text-default-500 mb-2">{t("m903800a419f0")}</div>
                   {protocolDisabled && (
                     <Alert
                       color="warning"
                       variant="flat"
-                      description={protocolDisabledReason || '等待转发机上线后再设置'}
+                      description={protocolDisabledReason || t("me646d3137c6b")}
                       className="mb-2"
                     />
                   )}
@@ -1002,7 +991,7 @@ export default function NodePage() {
                         <div className="text-sm font-medium text-default-700">HTTP</div>
                       </div>
                       <div className="flex items-center justify-between">
-                        <div className="text-xs text-default-500">禁用/启用</div>
+                        <div className="text-xs text-default-500">{t("m8a04c283a0b9")}</div>
                         <Switch
                           size="sm"
                           isSelected={form.http === 1}
@@ -1010,7 +999,7 @@ export default function NodePage() {
                           onValueChange={(v) => setForm(prev => ({ ...prev, http: v ? 1 : 0 }))}
                         />
                       </div>
-                      <div className="mt-1 text-xs text-default-400">{form.http === 1 ? '已开启' : '已关闭'}</div>
+                      <div className="mt-1 text-xs text-default-400">{form.http === 1 ? t("m8a4ef3e48e4e") : t("m6744b4c6a9aa")}</div>
                     </div>
 
                     {/* TLS tile */}
@@ -1020,7 +1009,7 @@ export default function NodePage() {
                         <div className="text-sm font-medium text-default-700">TLS</div>
                       </div>
                       <div className="flex items-center justify-between">
-                        <div className="text-xs text-default-500">禁用/启用</div>
+                        <div className="text-xs text-default-500">{t("m8a04c283a0b9")}</div>
                         <Switch
                           size="sm"
                           isSelected={form.tls === 1}
@@ -1028,7 +1017,7 @@ export default function NodePage() {
                           onValueChange={(v) => setForm(prev => ({ ...prev, tls: v ? 1 : 0 }))}
                         />
                       </div>
-                      <div className="mt-1 text-xs text-default-400">{form.tls === 1 ? '已开启' : '已关闭'}</div>
+                      <div className="mt-1 text-xs text-default-400">{form.tls === 1 ? t("m8a4ef3e48e4e") : t("m6744b4c6a9aa")}</div>
                     </div>
 
                     {/* SOCKS tile */}
@@ -1038,7 +1027,7 @@ export default function NodePage() {
                         <div className="text-sm font-medium text-default-700">SOCKS</div>
                       </div>
                       <div className="flex items-center justify-between">
-                        <div className="text-xs text-default-500">禁用/启用</div>
+                        <div className="text-xs text-default-500">{t("m8a04c283a0b9")}</div>
                         <Switch
                           size="sm"
                           isSelected={form.socks === 1}
@@ -1046,7 +1035,7 @@ export default function NodePage() {
                           onValueChange={(v) => setForm(prev => ({ ...prev, socks: v ? 1 : 0 }))}
                         />
                       </div>
-                      <div className="mt-1 text-xs text-default-400">{form.socks === 1 ? '已开启' : '已关闭'}</div>
+                      <div className="mt-1 text-xs text-default-400">{form.socks === 1 ? t("m8a4ef3e48e4e") : t("m6744b4c6a9aa")}</div>
                     </div>
                   </div>
                 </div>
@@ -1056,14 +1045,14 @@ export default function NodePage() {
                 <Alert
                         color="danger"
                         variant="flat"
-                        description="请不要在出口转发机执行屏蔽协议，否则可能影响转发；屏蔽协议仅需在入口转发机执行。"
+                        description={t("m8a9090f61890")}
                         className="mt-3"
                       />
                 
                 <Alert
                         color="primary"
                         variant="flat"
-                        description="服务器ip是你要添加的服务器的ip地址，不是面板的ip地址。入口ip是用于展示在转发页面，面向用户的访问地址。实在理解不到说明你没这个需求，都填转发机的服务器ip就行！"
+                        description={t("md6f1f2b8378c")}
                         className="mt-4"
                       />
               </div>
@@ -1072,15 +1061,13 @@ export default function NodePage() {
               <Button
                 variant="flat"
                 onPress={() => setDialogVisible(false)}
-              >
-                取消
-              </Button>
+              > {t("m2cd0f3be8738")} </Button>
               <Button
                 color="primary"
                 onPress={handleSubmit}
                 isLoading={submitLoading}
               >
-                {submitLoading ? '提交中...' : '确定'}
+                {submitLoading ? t("m2fb1db2875cb") : t("mfac2a67ad878")}
               </Button>
             </ModalFooter>
           </ModalContent>
@@ -1099,22 +1086,20 @@ export default function NodePage() {
             {(onClose) => (
               <>
                 <ModalHeader className="flex flex-col gap-1">
-                  <h2 className="text-xl font-bold">确认删除</h2>
+                  <h2 className="text-xl font-bold">{t("ma3ea3c17b401")}</h2>
                 </ModalHeader>
                 <ModalBody>
-                  <p>确定要删除转发机 <strong>"{nodeToDelete?.name}"</strong> 吗？</p>
-                  <p className="text-small text-default-500">此操作不可恢复，请谨慎操作。</p>
+                  <p>{t("m087d2951dabe")} <strong>"{nodeToDelete?.name}"</strong> {t("m9d45d8943988")}</p>
+                  <p className="text-small text-default-500">{t("m85338c54047d")}</p>
                 </ModalBody>
                 <ModalFooter>
-                  <Button variant="light" onPress={onClose}>
-                    取消
-                  </Button>
+                  <Button variant="light" onPress={onClose}> {t("m2cd0f3be8738")} </Button>
                   <Button 
                     color="danger" 
                     onPress={confirmDelete}
                     isLoading={deleteLoading}
                   >
-                    {deleteLoading ? '删除中...' : '确认删除'}
+                    {deleteLoading ? t("m4669785ade95") : t("ma3ea3c17b401")}
                   </Button>
                 </ModalFooter>
               </>
@@ -1132,12 +1117,10 @@ export default function NodePage() {
         placement="center"
         >
           <ModalContent>
-            <ModalHeader>安装命令 - {currentNodeName}</ModalHeader>
+            <ModalHeader>{t("mb246d375d6c2")} {currentNodeName}</ModalHeader>
             <ModalBody>
               <div className="space-y-4">
-                <p className="text-sm text-default-600">
-                  请复制以下安装命令到服务器上执行：
-                </p>
+                <p className="text-sm text-default-600"> {t("m4127bd39d2e6")} </p>
                 <div className="relative">
                   <Textarea
                     value={installCommand}
@@ -1156,26 +1139,20 @@ export default function NodePage() {
                     variant="flat"
                     className="absolute top-2 right-2"
                     onPress={handleManualCopy}
-                  >
-                    复制
-                  </Button>
+                  > {t("m63d90d977348")} </Button>
                 </div>
-                <div className="text-xs text-default-500">
-                  💡 提示：如果复制按钮失效，请手动选择上方文本进行复制
-                </div>
+                <div className="text-xs text-default-500"> {t("m1d6ae70041b8")} </div>
               </div>
             </ModalBody>
             <ModalFooter>
               <Button
                 variant="flat"
                 onPress={() => setInstallCommandModal(false)}
-              >
-                关闭
-              </Button>
+              > {t("m3fd47edce45b")} </Button>
             </ModalFooter>
           </ModalContent>
         </Modal>
       </div>
     
   );
-} 
+}

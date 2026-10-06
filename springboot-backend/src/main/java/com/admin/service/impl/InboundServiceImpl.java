@@ -41,7 +41,8 @@ import java.util.UUID;
 
 /**
  * 协议入站服务实现(合体面板:协议 + 限速)。
- * 架构:客户端 → gost(公网口:限速/流量/到期) → 127.0.0.1:sing-box入站(协议) → 外网。
+ * Legacy: public gost → private sing-box. Public Reality: sing-box → per-user
+ * private gost SOCKS meter → private sing-box gateway → direct/landing outbound.
  *
  * @author QAQ
  * @since 2026-07-19
@@ -52,6 +53,8 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
     private static final int TUNNEL_TYPE_PORT_FORWARD = 1;
     private static final int SINGBOX_LISTEN_BASE = 40000;
 
+    @Autowired
+    private com.admin.common.utils.NodeCommandClient nodeCommands;
     @Autowired
     private InboundUserMapper inboundUserMapper;
     @Autowired
@@ -91,7 +94,7 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
     }
 
     @Override
-    public R createInbound(InboundDto dto) {
+    public synchronized R createInbound(InboundDto dto) {
         R built = buildAndSaveInbound(dto);
         if (built.getCode() != 0) {
             return built;
@@ -117,12 +120,28 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
         String protocol = (dto.getProtocol() == null || dto.getProtocol().isEmpty())
                 ? "shadowsocks" : dto.getProtocol().toLowerCase();
 
-        // 通用字段(sing-box 一律 listen 127.0.0.1,公网口交给 gost 限速)
+        // New VLESS listens publicly; legacy protocols keep their loopback listeners.
         Inbound in = new Inbound();
         in.setNodeId(node.getId());
         in.setProtocol(protocol);
-        in.setListenPort(dto.getListenPort() != null ? dto.getListenPort() : allocateListenPort(node.getId()));
-        in.setTag("in-" + node.getId() + "-" + in.getListenPort());
+        Integer selectedPort = dto.getListenPort() != null ? dto.getListenPort()
+                : ("vless".equals(protocol) ? Integer.valueOf(443) : allocateListenPort(node.getId()));
+        if (selectedPort == null) return R.err("No free private ports available on this node");
+        int port = selectedPort;
+        if (port < 1 || port > 65535) return R.err("Port must be between 1 and 65535");
+        in.setPublicListen("vless".equals(protocol));
+        R available = validateListener(node.getId(), protocol, port, null);
+        if (available.getCode() != 0) return available;
+        in.setListenPort(port);
+        if (Boolean.TRUE.equals(in.getPublicListen())) {
+            Integer gateway = allocateListenPort(node.getId(), port);
+            if (gateway == null) return R.err("No private gateway ports available on this node");
+            if (gateway > 65535) return R.err("No private gateway ports available on this node");
+            R gatewayAvailable = validateListener(node.getId(), "vless", gateway, null);
+            if (gatewayAvailable.getCode() != 0) return gatewayAvailable;
+            in.setEgressPort(gateway);
+        }
+        in.setTag("in-" + node.getId() + "-" + protocol + "-" + in.getListenPort());
         in.setRemark(dto.getRemark());
         in.setLandingId(dto.getLandingId()); // 空=直连,有=中转(经该落地出网)
         in.setStatus(1);
@@ -170,7 +189,7 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
             }
             // 脏值(比如下拉的显示文字)会原样进 sing-box 的 server_name,握手必挂,这里最后卡一道
             String realSni = realitySni(dto.getSni());
-            GostDto kp = SingboxUtil.GenerateRealityKeypair(node.getId(), null);
+            GostDto kp = nodeCommands.realityKeypair(node.getId());
             // send_msg 返回的 GostDto 不设 code,判成功看 msg=="OK"(与 ForwardServiceImpl 一致)
             if (kp == null || !"OK".equals(kp.getMsg()) || kp.getData() == null) {
                 return R.err("生成 Reality 密钥失败:" + (kp != null && kp.getMsg() != null ? kp.getMsg() : "节点无响应/超时"));
@@ -227,7 +246,8 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
     }
 
     @Override
-    public R oneClickCreate(Long nodeId, String sni) {
+    public synchronized R oneClickCreate(Long nodeId, String sni, Integer listenPort) {
+        if (listenPort != null && (listenPort < 1 || listenPort > 65535)) return R.err("Port must be between 1 and 65535");
         Node node = nodeMapper.selectById(nodeId);
         if (node == null) {
             return R.err("节点不存在");
@@ -240,6 +260,7 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
             InboundDto dto = new InboundDto();
             dto.setNodeId(nodeId);
             dto.setProtocol(p);
+            if ("vless".equals(p)) dto.setListenPort(listenPort);
             if ("vless".equals(p) || "trojan".equals(p)) {
                 dto.setSni(realitySni);
             }
@@ -258,7 +279,8 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
     }
 
     @Override
-    public R oneClickRelay(Long nodeId, String link, String name, String sni) {
+    public synchronized R oneClickRelay(Long nodeId, String link, String name, String sni, Integer listenPort) {
+        if (listenPort != null && (listenPort < 1 || listenPort > 65535)) return R.err("Port must be between 1 and 65535");
         Node node = nodeMapper.selectById(nodeId);
         if (node == null) {
             return R.err("前置机不存在");
@@ -409,7 +431,9 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
         ForwardDto fdto = new ForwardDto();
         fdto.setName("inbound-" + in.getId() + "-user-" + user.getId());
         fdto.setTunnelId(tunnel.getId().intValue());
-        fdto.setRemoteAddr("127.0.0.1:" + in.getListenPort());
+        fdto.setRemoteAddr(Boolean.TRUE.equals(in.getPublicListen())
+                ? "tms-socks://127.0.0.1:" + in.getEgressPort()
+                : "127.0.0.1:" + in.getListenPort());
         fdto.setStrategy("fifo");
         fdto.setSpeedId(userLimiter); // 转发引用车友专属限速器
         fdto.setExpTime(dto.getExpTime());
@@ -451,7 +475,7 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
         JSONObject result = new JSONObject();
         result.put("inboundUserId", iu.getId());
         result.put("uuid", uuid);
-        result.put("port", forward.getInPort());
+        result.put("port", clientPort(in, forward));
         result.put("link", link);
         result.put("subToken", subToken);
         return R.ok(result);
@@ -633,7 +657,9 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
         ForwardDto fdto = new ForwardDto();
         fdto.setName("inbound-" + in.getId() + "-user-" + user.getId());
         fdto.setTunnelId(tunnel.getId().intValue());
-        fdto.setRemoteAddr("127.0.0.1:" + in.getListenPort());
+        fdto.setRemoteAddr(Boolean.TRUE.equals(in.getPublicListen())
+                ? "tms-socks://127.0.0.1:" + in.getEgressPort()
+                : "127.0.0.1:" + in.getListenPort());
         fdto.setStrategy("fifo");
         fdto.setSpeedId(limiterName); // 转发引用车友专属限速器
         fdto.setExpTime(expTime);
@@ -855,7 +881,7 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
             java.util.Map<String, Object> proxy = ClashUtil.toProxy(
                     in.getProtocol(),
                     ClashUtil.uniqueName(remark, usedNames),
-                    ip, forward.getInPort(),
+                    ip, clientPort(in, forward),
                     iu.getUuid(), iu.getPassword(), in.getSni(),
                     in.getPublicKey(), in.getShortId(), ssMethod,
                     wsPath, wsHost);
@@ -929,7 +955,7 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
         String ip = (node.getDomain() != null && !node.getDomain().trim().isEmpty())
                 ? node.getDomain().trim()
                 : node.getServerIp();
-        Integer port = forward.getInPort();
+        Integer port = clientPort(in, forward);
         switch (in.getProtocol() == null ? "" : in.getProtocol()) {
             case "shadowsocks": {
                 JSONObject cfg = JSON.parseObject(in.getConfigJson() == null ? "{}" : in.getConfigJson());
@@ -1470,6 +1496,107 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
         return hit;
     }
 
+    static Integer clientPort(Inbound in, Forward forward) {
+        return Boolean.TRUE.equals(in.getPublicListen()) ? in.getListenPort() : forward.getInPort();
+    }
+
+    private static java.util.Set<String> listenerNetworks(String protocol) {
+        if ("hysteria2".equals(protocol) || "tuic".equals(protocol)) return java.util.Set.of("udp");
+        if ("shadowsocks".equals(protocol)) return java.util.Set.of("tcp", "udp");
+        return java.util.Set.of("tcp");
+    }
+
+    private R validateListener(Long nodeId, String protocol, int port, Long excludeId) {
+        java.util.Set<String> networks = listenerNetworks(protocol);
+        for (Inbound other : list(new QueryWrapper<Inbound>().eq("node_id", nodeId))) {
+            if (excludeId != null && excludeId.equals(other.getId())) continue;
+            for (String network : networks) {
+                if ((listenerNetworks(other.getProtocol()).contains(network) && Integer.valueOf(port).equals(other.getListenPort()))
+                        || ("tcp".equals(network) && Integer.valueOf(port).equals(other.getEgressPort())))
+                    return R.err(network.toUpperCase() + " port " + port + " is already used on node " + nodeId);
+            }
+        }
+        // Paused services retain their DB reservation even when the OS socket is temporarily closed.
+        List<Tunnel> tunnels = tunnelMapper.selectList(new QueryWrapper<Tunnel>()
+                .eq("in_node_id", nodeId).or().eq("out_node_id", nodeId));
+        Map<Integer, Tunnel> byId = new HashMap<>();
+        for (Tunnel tunnel : tunnels) byId.put(tunnel.getId().intValue(), tunnel);
+        if (!byId.isEmpty()) for (Forward forward : forwardMapper.selectList(new QueryWrapper<Forward>().in("tunnel_id", byId.keySet()))) {
+            Tunnel tunnel = byId.get(forward.getTunnelId());
+            boolean privateSocks = forward.getRemoteAddr() != null && forward.getRemoteAddr().startsWith("tms-socks://");
+            for (String network : networks) {
+                boolean entry = nodeId.equals(tunnel.getInNodeId()) && Integer.valueOf(port).equals(forward.getInPort())
+                        && (!privateSocks || "tcp".equals(network));
+                boolean exit = nodeId.equals(tunnel.getOutNodeId()) && Integer.valueOf(port).equals(forward.getOutPort())
+                        && ("quic".equals(tunnel.getProtocol()) ? "udp" : "tcp").equals(network);
+                if (entry || exit) return R.err(network.toUpperCase() + " port " + port + " is reserved by a forwarding service on node " + nodeId);
+            }
+        }
+        for (String network : networks) {
+            com.alibaba.fastjson.JSONObject request = new com.alibaba.fastjson.JSONObject();
+            request.put("port", port); request.put("network", network);
+            GostDto result = nodeCommands.send(nodeId, request, "CheckListenPort");
+            if (result == null || !"OK".equals(result.getMsg()))
+                return R.err("Cannot use " + network.toUpperCase() + " port " + port + " on node " + nodeId
+                        + ": " + (result == null ? "node unavailable" : result.getMsg()));
+        }
+        return R.ok();
+    }
+
+    @Override
+    public synchronized R updateListenPort(Long id, Integer port) {
+        if (port == null || port < 1 || port > 65535) return R.err("Port must be between 1 and 65535");
+        Inbound in = getById(id);
+        if (in == null || !"vless".equals(in.getProtocol())) return R.err("VLESS entry not found");
+        if (port.equals(in.getListenPort()) && Boolean.TRUE.equals(in.getPublicListen())) return R.ok(in);
+        R available = validateListener(in.getNodeId(), in.getProtocol(), port, id);
+        if (available.getCode() != 0) return available;
+        // Conversion is explicit: untouched legacy records never change ports or forwarding mode.
+        Inbound previous = new Inbound();
+        org.springframework.beans.BeanUtils.copyProperties(in, previous);
+        in.setPublicListen(true);
+        in.setListenPort(port);
+        if (in.getEgressPort() == null) {
+            Integer gateway = allocateListenPort(in.getNodeId(), port);
+            if (gateway == null) return R.err("No private gateway ports available on this node");
+            if (gateway > 65535) return R.err("No private gateway ports available");
+            R gatewayAvailable = validateListener(in.getNodeId(), "vless", gateway, id);
+            if (gatewayAvailable.getCode() != 0) return gatewayAvailable;
+            in.setEgressPort(gateway);
+        }
+        updateById(in);
+        List<InboundUser> users = inboundUserMapper.selectList(new QueryWrapper<InboundUser>().eq("inbound_id", id));
+        Map<Long, String> oldTargets = new HashMap<>();
+        R pushed = R.ok();
+        if (!Boolean.TRUE.equals(previous.getPublicListen())) for (InboundUser user : users) {
+            Forward f = user.getGostForwardId() == null ? null : forwardMapper.selectById(user.getGostForwardId());
+            if (f != null) {
+                oldTargets.put(f.getId(), f.getRemoteAddr());
+                f.setRemoteAddr("tms-socks://127.0.0.1:" + in.getEgressPort());
+                forwardService.updateById(f);
+                pushed = forwardService.updateInboundForward(f);
+                if (pushed.getCode() != 0) break;
+            }
+        }
+        if (pushed.getCode() == 0) pushed = pushNodeSingbox(in.getNodeId());
+        if (pushed.getCode() != 0) {
+            updateById(previous);
+            // updateById skips nullable fields, so restore the private gateway explicitly.
+            this.update(new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<Inbound>()
+                    .eq("id", id).set("egress_port", previous.getEgressPort()));
+            for (Map.Entry<Long, String> target : oldTargets.entrySet()) {
+                Forward f = forwardMapper.selectById(target.getKey());
+                f.setRemoteAddr(target.getValue());
+                forwardService.updateById(f);
+                R restored = forwardService.updateInboundForward(f);
+                if (restored.getCode() != 0) log.warn("Could not restore node service after failed port edit: " + f.getId());
+            }
+            pushNodeSingbox(in.getNodeId());
+            return pushed;
+        }
+        return R.ok(in);
+    }
+
     // -------- helpers --------
 
     /** 汇总该节点所有入站 + 各入站用户,推 sing-box 配置到节点 */
@@ -1478,8 +1605,14 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
         Map<Long, List<InboundUser>> usersByInbound = new HashMap<>();
         Map<Long, String> landingOutbounds = new HashMap<>();
         for (Inbound in : inbounds) {
-            usersByInbound.put(in.getId(),
-                    inboundUserMapper.selectList(new QueryWrapper<InboundUser>().eq("inbound_id", in.getId())));
+            List<InboundUser> users = inboundUserMapper.selectList(new QueryWrapper<InboundUser>().eq("inbound_id", in.getId()));
+            if (Boolean.TRUE.equals(in.getPublicListen())) {
+                for (InboundUser u : users) {
+                    Forward f = u.getGostForwardId() == null ? null : forwardMapper.selectById(u.getGostForwardId());
+                    if (f != null) u.setEgressPort(f.getInPort());
+                }
+            }
+            usersByInbound.put(in.getId(), users);
             // 中转:收集该入站用到的落地出站(去重,一条落地查一次)
             Long lid = in.getLandingId();
             if (lid != null && !landingOutbounds.containsKey(lid)) {
@@ -1489,7 +1622,7 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
                 }
             }
         }
-        GostDto r = SingboxUtil.SetSingboxConfig(nodeId, inbounds, usersByInbound, landingOutbounds, null);
+        GostDto r = nodeCommands.configure(nodeId, inbounds, usersByInbound, landingOutbounds);
         if (r == null || !"OK".equals(r.getMsg())) {
             return R.err("下发 sing-box 配置失败:" + (r != null && r.getMsg() != null ? r.getMsg() : "节点无响应/超时"));
         }
@@ -1612,14 +1745,20 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
 
     /** 分配 sing-box 本机监听口(40000+,避开 gost 公网口段) */
     private Integer allocateListenPort(Long nodeId) {
-        List<Inbound> inbounds = this.list(new QueryWrapper<Inbound>().eq("node_id", nodeId));
-        int max = SINGBOX_LISTEN_BASE - 1;
-        for (Inbound in : inbounds) {
-            if (in.getListenPort() != null && in.getListenPort() > max) {
-                max = in.getListenPort();
-            }
+        return allocateListenPort(nodeId, null);
+    }
+
+    private Integer allocateListenPort(Long nodeId, Integer reserved) {
+        java.util.Set<Integer> used = new java.util.HashSet<>();
+        for (Inbound in : this.list(new QueryWrapper<Inbound>().eq("node_id", nodeId))) {
+            if (in.getListenPort() != null) used.add(in.getListenPort());
+            if (in.getEgressPort() != null) used.add(in.getEgressPort());
         }
-        return max + 1;
+        if (reserved != null) used.add(reserved);
+        for (int port = SINGBOX_LISTEN_BASE; port <= 65535; port++) {
+            if (!used.contains(port)) return port;
+        }
+        return null;
     }
 
     /** 随机 8 位十六进制 shortId */

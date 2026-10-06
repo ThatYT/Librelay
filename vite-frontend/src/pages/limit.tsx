@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 import { useState, useEffect } from "react";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Button } from "@heroui/button";
@@ -6,7 +8,7 @@ import { Select, SelectItem } from "@heroui/select";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
 import { Chip } from "@heroui/chip";
 import { Spinner } from "@heroui/spinner";
-import toast from 'react-hot-toast';
+import toast from '@/utils/toast';
 
 
 import { 
@@ -47,6 +49,7 @@ interface SpeedLimitForm {
 }
 
 export default function LimitPage() {
+  useTranslation();
   const [loading, setLoading] = useState(true);
   const [rules, setRules] = useState<SpeedLimitRule[]>([]);
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
@@ -89,17 +92,17 @@ export default function LimitPage() {
       if (rulesRes.code === 0) {
         setRules(rulesRes.data || []);
       } else {
-        toast.error(rulesRes.msg || '获取限速规则失败');
+        toast.error(rulesRes.msg || t("mbda7feecd7be"));
       }
       
       if (tunnelsRes.code === 0) {
         setTunnels(tunnelsRes.data || []);
       } else {
-        console.warn('获取隧道列表失败:', tunnelsRes.msg);
+        console.warn(t("m8e2d2dfe2399"), tunnelsRes.msg);
       }
     } catch (error) {
-      console.error('加载数据失败:', error);
-      toast.error('加载数据失败');
+      console.error(t("m5a3f28106237"), error);
+      toast.error(t("md1abfa54a4ac"));
     } finally {
       setLoading(false);
     }
@@ -110,13 +113,13 @@ export default function LimitPage() {
     const newErrors: {[key: string]: string} = {};
     
     if (!form.name.trim()) {
-      newErrors.name = '请输入规则名称';
+      newErrors.name = t("me2df945bb61d");
     } else if (form.name.length < 2 || form.name.length > 50) {
-      newErrors.name = '规则名称长度应在2-50个字符之间';
+      newErrors.name = t("m5e5200343f02");
     }
     
     if (!form.speed || form.speed < 1) {
-      newErrors.speed = '请输入有效的速度限制（≥1 MB/s）';
+      newErrors.speed = t("mf651d06921ed");
     }
 
     // 隧道可选:合体面板的协议限速不用绑隧道(分配协议用户时自动把限速器推到协议节点)
@@ -172,15 +175,15 @@ export default function LimitPage() {
     try {
       const res = await deleteSpeedLimit(ruleToDelete.id);
       if (res.code === 0) {
-        toast.success('删除成功');
+        toast.success(t("m5223f91b9670"));
         setDeleteModalOpen(false);
         loadData();
       } else {
-        toast.error(res.msg || '删除失败');
+        toast.error(res.msg || t("mc228558cf257"));
       }
     } catch (error) {
-      console.error('删除失败:', error);
-      toast.error('删除失败');
+      console.error(t("m8b176752f6e2"), error);
+      toast.error(t("mc228558cf257"));
     } finally {
       setDeleteLoading(false);
     }
@@ -201,15 +204,15 @@ export default function LimitPage() {
       }
       
       if (res.code === 0) {
-        toast.success(isEdit ? '修改成功' : '创建成功');
+        toast.success(isEdit ? t("m3602152b0fe5") : t("m1ab62884f4ee"));
         setModalOpen(false);
         loadData();
       } else {
-        toast.error(res.msg || '操作失败');
+        toast.error(res.msg || t("m0c3b4cf7aa25"));
       }
     } catch (error) {
-      console.error('提交失败:', error);
-      toast.error('操作失败');
+      console.error(t("ma2928635ad12"), error);
+      toast.error(t("m0c3b4cf7aa25"));
     } finally {
       setSubmitLoading(false);
     }
@@ -221,7 +224,7 @@ export default function LimitPage() {
         <div className="flex items-center justify-center h-64">
           <div className="flex items-center gap-3">
             <Spinner size="sm" />
-            <span className="text-default-600">正在加载...</span>
+            <span className="text-default-600">{t("m7545b3950397")}</span>
           </div>
         </div>
       
@@ -242,9 +245,7 @@ export default function LimitPage() {
               color="primary"
               onPress={handleAdd}
              
-            >
-              新增
-            </Button>
+            > {t("m0006d696d8e1")} </Button>
         </div>
 
         {/* 统一卡片网格 */}
@@ -262,26 +263,26 @@ export default function LimitPage() {
                       variant="flat" 
                       size="sm"
                     >
-                      {rule.status === 1 ? '运行' : '异常'}
+                      {rule.status === 1 ? t("m75b269496f69") : t("m428fb8bfeecf")}
                     </Chip>
                   </div>
                 </CardHeader>
                 <CardBody className="pt-0">
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-small text-default-600">速度限制</span>
+                      <span className="text-small text-default-600">{t("mb4b2fe2e349f")}</span>
                       <Chip color="secondary" variant="flat" size="sm">
                         {rule.speed} MB/s
                       </Chip>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-small text-default-600">绑定隧道</span>
+                      <span className="text-small text-default-600">{t("m3909a30ba0e5")}</span>
                       {rule.tunnelName ? (
                         <Chip color="primary" variant="flat" size="sm">
                           {rule.tunnelName}
                         </Chip>
                       ) : (
-                        <span className="text-default-400 text-small">未绑定</span>
+                        <span className="text-default-400 text-small">{t("me026c6693dc5")}</span>
                       )}
                     </div>
                   </div>
@@ -298,9 +299,7 @@ export default function LimitPage() {
                           <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
                         </svg>
                       }
-                    >
-                      编辑
-                    </Button>
+                    > {t("m051836569928")} </Button>
                     <Button
                       size="sm"
                       variant="flat"
@@ -313,9 +312,7 @@ export default function LimitPage() {
                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 012 0v4a1 1 0 11-2 0V7zM12 7a1 1 0 012 0v4a1 1 0 11-2 0V7z" clipRule="evenodd" />
                         </svg>
                       }
-                    >
-                      删除
-                    </Button>
+                    > {t("m2f9daa828907")} </Button>
                   </div>
                 </CardBody>
               </Card>
@@ -332,8 +329,8 @@ export default function LimitPage() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-foreground">暂无限速规则</h3>
-                  <p className="text-default-500 text-sm mt-1">还没有创建任何限速规则，点击上方按钮开始创建</p>
+                  <h3 className="text-lg font-semibold text-foreground">{t("mdff564fa0ff0")}</h3>
+                  <p className="text-default-500 text-sm mt-1">{t("mec22ac446aed")}</p>
                 </div>
               </div>
             </CardBody>
@@ -354,17 +351,17 @@ export default function LimitPage() {
               <>
                 <ModalHeader className="flex flex-col gap-1">
                   <h2 className="text-xl font-bold">
-                    {isEdit ? '编辑限速规则' : '新增限速规则'}
+                    {isEdit ? t("mea6240a3d607") : t("m0a676b7e4ad0")}
                   </h2>
                   <p className="text-small text-default-500">
-                    {isEdit ? '修改现有限速规则的配置信息' : '创建新的限速规则并绑定到隧道'}
+                    {isEdit ? t("m15a3c7420f94") : t("mc960f0932d6b")}
                   </p>
                 </ModalHeader>
                 <ModalBody>
                   <div className="space-y-4">
                     <Input
-                      label="规则名称"
-                      placeholder="请输入限速规则名称"
+                      label={t("m18dba51b47c8")}
+                      placeholder={t("mf6b7252d9413")}
                       value={form.name}
                       onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
                       isInvalid={!!errors.name}
@@ -373,15 +370,15 @@ export default function LimitPage() {
                     />
                     
                     <Input
-                      label="速度限制"
-                      placeholder="请输入速度限制"
+                      label={t("mb4b2fe2e349f")}
+                      placeholder={t("mcab0951da9c1")}
                       type="number"
                       value={form.speed.toString()}
                       onChange={(e) => setForm(prev => ({ ...prev, speed: parseInt(e.target.value) || 0 }))}
                       isInvalid={!!errors.speed}
                       errorMessage={errors.speed}
                       variant="bordered"
-                      description="单位 MB/s(兆字节每秒),和客户端测速显示的一致:填 5,车友测出来就是 5MB/s 左右"
+                      description={t("m21e468aa567b")}
                       endContent={
                         <div className="pointer-events-none flex items-center">
                           <span className="text-default-400 text-small">MB/s</span>
@@ -390,29 +387,29 @@ export default function LimitPage() {
                     />
 
                     <Select
-                      label="限速模式"
-                      placeholder="选择限速粒度"
+                      label={t("m53ccaf8e6a48")}
+                      placeholder={t("m11d2e698db7f")}
                       selectedKeys={[String(form.mode ?? 0)]}
                       onSelectionChange={(keys) => {
                         const k = Array.from(keys)[0] as string;
                         setForm(prev => ({ ...prev, mode: parseInt(k) || 0 }));
                       }}
                       variant="bordered"
-                      description="每客户端IP:防单人吃满带宽"
+                      description={t("m3909c61dc89c")}
                     >
-                      <SelectItem key="0">共享(整条限速器一个池)</SelectItem>
-                      <SelectItem key="1">每连接各自封顶</SelectItem>
-                      <SelectItem key="2">每客户端IP各自封顶</SelectItem>
+                      <SelectItem key="0">{t("m44c6050ffd8e")}</SelectItem>
+                      <SelectItem key="1">{t("m1965ca5d27ed")}</SelectItem>
+                      <SelectItem key="2">{t("mdbb541e456b9")}</SelectItem>
                     </Select>
 
                     <Input
-                      label="总带宽天花板"
-                      placeholder="0 = 不设"
+                      label={t("m4e6f3e0b5e32")}
+                      placeholder={t("m23b31493b3ce")}
                       type="number"
                       value={(form.total ?? 0).toString()}
                       onChange={(e) => setForm(prev => ({ ...prev, total: parseInt(e.target.value) || 0 }))}
                       variant="bordered"
-                      description="整条限速器的总带宽上限(MB/s),与上面叠加,用来防机房限流。0=不限。给协议/中转限速时不用管这项"
+                      description={t("mb4c5bfa38567")}
                       endContent={
                         <div className="pointer-events-none flex items-center">
                           <span className="text-default-400 text-small">MB/s</span>
@@ -421,8 +418,8 @@ export default function LimitPage() {
                     />
 
                     <Select
-                      label="绑定隧道(可选)"
-                      placeholder="协议限速可不选;转发限速才需要选隧道"
+                      label={t("m802c9f6d35be")}
+                      placeholder={t("m74b7847de8bb")}
                       selectedKeys={form.tunnelId ? [form.tunnelId.toString()] : []}
                       onSelectionChange={(keys) => {
                         const selectedKey = Array.from(keys)[0] as string;
@@ -454,15 +451,13 @@ export default function LimitPage() {
                   </div>
                 </ModalBody>
                 <ModalFooter>
-                  <Button variant="light" onPress={onClose}>
-                    取消
-                  </Button>
+                  <Button variant="light" onPress={onClose}> {t("m2cd0f3be8738")} </Button>
                   <Button 
                     color="primary" 
                     onPress={handleSubmit}
                     isLoading={submitLoading}
                   >
-                    {isEdit ? '保存修改' : '创建规则'}
+                    {isEdit ? t("m991bb7cfe5a8") : t("m63faeddb2a46")}
                   </Button>
                 </ModalFooter>
               </>
@@ -483,27 +478,19 @@ export default function LimitPage() {
             {(onClose) => (
               <>
                 <ModalHeader className="flex flex-col gap-1">
-                  <h2 className="text-lg font-bold text-danger">确认删除</h2>
+                  <h2 className="text-lg font-bold text-danger">{t("ma3ea3c17b401")}</h2>
                 </ModalHeader>
                 <ModalBody>
-                  <p className="text-default-600">
-                    确定要删除限速规则 <span className="font-semibold text-foreground">"{ruleToDelete?.name}"</span> 吗？
-                  </p>
-                  <p className="text-small text-default-500 mt-2">
-                    此操作无法撤销，删除后该规则将永久消失。
-                  </p>
+                  <p className="text-default-600"> {t("m491202966994")} <span className="font-semibold text-foreground">"{ruleToDelete?.name}"</span> {t("m9d45d8943988")} </p>
+                  <p className="text-small text-default-500 mt-2"> {t("m941618fc4c4e")} </p>
                 </ModalBody>
                 <ModalFooter>
-                  <Button variant="light" onPress={onClose}>
-                    取消
-                  </Button>
+                  <Button variant="light" onPress={onClose}> {t("m2cd0f3be8738")} </Button>
                   <Button 
                     color="danger" 
                     onPress={confirmDelete}
                     isLoading={deleteLoading}
-                  >
-                    确认删除
-                  </Button>
+                  > {t("ma3ea3c17b401")} </Button>
                 </ModalFooter>
               </>
             )}
@@ -512,4 +499,4 @@ export default function LimitPage() {
       </div>
     
   );
-} 
+}

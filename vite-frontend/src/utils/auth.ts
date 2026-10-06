@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { getRoleIdFromToken, isTokenValid } from './jwt';
 
 /**
@@ -60,7 +61,7 @@ export function isLoggedIn(): boolean {
  */
 export function requireAdmin<T extends (...args: any[]) => any>(
   fn: T, 
-  errorMsg: string = '权限不足，仅管理员可操作'
+  errorMsg: string = t("m77bc1ca22a81")
 ): T {
   return ((...args: Parameters<T>) => {
     if (!isAdmin()) {
@@ -69,4 +70,4 @@ export function requireAdmin<T extends (...args: any[]) => any>(
     }
     return fn(...args);
   }) as T;
-} 
+}

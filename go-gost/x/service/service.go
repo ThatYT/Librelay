@@ -32,16 +32,17 @@ import (
 )
 
 type options struct {
-	admission      admission.Admission
-	recorders      []recorder.RecorderObject
-	preUp          []string
-	postUp         []string
-	preDown        []string
-	postDown       []string
-	stats          stats.Stats
-	observer       observer.Observer
-	observerPeriod time.Duration
-	logger         logger.Logger
+	internalTransport bool
+	admission         admission.Admission
+	recorders         []recorder.RecorderObject
+	preUp             []string
+	postUp            []string
+	preDown           []string
+	postDown          []string
+	stats             stats.Stats
+	observer          observer.Observer
+	observerPeriod    time.Duration
+	logger            logger.Logger
 }
 
 var isTls = 0
@@ -54,21 +55,27 @@ var needWrap = false
 
 // SetProtocolBlock sets protocol blocking switches and recomputes wrapper need
 func SetProtocolBlock(httpOn int, tlsOn int, socksOn int) {
-    isHttp = httpOn
-    isTls = tlsOn
-    isSocks = socksOn
-    needWrap = isTls+isSocks+isHttp > 0
+	isHttp = httpOn
+	isTls = tlsOn
+	isSocks = socksOn
+	needWrap = isTls+isSocks+isHttp > 0
 }
 
 type Option func(opts *options)
 
 func init() {
 	_, err := LoadConfig("config.json")
-	fmt.Println("config.json loaded")
-	if err != nil {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		log.Fatal(err)
 	}
+	if err == nil {
+		fmt.Println("config.json loaded")
+	}
 	needWrap = isTls+isSocks+isHttp > 0
+}
+
+func InternalTransportOption(value bool) Option {
+	return func(opts *options) { opts.internalTransport = value }
 }
 
 func AdmissionOption(admission admission.Admission) Option {
@@ -287,7 +294,7 @@ func (s *defaultService) Serve() error {
 				}()
 			}
 
-			if needWrap {
+			if needWrap && !s.options.internalTransport {
 				conn = wrapConnPDetection(conn)
 			}
 
@@ -573,7 +580,7 @@ type Config struct {
 
 func LoadConfig(configPath string) (string, error) {
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return "", fmt.Errorf("配置文件不存在: %s", configPath)
+		return "", fmt.Errorf("configuration file %s: %w", configPath, os.ErrNotExist)
 	}
 
 	data, err := os.ReadFile(configPath)

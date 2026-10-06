@@ -35,6 +35,18 @@ public class InboundController extends BaseController {
         return inboundService.createInbound(dto);
     }
 
+    @LogAnnotation
+    @RequireRole
+    @PostMapping("/port")
+    public R port(@RequestBody Map<String, Object> body) {
+        try {
+            return inboundService.updateListenPort(asLong(body.get("id")),
+                    Integer.valueOf(String.valueOf(body.get("listenPort"))));
+        } catch (NumberFormatException e) {
+            return R.err("Port must be an integer between 1 and 65535");
+        }
+    }
+
     /** 一键添加:在指定节点上把所有支持的协议一键全建出来(像 s-ui 的一键添加) */
     @LogAnnotation
     @RequireRole
@@ -42,7 +54,8 @@ public class InboundController extends BaseController {
     public R oneClick(@RequestBody Map<String, Object> body) {
         return inboundService.oneClickCreate(
                 Long.valueOf(String.valueOf(body.get("nodeId"))),
-                body.get("sni") == null ? null : String.valueOf(body.get("sni")));
+                body.get("sni") == null ? null : String.valueOf(body.get("sni")),
+                body.get("listenPort") == null ? null : Integer.valueOf(String.valueOf(body.get("listenPort"))));
     }
 
     /** 一键搭中转:在前置机上建全套协议,流量经内联粘贴的落地出网 */
@@ -54,7 +67,8 @@ public class InboundController extends BaseController {
                 Long.valueOf(String.valueOf(body.get("nodeId"))),
                 String.valueOf(body.get("link")),
                 body.get("name") == null ? null : String.valueOf(body.get("name")),
-                body.get("sni") == null ? null : String.valueOf(body.get("sni")));
+                body.get("sni") == null ? null : String.valueOf(body.get("sni")),
+                body.get("listenPort") == null ? null : Integer.valueOf(String.valueOf(body.get("listenPort"))));
     }
 
     @RequireRole

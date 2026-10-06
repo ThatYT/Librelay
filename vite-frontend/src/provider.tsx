@@ -1,4 +1,5 @@
 import type { NavigateOptions } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import * as React from "react";
 
 import { HeroUIProvider } from "@heroui/system";
@@ -19,9 +20,10 @@ export interface ProvidersProps {
 
 export function Provider({ children }: ProvidersProps) {
   const navigate = useNavigate();
+  const { i18n } = useTranslation();
 
   return (
-    <I18nProvider locale="zh-CN">
+    <I18nProvider locale={i18n.language}>
       <HeroUIProvider navigate={navigate} useHref={useHref}>
         <ThemeProvider>
           {children}

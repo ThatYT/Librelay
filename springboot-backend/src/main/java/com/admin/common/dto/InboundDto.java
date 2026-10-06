@@ -17,6 +17,9 @@ public class InboundDto {
     private String protocol;
 
     /** sing-box 本机监听口,可空(自动分配 40000+) */
+    @javax.validation.constraints.Min(value = 1, message = "Port must be between 1 and 65535")
+    @javax.validation.constraints.Max(value = 65535, message = "Port must be between 1 and 65535")
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.admin.common.utils.PortNumberDeserializer.class)
     private Integer listenPort;
 
     /** Reality 借用的 SNI(仅 vless-reality 需要,如 www.microsoft.com) */

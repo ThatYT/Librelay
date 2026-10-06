@@ -8,31 +8,12 @@
     <script>
       // 防止暗黑模式闪烁：在页面加载前立即应用系统主题
       (function() {
-        // 立即检测系统主题并应用
-        const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        
-        // 立即设置主题类，避免闪烁
-        if (isDarkMode) {
-          document.documentElement.classList.add('dark');
-          document.documentElement.style.colorScheme = 'dark';
-        } else {
-          document.documentElement.classList.remove('dark');
-          document.documentElement.style.colorScheme = 'light';
-        }
-        
-        // 监听系统主题变化
-        if (window.matchMedia) {
-          window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
-            if (e.matches) {
-              document.documentElement.classList.add('dark');
-              document.documentElement.style.colorScheme = 'dark';
-            } else {
-              document.documentElement.classList.remove('dark');
-              document.documentElement.style.colorScheme = 'light';
-            }
-          });
-        }
-        
+        const saved = localStorage.getItem('skin');
+        const oldDark = ['aurora', 'deepsea', 'cyber', 'midnight', 'forest', 'lava', 'grape', 'steel'];
+        const theme = saved === 'dark' || oldDark.includes(saved) ? 'dark' : 'light';
+        document.documentElement.classList.add(theme);
+        document.documentElement.style.colorScheme = theme;
+
         // 检测H5模式并设置标记，避免布局切换时的闪屏
         const isMobile = window.innerWidth <= 768;
         const isMobileBrowser = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);

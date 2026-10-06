@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import axios, { AxiosResponse } from 'axios';
 import { getPanelAddresses, isWebViewFunc} from '@/utils/panel';
 
@@ -99,7 +100,7 @@ const Network = {
     return new Promise(function(resolve) {
       // 如果baseURL是默认值且是WebView环境，说明没有设置面板地址
       if (baseURL === '') {
-        resolve({"code": -1, "msg": " - 请先设置面板地址", "data": null as T});
+        resolve({"code": -1, "msg": t("m07589d80a3dc"), "data": null as T});
         return;
       }
 
@@ -119,7 +120,7 @@ const Network = {
           resolve(response.data);
         })
                  .catch(function(error: any) {
-           console.error('GET请求错误:', error);
+           console.error(t("m48ef355e5b17"), error);
            
            // 检查是否是401错误（token失效）
            if (error.response && error.response.status === 401) {
@@ -127,7 +128,7 @@ const Network = {
              return;
            }
            
-           resolve({"code": -1, "msg": error.message || "网络请求失败", "data": null as T});
+           resolve({"code": -1, "msg": error.message || t("m8407ceab3752"), "data": null as T});
          });
     });
   },
@@ -136,7 +137,7 @@ const Network = {
     return new Promise(function(resolve) {
       // 如果baseURL是默认值且是WebView环境，说明没有设置面板地址
       if (baseURL === '') {
-        resolve({"code": -1, "msg": " - 请先设置面板地址", "data": null as T});
+        resolve({"code": -1, "msg": t("m07589d80a3dc"), "data": null as T});
         return;
       }
 
@@ -156,7 +157,7 @@ const Network = {
           resolve(response.data);
         })
                  .catch(function(error: any) {
-           console.error('POST请求错误:', error);
+           console.error(t("m99b77749d435"), error);
            
            // 检查是否是401错误（token失效）
            if (error.response && error.response.status === 401) {
@@ -164,10 +165,10 @@ const Network = {
              return;
            }
            
-           resolve({"code": -1, "msg": error.message || "网络请求失败", "data": null as T});
+           resolve({"code": -1, "msg": error.message || t("m8407ceab3752"), "data": null as T});
          });
     });
   }
 };
 
-export default Network; 
+export default Network;

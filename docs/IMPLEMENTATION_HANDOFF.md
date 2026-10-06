@@ -1,0 +1,193 @@
+# Implementation handoff
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for installation commands, existing installation upgrade instructions, database migration, Reality configuration, i18n/themes, validation matrix and known limitations.
+
+## Complete changed-file inventory
+
+73 modified tracked files and 21 new files (94 total). Every file is listed below; generated build outputs and temporary test tools are excluded.
+
+| File | Change |
+| --- | --- |
+| [.env.example](../.env.example) | Document frontend 2095/API 6365 and blank secret placeholders for manual configuration. |
+| [.github/workflows/docker-build.yml](../.github/workflows/docker-build.yml) | Derive lowercase GHCR owner from the fork rather than the upstream username. |
+| [.github/workflows/release-gost.yml](../.github/workflows/release-gost.yml) | Use the current repository in release installation examples. |
+| [.github/workflows/validate.yml](../.github/workflows/validate.yml) | Add backend/frontend/agent regression, production builds, shell and Compose checks to CI. |
+| [.gitignore](../.gitignore) | Ignore local pnpm dependency caches. |
+| [README.md](../README.md) | Update panel port/install examples and link the deployment guide. |
+| [docker-compose-hybrid.yml](../docker-compose-hybrid.yml) | Default frontend to 2095 and API to 6365; propagate repository/ref for source installs. |
+| [docker-compose-v4.yml](../docker-compose-v4.yml) | Apply new panel default and propagate repository/ref; retain named data volumes. |
+| [docker-compose-v6.yml](../docker-compose-v6.yml) | Apply new panel default and propagate repository/ref; retain named data volumes. |
+| [docs/DEPLOYMENT.md](../docs/DEPLOYMENT.md) | Document architecture, fresh installation, existing upgrades, migration, UI behavior and test limitations. |
+| [docs/IMPLEMENTATION_HANDOFF.md](../docs/IMPLEMENTATION_HANDOFF.md) | Provide this complete file inventory and tracked diff summary. |
+| [docs/反向代理.md](../docs/反向代理.md) | Update panel reverse-proxy examples to port 2095. |
+| [go-gost/x/config/parsing/service/parse.go](../go-gost/x/config/parsing/service/parse.go) | Share SOCKS traffic counters and mark private transports exempt from node protocol blocking. |
+| [go-gost/x/go.mod](../go-gost/x/go.mod) | Record previously missing build dependencies for the node module. |
+| [go-gost/x/go.sum](../go-gost/x/go.sum) | Record verified dependency checksums used by node builds. |
+| [go-gost/x/handler/socks/v5/handler.go](../go-gost/x/handler/socks/v5/handler.go) | Accept shared per-service counters for private SOCKS traffic. |
+| [go-gost/x/handler/socks/v5/udp.go](../go-gost/x/handler/socks/v5/udp.go) | Account SOCKS UDP association packets in the same service counters. |
+| [go-gost/x/service/service.go](../go-gost/x/service/service.go) | Support private transport bypass; allow missing optional node settings while rejecting malformed settings. |
+| [go-gost/x/socket/listen_port.go](../go-gost/x/socket/listen_port.go) | Validate and probe independent TCP/UDP availability on the selected node. |
+| [go-gost/x/socket/listen_port_test.go](../go-gost/x/socket/listen_port_test.go) | Test invalid inputs, TCP conflicts and TCP/UDP port coexistence. |
+| [go-gost/x/socket/reality_egress_test.go](../go-gost/x/socket/reality_egress_test.go) | Exercise actual private TCP/UDP SOCKS traffic, counters and lifecycle with node blocking enabled. |
+| [go-gost/x/socket/service.go](../go-gost/x/socket/service.go) | Handle paired pause/resume/delete when a private SOCKS service has no separate UDP listener. |
+| [go-gost/x/socket/singbox.go](../go-gost/x/socket/singbox.go) | Validate candidate config, check service startup and restore prior configuration on failure. |
+| [go-gost/x/socket/websocket_reporter.go](../go-gost/x/socket/websocket_reporter.go) | Dispatch the remote CheckListenPort command. |
+| [gost.sql](../gost.sql) | Add compatible public_listen/egress_port columns to the initial inbound schema. |
+| [install.sh](../install.sh) | Fetch/build the fork agent, preserve node settings, validate repository inputs and safely pass configuration. |
+| [panel_install.sh](../panel_install.sh) | Add port/domain/directory flags, prerequisite/plugin checks, random secrets, source builds and nondestructive install/update. |
+| [springboot-backend/Dockerfile](../springboot-backend/Dockerfile) | Use standard Debian package sources when installing fonts. |
+| [springboot-backend/pom.xml](../springboot-backend/pom.xml) | Enable JUnit 5 execution through current Maven Surefire. |
+| [springboot-backend/src/main/java/com/admin/common/dto/InboundDto.java](../springboot-backend/src/main/java/com/admin/common/dto/InboundDto.java) | Validate listening port bounds and reject fractional JSON numbers. |
+| [springboot-backend/src/main/java/com/admin/common/task/SchemaMigration.java](../springboot-backend/src/main/java/com/admin/common/task/SchemaMigration.java) | Add missing inbound columns without changing existing ports or rows. |
+| [springboot-backend/src/main/java/com/admin/common/utils/GostUtil.java](../springboot-backend/src/main/java/com/admin/common/utils/GostUtil.java) | Generate private per-user SOCKS meters/chains and remove their chains on deletion. |
+| [springboot-backend/src/main/java/com/admin/common/utils/NodeCommandClient.java](../springboot-backend/src/main/java/com/admin/common/utils/NodeCommandClient.java) | Expose an injectable node-command boundary for configuration and regression tests. |
+| [springboot-backend/src/main/java/com/admin/common/utils/PortNumberDeserializer.java](../springboot-backend/src/main/java/com/admin/common/utils/PortNumberDeserializer.java) | Reject fractional/out-of-range integer representations while retaining numeric-string compatibility. |
+| [springboot-backend/src/main/java/com/admin/common/utils/RepositoryConfig.java](../springboot-backend/src/main/java/com/admin/common/utils/RepositoryConfig.java) | Centralize validated repository/ref settings and safe shell quoting. |
+| [springboot-backend/src/main/java/com/admin/common/utils/SingboxUtil.java](../springboot-backend/src/main/java/com/admin/common/utils/SingboxUtil.java) | Generate public Reality listeners, authenticated per-user routes and private gateway listeners. |
+| [springboot-backend/src/main/java/com/admin/controller/InboundController.java](../springboot-backend/src/main/java/com/admin/controller/InboundController.java) | Expose authorized Reality port editing and forward optional one-click listening ports. |
+| [springboot-backend/src/main/java/com/admin/controller/VersionController.java](../springboot-backend/src/main/java/com/admin/controller/VersionController.java) | Check updates from configured repository/ref. |
+| [springboot-backend/src/main/java/com/admin/entity/Inbound.java](../springboot-backend/src/main/java/com/admin/entity/Inbound.java) | Persist public listener mode and separate private gateway port. |
+| [springboot-backend/src/main/java/com/admin/entity/InboundUser.java](../springboot-backend/src/main/java/com/admin/entity/InboundUser.java) | Carry transient private user-meter ports during config generation. |
+| [springboot-backend/src/main/java/com/admin/service/ForwardService.java](../springboot-backend/src/main/java/com/admin/service/ForwardService.java) | Expose checked inbound-forward reconfiguration result. |
+| [springboot-backend/src/main/java/com/admin/service/InboundService.java](../springboot-backend/src/main/java/com/admin/service/InboundService.java) | Extend creation and port-edit API contracts. |
+| [springboot-backend/src/main/java/com/admin/service/impl/ForwardServiceImpl.java](../springboot-backend/src/main/java/com/admin/service/impl/ForwardServiceImpl.java) | Keep private meters independent of public transfer ranges and reserve private gateway ports. |
+| [springboot-backend/src/main/java/com/admin/service/impl/InboundServiceImpl.java](../springboot-backend/src/main/java/com/admin/service/impl/InboundServiceImpl.java) | Default only new VLESS to 443, validate node/transport conflicts, edit with recovery and unify all subscription ports. |
+| [springboot-backend/src/main/java/com/admin/service/impl/NodeServiceImpl.java](../springboot-backend/src/main/java/com/admin/service/impl/NodeServiceImpl.java) | Generate safely quoted installation commands against the configured fork. |
+| [springboot-backend/src/test/java/com/admin/AdminApplicationTests.java](../springboot-backend/src/test/java/com/admin/AdminApplicationTests.java) | Replace production-context-only test with focused port bounds/JSON validation. |
+| [springboot-backend/src/test/java/com/admin/service/impl/RealityPortTest.java](../springboot-backend/src/test/java/com/admin/service/impl/RealityPortTest.java) | Test defaults, custom config/exports, legacy preservation, occupied ports and editing without credential reallocation. |
+| [tests/installer_test.sh](../tests/installer_test.sh) | Check port range, busy rejection, default/custom CLI and existing .env preservation. |
+| [tms-hybrid.sh](../tms-hybrid.sh) | Update status/default port reporting to 2095. |
+| [vite-frontend/.gitignore](../vite-frontend/.gitignore) | Allow the reproducible pnpm lockfile to be versioned. |
+| [vite-frontend/Dockerfile](../vite-frontend/Dockerfile) | Use Node compatible with pinned pnpm and frozen-lockfile installation. |
+| [vite-frontend/index.html](../vite-frontend/index.html) | Apply persisted Light/Dark immediately and migrate old skin IDs. |
+| [vite-frontend/package.json](../vite-frontend/package.json) | Declare React localization/direct build dependencies, pinned package manager and test command. |
+| [vite-frontend/pnpm-lock.yaml](../vite-frontend/pnpm-lock.yaml) | Lock complete frontend dependencies for local, CI and Docker builds. |
+| [vite-frontend/pnpm-workspace.yaml](../vite-frontend/pnpm-workspace.yaml) | Declare permitted dependency build scripts for pnpm installation. |
+| [vite-frontend/src/App.tsx](../vite-frontend/src/App.tsx) | Subscribe app rendering to language changes and translate global UI. |
+| [vite-frontend/src/api/index.ts](../vite-frontend/src/api/index.ts) | Expose port-edit API and custom one-click/relay port payloads. |
+| [vite-frontend/src/api/network.ts](../vite-frontend/src/api/network.ts) | Translate displayed network/session notifications while retaining raw API messages. |
+| [vite-frontend/src/components/language-picker.tsx](../vite-frontend/src/components/language-picker.tsx) | Provide persisted Chinese/English selection. |
+| [vite-frontend/src/components/navbar.tsx](../vite-frontend/src/components/navbar.tsx) | Translate navigation/account actions and show the language picker. |
+| [vite-frontend/src/components/reality-port-button.tsx](../vite-frontend/src/components/reality-port-button.tsx) | Provide a reusable validated Reality port-edit dialog for relay listings. |
+| [vite-frontend/src/components/skin-picker.tsx](../vite-frontend/src/components/skin-picker.tsx) | Translate and restrict theme selection to Light/Dark. |
+| [vite-frontend/src/components/sub-qr.tsx](../vite-frontend/src/components/sub-qr.tsx) | Translate subscription QR dialogs and actions. |
+| [vite-frontend/src/components/theme-provider.tsx](../vite-frontend/src/components/theme-provider.tsx) | Document persisted Light/Dark skin behavior. |
+| [vite-frontend/src/config/skins.ts](../vite-frontend/src/config/skins.ts) | Retain only two skins and map old skin IDs to their light/dark base. |
+| [vite-frontend/src/config/sni.ts](../vite-frontend/src/config/sni.ts) | Translate human-readable SNI descriptions without changing host identifiers. |
+| [vite-frontend/src/i18n.ts](../vite-frontend/src/i18n.ts) | Initialize React i18next catalogs, browser fallback and localStorage persistence. |
+| [vite-frontend/src/layouts/admin.tsx](../vite-frontend/src/layouts/admin.tsx) | Translate navigation/account/dialog controls and rerender on language switches. |
+| [vite-frontend/src/layouts/h5-simple.tsx](../vite-frontend/src/layouts/h5-simple.tsx) | Show language switching in the simple mobile layout. |
+| [vite-frontend/src/layouts/h5.tsx](../vite-frontend/src/layouts/h5.tsx) | Translate mobile navigation and provide language switching. |
+| [vite-frontend/src/locales/en-US.json](../vite-frontend/src/locales/en-US.json) | Provide English UI, validation and common server-notification translations. |
+| [vite-frontend/src/locales/zh-CN.json](../vite-frontend/src/locales/zh-CN.json) | Provide matching Chinese messages and interpolation fields. |
+| [vite-frontend/src/pages/change-password.tsx](../vite-frontend/src/pages/change-password.tsx) | Translate password forms and validation and subscribe to language changes. |
+| [vite-frontend/src/pages/config.tsx](../vite-frontend/src/pages/config.tsx) | Translate website configuration forms and alerts and subscribe to language changes. |
+| [vite-frontend/src/pages/dashboard.tsx](../vite-frontend/src/pages/dashboard.tsx) | Translate dashboard statistics, traffic and expiry labels and subscribe to language changes. |
+| [vite-frontend/src/pages/forward.tsx](../vite-frontend/src/pages/forward.tsx) | Translate transfer rules, bulk actions and validation and subscribe to language changes. |
+| [vite-frontend/src/pages/guide.tsx](../vite-frontend/src/pages/guide.tsx) | Translate setup guidance, dialogs and notifications and subscribe to language changes. |
+| [vite-frontend/src/pages/inbound.tsx](../vite-frontend/src/pages/inbound.tsx) | Add new/edit/one-click Reality port controls and translate protocol management. |
+| [vite-frontend/src/pages/index.tsx](../vite-frontend/src/pages/index.tsx) | Translate login, CAPTCHA and authentication messages and subscribe to language changes. |
+| [vite-frontend/src/pages/landing.tsx](../vite-frontend/src/pages/landing.tsx) | Translate landing nodes, forms and status and subscribe to language changes. |
+| [vite-frontend/src/pages/limit.tsx](../vite-frontend/src/pages/limit.tsx) | Translate rate limits, forms and validation and subscribe to language changes. |
+| [vite-frontend/src/pages/my-sub.tsx](../vite-frontend/src/pages/my-sub.tsx) | Translate subscription formats, QR/export controls and expiry and subscribe to language changes. |
+| [vite-frontend/src/pages/node.tsx](../vite-frontend/src/pages/node.tsx) | Translate node installation, status, configuration and alerts and subscribe to language changes. |
+| [vite-frontend/src/pages/profile.tsx](../vite-frontend/src/pages/profile.tsx) | Translate profile, traffic and subscriptions and subscribe to language changes. |
+| [vite-frontend/src/pages/relay.tsx](../vite-frontend/src/pages/relay.tsx) | Add selected Reality port to relay creation/editing and translate relay management. |
+| [vite-frontend/src/pages/settings.tsx](../vite-frontend/src/pages/settings.tsx) | Translate personal settings and dialogs and subscribe to language changes. |
+| [vite-frontend/src/pages/tunnel.tsx](../vite-frontend/src/pages/tunnel.tsx) | Translate tunnels, transfer ranges, forms and notifications and subscribe to language changes. |
+| [vite-frontend/src/pages/user.tsx](../vite-frontend/src/pages/user.tsx) | Translate users, assignment dialogs, quotas and expiry and subscribe to language changes. |
+| [vite-frontend/src/provider.tsx](../vite-frontend/src/provider.tsx) | Pass selected language to React Aria for localized component behavior. |
+| [vite-frontend/src/styles/themes.css](../vite-frontend/src/styles/themes.css) | Remove decorative skins and keep neutral white/dark backgrounds and toast colors. |
+| [vite-frontend/src/utils/auth.ts](../vite-frontend/src/utils/auth.ts) | Translate displayed session/authentication messages. |
+| [vite-frontend/src/utils/partial-success.ts](../vite-frontend/src/utils/partial-success.ts) | Translate display fallback while preserving partial-result parsing. |
+| [vite-frontend/src/utils/toast.ts](../vite-frontend/src/utils/toast.ts) | Translate user-visible server messages, including dynamic port errors, without mutating API contracts. |
+| [vite-frontend/tests/ui.test.mjs](../vite-frontend/tests/ui.test.mjs) | Test language defaults/switches, catalog completeness, notifications, themes and persistence. |
+
+## Key diffs
+
+- New public Reality mode is additive and opt-in for legacy rows through explicit editing. One helper chooses the actual subscription port across URI and Clash/Mihomo exports.
+- The node checks port availability by transport and installs sing-box configurations with validation/recovery. Private accounting retains per-user limits, UDP traffic counters and lifecycle operations.
+- Installation builds this fork, defaults to panel 2095/API 6365, preserves saved credentials/volumes and centralizes repository identity. Caddy remains on the panel host.
+- React localization covers the existing UI, and saved decorative skins migrate to Light/Dark. Layouts remain intact.
+- Focused regression tests and CI validation cover the changed paths; live VPS/Docker persistence checks remain outstanding.
+
+## `git diff --stat`
+
+This pre-publication snapshot covers modified tracked files only; the new files listed above were unstaged at the time and therefore absent from this output.
+
+```text
+ .github/workflows/docker-build.yml                 |  10 +-
+ .github/workflows/release-gost.yml                 |   2 +-
+ .gitignore                                         |   4 +-
+ README.md                                          |  13 +-
+ docker-compose-hybrid.yml                          |   8 +-
+ docker-compose-v4.yml                              |   6 +-
+ docker-compose-v6.yml                              |   6 +-
+ docs/反向代理.md                                   |  16 +-
+ go-gost/x/config/parsing/service/parse.go          |   8 +
+ go-gost/x/go.mod                                   |   7 +-
+ go-gost/x/go.sum                                   |   9 +
+ go-gost/x/handler/socks/v5/handler.go              |  20 +-
+ go-gost/x/handler/socks/v5/udp.go                  |   3 +
+ go-gost/x/service/service.go                       |  43 +-
+ go-gost/x/socket/service.go                        |  23 +
+ go-gost/x/socket/singbox.go                        |  33 +-
+ go-gost/x/socket/websocket_reporter.go             |  13 +-
+ gost.sql                                           |   4 +-
+ install.sh                                         | 104 +++--
+ panel_install.sh                                   | 314 ++++++++-----
+ springboot-backend/Dockerfile                      |   4 +-
+ springboot-backend/pom.xml                         |   5 +
+ .../main/java/com/admin/common/dto/InboundDto.java |   3 +
+ .../com/admin/common/task/SchemaMigration.java     |   4 +
+ .../main/java/com/admin/common/utils/GostUtil.java |  53 ++-
+ .../java/com/admin/common/utils/SingboxUtil.java   |  32 +-
+ .../com/admin/controller/InboundController.java    |  18 +-
+ .../com/admin/controller/VersionController.java    |   4 +-
+ .../src/main/java/com/admin/entity/Inbound.java    |   6 +
+ .../main/java/com/admin/entity/InboundUser.java    |   3 +
+ .../java/com/admin/service/ForwardService.java     |   1 +
+ .../java/com/admin/service/InboundService.java     |   6 +-
+ .../com/admin/service/impl/ForwardServiceImpl.java |  23 +-
+ .../com/admin/service/impl/InboundServiceImpl.java | 185 +++++++-
+ .../com/admin/service/impl/NodeServiceImpl.java    |  23 +-
+ .../test/java/com/admin/AdminApplicationTests.java |  50 +--
+ tms-hybrid.sh                                      |   5 +-
+ vite-frontend/.gitignore                           |   1 -
+ vite-frontend/Dockerfile                           |  10 +-
+ vite-frontend/index.html                           |  31 +-
+ vite-frontend/package.json                         |  16 +-
+ vite-frontend/src/App.tsx                          |   7 +-
+ vite-frontend/src/api/index.ts                     |   7 +-
+ vite-frontend/src/api/network.ts                   |  15 +-
+ vite-frontend/src/components/navbar.tsx            |  13 +-
+ vite-frontend/src/components/skin-picker.tsx       |   7 +-
+ vite-frontend/src/components/sub-qr.tsx            |   8 +-
+ vite-frontend/src/components/theme-provider.tsx    |   2 +-
+ vite-frontend/src/config/skins.ts                  |  40 +-
+ vite-frontend/src/config/sni.ts                    |   3 +-
+ vite-frontend/src/layouts/admin.tsx                | 118 +++--
+ vite-frontend/src/layouts/h5-simple.tsx            |   5 +-
+ vite-frontend/src/layouts/h5.tsx                   |  20 +-
+ vite-frontend/src/pages/change-password.tsx        |  61 +--
+ vite-frontend/src/pages/config.tsx                 |  81 ++--
+ vite-frontend/src/pages/dashboard.tsx              | 122 +++---
+ vite-frontend/src/pages/forward.tsx                | 439 ++++++++-----------
+ vite-frontend/src/pages/guide.tsx                  | 194 ++++-----
+ vite-frontend/src/pages/inbound.tsx                | 283 ++++++------
+ vite-frontend/src/pages/index.tsx                  |  53 ++-
+ vite-frontend/src/pages/landing.tsx                | 129 +++---
+ vite-frontend/src/pages/limit.tsx                  | 123 +++---
+ vite-frontend/src/pages/my-sub.tsx                 | 106 ++---
+ vite-frontend/src/pages/node.tsx                   | 223 +++++-----
+ vite-frontend/src/pages/profile.tsx                |  83 ++--
+ vite-frontend/src/pages/relay.tsx                  | 181 ++++----
+ vite-frontend/src/pages/settings.tsx               |  43 +-
+ vite-frontend/src/pages/tunnel.tsx                 | 265 ++++++-----
+ vite-frontend/src/pages/user.tsx                   | 484 ++++++++-------------
+ vite-frontend/src/provider.tsx                     |   4 +-
+ vite-frontend/src/styles/themes.css                |  28 +-
+ vite-frontend/src/utils/auth.ts                    |   5 +-
+ vite-frontend/src/utils/partial-success.ts         |   3 +-
+ 73 files changed, 2201 insertions(+), 2083 deletions(-)
+```

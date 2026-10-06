@@ -13,15 +13,17 @@ import com.baomidou.mybatisplus.extension.service.IService;
  * @since 2026-07-19
  */
 public interface InboundService extends IService<Inbound> {
+    R updateListenPort(Long id, Integer port);
+
 
     /** 新建入站(节点生成 Reality 密钥 → 存 → 推 sing-box 配置) */
     R createInbound(InboundDto dto);
 
     /** 一键添加:在指定节点上把所有支持的协议一键全建出来。sni=Reality 借壳域名,空则默认 www.apple.com */
-    R oneClickCreate(Long nodeId, String sni);
+    R oneClickCreate(Long nodeId, String sni, Integer listenPort);
 
     /** 一键搭中转:在前置机上把全套协议建出来,流量经落地(内联粘贴的分享链接)出网。sni 同上 */
-    R oneClickRelay(Long nodeId, String link, String name, String sni);
+    R oneClickRelay(Long nodeId, String link, String name, String sni, Integer listenPort);
 
     /** 入站列表 */
     R getInbounds();

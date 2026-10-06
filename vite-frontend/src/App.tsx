@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 import { Route, Routes, useNavigate, Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 
@@ -65,6 +67,7 @@ const useH5Mode = () => {
 
 // 简化的路由保护组件 - 使用 React Router 导航避免循环
 const ProtectedRoute = ({ children, useSimpleLayout = false, skipLayout = false }: { children: React.ReactNode, useSimpleLayout?: boolean, skipLayout?: boolean }) => {
+  useTranslation();
   const authenticated = isLoggedIn();
   const isH5 = useH5Mode();
   const navigate = useNavigate();
@@ -105,6 +108,7 @@ const ProtectedRoute = ({ children, useSimpleLayout = false, skipLayout = false 
 
 // 登录页面路由组件 - 已登录则重定向到dashboard
 const LoginRoute = () => {
+  useTranslation();
   const authenticated = isLoggedIn();
   const navigate = useNavigate();
   
@@ -128,6 +132,7 @@ const LoginRoute = () => {
 };
 
 function App() {
+  useTranslation();
   // 立即设置页面标题（使用已从缓存读取的配置）
   useEffect(() => {
     document.title = siteConfig.name;
@@ -142,7 +147,7 @@ function App() {
           document.title = cachedAppName;
         }
       } catch (error) {
-        console.warn('检查标题更新失败:', error);
+        console.warn(t("m0f750dbdb9ad"), error);
       }
     };
 

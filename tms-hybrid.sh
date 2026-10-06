@@ -3,7 +3,7 @@
 # TMS 面板管理命令(源码编译版 / hybrid 部署专用)
 #
 # 适用于:用 git clone + docker-compose-hybrid.yml 本地 build 起来的面板
-#         (区别于 panel_install.sh 的镜像版:那个的更新是拉镜像)
+#         (panel_install.sh 也默认从配置的 GitHub 仓库构建源码)
 #
 # 安装:  bash tms-hybrid.sh install     (在面板目录里执行,会生成 /usr/local/bin/tms)
 # 之后:  tms                            打开菜单
@@ -86,7 +86,8 @@ cmd_status() {
   if [ -f .env ]; then
     local port
     port="$(grep -E '^FRONTEND_PORT=' .env 2>/dev/null | cut -d= -f2)"
-    [ -n "$port" ] && echo "🌐 访问地址: http://$(curl -s --max-time 3 ifconfig.me 2>/dev/null || echo 本机IP):$port"
+    port=${port:-2095}
+    echo "🌐 访问地址: http://$(curl -s --max-time 3 ifconfig.me 2>/dev/null || echo 本机IP):$port"
   fi
 }
 

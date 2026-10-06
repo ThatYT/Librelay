@@ -1,3 +1,5 @@
+import LanguagePicker from "@/components/language-picker";
+import SkinPicker from "@/components/skin-picker";
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@heroui/button";
@@ -47,8 +49,7 @@ export default function H5SimpleLayout({
           <h1 className="text-sm font-bold text-foreground">{siteConfig.name}</h1>
         </div>
 
-        <div className="flex items-center gap-2">
-        </div>
+        <div className="flex items-center gap-2"><LanguagePicker /><SkinPicker /></div>
       </header>
 
       {/* 主内容区域 */}

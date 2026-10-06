@@ -1,35 +1,29 @@
 package com.admin;
 
-import com.admin.common.dto.GostDto;
-import com.admin.common.utils.GostUtil;
-import com.admin.entity.Forward;
-import com.admin.entity.Tunnel;
-import com.admin.entity.User;
-import com.admin.entity.UserTunnel;
-import com.admin.service.ForwardService;
-import com.admin.service.TunnelService;
-import com.admin.service.UserService;
-import com.admin.service.UserTunnelService;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.admin.common.dto.InboundDto;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
+import javax.validation.Validation;
+import static org.junit.jupiter.api.Assertions.*;
 
-import javax.annotation.Resource;
-import java.util.Date;
-import java.util.List;
-
-
-@SpringBootTest
+/** API validation contract; no production database or log directory required. */
 class AdminApplicationTests {
-
-
-
-    @Test
-    public void test(){
-
+    @Test void validatesPortsAtTheApiBoundary() {
+        try (var factory = Validation.buildDefaultValidatorFactory()) {
+            var validator = factory.getValidator();
+            InboundDto dto = new InboundDto(); dto.setNodeId(1L); dto.setProtocol("vless");
+            assertTrue(validator.validate(dto).isEmpty()); // absent port is defaulted by the service
+            for (int port : new int[]{1,443,8443,65535}) {
+                dto.setListenPort(port); assertTrue(validator.validate(dto).isEmpty());
+            }
+            for (int port : new int[]{0,-1,65536}) {
+                dto.setListenPort(port); assertFalse(validator.validate(dto).isEmpty());
+            }
+        }
     }
-
-
-
-
+    @Test void rejectsFractionalPortsBeforeTheyReachTheService() throws Exception {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        assertThrows(com.fasterxml.jackson.databind.JsonMappingException.class,
+                () -> mapper.readValue("{\"nodeId\":1,\"listenPort\":443.5}", InboundDto.class));
+        assertEquals(8443, mapper.readValue("{\"nodeId\":1,\"listenPort\":\"8443\"}", InboundDto.class).getListenPort());
+    }
 }

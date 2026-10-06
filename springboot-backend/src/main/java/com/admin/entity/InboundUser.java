@@ -38,6 +38,9 @@ public class InboundUser implements Serializable {
     /** 对应的 gost 前置转发(带限速/流量/到期) */
     private Long gostForwardId;
 
+    @com.baomidou.mybatisplus.annotation.TableField(exist = false)
+    private Integer egressPort;
+
     /** 订阅链接 token */
     private String subToken;
 

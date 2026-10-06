@@ -323,11 +323,11 @@ func (w *WebSocketReporter) collectSystemInfo() SystemInfo {
 	memoryInfo := getMemoryInfo()
 
 	return SystemInfo{
-		Uptime:           getUptime(),
-		BytesReceived:    networkStats.BytesReceived,
-		BytesTransmitted: networkStats.BytesTransmitted,
-		CPUUsage:         cpuInfo.Usage,
-		MemoryUsage:      memoryInfo.Usage,
+		Uptime:            getUptime(),
+		BytesReceived:     networkStats.BytesReceived,
+		BytesTransmitted:  networkStats.BytesTransmitted,
+		CPUUsage:          cpuInfo.Usage,
+		MemoryUsage:       memoryInfo.Usage,
 		SingboxRunning:    isSingboxRunning(),
 		SingboxInstalled:  isSingboxInstalled(),
 		SingboxInstalling: singboxInstallingNow(),
@@ -619,6 +619,9 @@ func (w *WebSocketReporter) routeCommand(cmd CommandMessage) {
 		response.Type = "SetProtocolResponse"
 
 	// sing-box 协议(合体面板:协议+限速)
+	case "CheckListenPort":
+		err = checkListenPort(cmd.Data)
+		response.Type = "CheckListenPortResponse"
 	case "SetSingboxConfig":
 		err = w.handleSetSingboxConfig(cmd.Data)
 		response.Type = "SetSingboxConfigResponse"

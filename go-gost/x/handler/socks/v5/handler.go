@@ -36,14 +36,15 @@ func init() {
 }
 
 type socks5Handler struct {
-	selector gosocks5.Selector
-	md       metadata
-	options  handler.Options
-	stats    *stats_util.HandlerStats
-	limiter  traffic.TrafficLimiter
-	cancel   context.CancelFunc
-	recorder recorder.RecorderObject
-	certPool tls_util.CertPool
+	selector     gosocks5.Selector
+	md           metadata
+	options      handler.Options
+	stats        *stats_util.HandlerStats
+	serviceStats stats.Stats
+	limiter      traffic.TrafficLimiter
+	cancel       context.CancelFunc
+	recorder     recorder.RecorderObject
+	certPool     tls_util.CertPool
 }
 
 func NewHandler(opts ...handler.Option) handler.Handler {
@@ -217,6 +218,9 @@ func (h *socks5Handler) checkRateLimit(addr net.Addr) bool {
 
 	return true
 }
+
+// Share the service counters for UDP ASSOCIATE traffic, which bypasses the TCP listener.
+func (h *socks5Handler) SetServiceStats(value stats.Stats) { h.serviceStats = value }
 
 func (h *socks5Handler) observeStats(ctx context.Context) {
 	if h.options.Observer == nil {

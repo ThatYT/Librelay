@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 import { useState, useEffect } from "react";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Button } from "@heroui/button";
@@ -8,7 +10,7 @@ import { Chip } from "@heroui/chip";
 import { Spinner } from "@heroui/spinner";
 import { Divider } from "@heroui/divider";
 import { Alert } from "@heroui/alert";
-import toast from 'react-hot-toast';
+import toast from '@/utils/toast';
 
 
 import { 
@@ -79,6 +81,7 @@ interface DiagnosisResult {
 }
 
 export default function TunnelPage() {
+  useTranslation();
   const [loading, setLoading] = useState(true);
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
   // 搭协议自动建的隧道默认收起来:用户没手工建过,看到它们只会困惑
@@ -131,17 +134,17 @@ export default function TunnelPage() {
       if (tunnelsRes.code === 0) {
         setTunnels(tunnelsRes.data || []);
       } else {
-        toast.error(tunnelsRes.msg || '获取隧道列表失败');
+        toast.error(tunnelsRes.msg || t("mdc67e7f78f0f"));
       }
       
       if (nodesRes.code === 0) {
         setNodes(nodesRes.data || []);
       } else {
-        console.warn('获取转发机列表失败:', nodesRes.msg);
+        console.warn(t("m40b9a07192c8"), nodesRes.msg);
       }
     } catch (error) {
-      console.error('加载数据失败:', error);
-      toast.error('加载数据失败');
+      console.error(t("m5a3f28106237"), error);
+      toast.error(t("md1abfa54a4ac"));
     } finally {
       setLoading(false);
     }
@@ -152,37 +155,37 @@ export default function TunnelPage() {
     const newErrors: {[key: string]: string} = {};
     
     if (!form.name.trim()) {
-      newErrors.name = '请输入隧道名称';
+      newErrors.name = t("mef9be032cd0a");
     } else if (form.name.length < 2 || form.name.length > 50) {
-      newErrors.name = '隧道名称长度应在2-50个字符之间';
+      newErrors.name = t("m1734269e6af2");
     }
     
     if (!form.inNodeId) {
-      newErrors.inNodeId = '请选择入口转发机';
+      newErrors.inNodeId = t("m65503f8f148c");
     }
     
     if (!form.tcpListenAddr.trim()) {
-      newErrors.tcpListenAddr = '请输入TCP监听地址';
+      newErrors.tcpListenAddr = t("md49551d52d71");
     }
     
     if (!form.udpListenAddr.trim()) {
-      newErrors.udpListenAddr = '请输入UDP监听地址';
+      newErrors.udpListenAddr = t("m124d9115dfd3");
     }
     
     if (form.trafficRatio < 0.0 || form.trafficRatio > 100.0) {
-      newErrors.trafficRatio = '流量倍率必须在0.0-100.0之间';
+      newErrors.trafficRatio = t("m522752906eda");
     }
     
     // 隧道转发时的验证
     if (form.type === 2) {
       if (!form.outNodeId) {
-        newErrors.outNodeId = '请选择出口转发机';
+        newErrors.outNodeId = t("mebdaa22e17f0");
       } else if (form.inNodeId === form.outNodeId) {
-        newErrors.outNodeId = '隧道转发模式下，入口和出口不能是同一个转发机';
+        newErrors.outNodeId = t("mf91342a3ddd1");
       }
       
       if (!form.protocol) {
-        newErrors.protocol = '请选择协议类型';
+        newErrors.protocol = t("md8fb4cf989a8");
       }
     }
     
@@ -244,16 +247,16 @@ export default function TunnelPage() {
     try {
       const response = await deleteTunnel(tunnelToDelete.id);
       if (response.code === 0) {
-        toast.success('删除成功');
+        toast.success(t("m5223f91b9670"));
         setDeleteModalOpen(false);
         setTunnelToDelete(null);
         loadData();
       } else {
-        toast.error(response.msg || '删除失败');
+        toast.error(response.msg || t("mc228558cf257"));
       }
     } catch (error) {
-      console.error('删除失败:', error);
-      toast.error('删除失败');
+      console.error(t("m8b176752f6e2"), error);
+      toast.error(t("mc228558cf257"));
     } finally {
       setDeleteLoading(false);
     }
@@ -282,15 +285,15 @@ export default function TunnelPage() {
         : await createTunnel(data);
         
       if (response.code === 0) {
-        toast.success(isEdit ? '更新成功' : '创建成功');
+        toast.success(isEdit ? t("m7c0d2664869c") : t("m1ab62884f4ee"));
         setModalOpen(false);
         loadData();
       } else {
-        toast.error(response.msg || (isEdit ? '更新失败' : '创建失败'));
+        toast.error(response.msg || (isEdit ? t("mec99e5c45d64") : t("m7e6a71efbf63")));
       }
     } catch (error) {
-      console.error('提交失败:', error);
-      toast.error('网络错误，请重试');
+      console.error(t("ma2928635ad12"), error);
+      toast.error(t("mfa8326d4a0e5"));
     } finally {
       setSubmitLoading(false);
     }
@@ -308,37 +311,37 @@ export default function TunnelPage() {
       if (response.code === 0) {
         setDiagnosisResult(response.data);
       } else {
-        toast.error(response.msg || '诊断失败');
+        toast.error(response.msg || t("mfa8bee370bbe"));
         setDiagnosisResult({
           tunnelName: tunnel.name,
-          tunnelType: tunnel.type === 1 ? '端口转发' : '隧道转发',
+          tunnelType: tunnel.type === 1 ? t("mdae851b6621c") : t("mf13895bd3f8a"),
           timestamp: Date.now(),
           results: [{
             success: false,
-            description: '诊断失败',
+            description: t("mfa8bee370bbe"),
             nodeName: '-',
             nodeId: '-',
             targetIp: '-',
             targetPort: 443,
-            message: response.msg || '诊断过程中发生错误'
+            message: response.msg || t("ma40cb8b632dc")
           }]
         });
       }
     } catch (error) {
-      console.error('诊断失败:', error);
-      toast.error('网络错误，请重试');
+      console.error(t("ma52da2b03f00"), error);
+      toast.error(t("mfa8326d4a0e5"));
       setDiagnosisResult({
         tunnelName: tunnel.name,
-        tunnelType: tunnel.type === 1 ? '端口转发' : '隧道转发',
+        tunnelType: tunnel.type === 1 ? t("mdae851b6621c") : t("mf13895bd3f8a"),
         timestamp: Date.now(),
         results: [{
           success: false,
-          description: '网络错误',
+          description: t("m88c035ff99b6"),
           nodeName: '-',
           nodeId: '-',
           targetIp: '-',
           targetPort: 443,
-          message: '无法连接到服务器'
+          message: t("me8564e85fdf9")
         }]
       });
     } finally {
@@ -355,25 +358,25 @@ export default function TunnelPage() {
     if (ips.length === 0) return '-';
     if (ips.length === 1) return ips[0];
     
-    return `${ips[0]} 等${ips.length}个`;
+    return t("md493e3b88a2b", {v0: ips[0], v1: ips.length});
   };
 
   // 获取转发机名称
   const getNodeName = (nodeId?: number): string => {
     if (!nodeId) return '-';
     const node = nodes.find(n => n.id === nodeId);
-    return node ? node.name : `转发机${nodeId}`;
+    return node ? node.name : t("m295839c12370", {v0: nodeId});
   };
 
   // 获取状态显示
   const getStatusDisplay = (status: number) => {
     switch (status) {
       case 1:
-        return { text: '启用', color: 'success' };
+        return { text: t("mf4f0ead1116b"), color: 'success' };
       case 0:
-        return { text: '禁用', color: 'default' };
+        return { text: t("m7df5c456c765"), color: 'default' };
       default:
-        return { text: '未知', color: 'warning' };
+        return { text: t("m4d8c1c5b4283"), color: 'warning' };
     }
   };
 
@@ -381,11 +384,11 @@ export default function TunnelPage() {
   const getTypeDisplay = (type: number) => {
     switch (type) {
       case 1:
-        return { text: '端口转发', color: 'primary' };
+        return { text: t("mdae851b6621c"), color: 'primary' };
       case 2:
-        return { text: '隧道转发', color: 'secondary' };
+        return { text: t("mf13895bd3f8a"), color: 'secondary' };
       default:
-        return { text: '未知', color: 'default' };
+        return { text: t("m4d8c1c5b4283"), color: 'default' };
     }
   };
 
@@ -393,11 +396,11 @@ export default function TunnelPage() {
   const getFlowDisplay = (flow: number) => {
     switch (flow) {
       case 1:
-        return '单向计算';
+        return t("m663a6026f63b");
       case 2:
-        return '双向计算';
+        return t("m250c656d6264");
       default:
-        return '未知';
+        return t("m4d8c1c5b4283");
     }
   };
 
@@ -406,12 +409,12 @@ export default function TunnelPage() {
   const getQualityDisplay = (averageTime?: number, packetLoss?: number) => {
     if (averageTime === undefined || packetLoss === undefined) return null;
     
-    if (averageTime < 30 && packetLoss === 0) return { text: '🚀 优秀', color: 'success' };
-    if (averageTime < 50 && packetLoss === 0) return { text: '✨ 很好', color: 'success' };
-    if (averageTime < 100 && packetLoss < 1) return { text: '👍 良好', color: 'primary' };
-    if (averageTime < 150 && packetLoss < 2) return { text: '😐 一般', color: 'warning' };
-    if (averageTime < 200 && packetLoss < 5) return { text: '😟 较差', color: 'warning' };
-    return { text: '😵 很差', color: 'danger' };
+    if (averageTime < 30 && packetLoss === 0) return { text: t("mb2ffb519afdf"), color: 'success' };
+    if (averageTime < 50 && packetLoss === 0) return { text: t("m155dabc34ea5"), color: 'success' };
+    if (averageTime < 100 && packetLoss < 1) return { text: t("mb196a619de2b"), color: 'primary' };
+    if (averageTime < 150 && packetLoss < 2) return { text: t("m7c63cc105958"), color: 'warning' };
+    if (averageTime < 200 && packetLoss < 5) return { text: t("m5cd767bee0b2"), color: 'warning' };
+    return { text: t("mc1799eaa3c01"), color: 'danger' };
   };
 
   if (loading) {
@@ -420,7 +423,7 @@ export default function TunnelPage() {
         <div className="flex items-center justify-center h-64">
           <div className="flex items-center gap-3">
             <Spinner size="sm" />
-            <span className="text-default-600">正在加载...</span>
+            <span className="text-default-600">{t("m7545b3950397")}</span>
           </div>
         </div>
 
@@ -440,17 +443,15 @@ export default function TunnelPage() {
             <div className="text-xs text-default-500 flex items-center gap-2 flex-wrap">
               <span>
                 {showProtocolTunnels
-                  ? `正在显示 ${protocolTunnelCount} 条协议自动生成的隧道`
-                  : `已隐藏 ${protocolTunnelCount} 条协议自动生成的隧道`}
-                ,搭协议时每台机器自动建一条,不用管它
-              </span>
+                  ? t("mba668c2453d0", {v0: protocolTunnelCount})
+                  : t("ma672889bf90f", {v0: protocolTunnelCount})} {t("m47fbfc6e64a4")} </span>
               <Button
                 size="sm"
                 variant="light"
                 className="h-6 min-w-0 px-2 text-xs"
                 onPress={() => setShowProtocolTunnels(!showProtocolTunnels)}
               >
-                {showProtocolTunnels ? "收起" : "展开看看"}
+                {showProtocolTunnels ? t("mafd4b783536b") : t("m75381940476f")}
               </Button>
             </div>
           )}
@@ -462,9 +463,7 @@ export default function TunnelPage() {
               color="primary"
               onPress={handleAdd}
 
-            >
-              新增
-            </Button>
+            > {t("m0006d696d8e1")} </Button>
 
         </div>
 
@@ -509,7 +508,7 @@ export default function TunnelPage() {
                       <div className="space-y-1.5">
                         <div className="p-2 bg-default-50 dark:bg-default-100/50 rounded border border-default-200 dark:border-default-300">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-medium text-default-600">入口转发机</span>
+                            <span className="text-xs font-medium text-default-600">{t("m145479d5b0a3")}</span>
                           </div>
                           <code className="text-xs font-mono text-foreground block truncate">
                             {getNodeName(tunnel.inNodeId)}
@@ -528,7 +527,7 @@ export default function TunnelPage() {
                         <div className="p-2 bg-default-50 dark:bg-default-100/50 rounded border border-default-200 dark:border-default-300">
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-xs font-medium text-default-600">
-                              {tunnel.type === 1 ? '出口转发机（同入口）' : '出口转发机'}
+                              {tunnel.type === 1 ? t("m81d428394da0") : t("m93f3f95828e9")}
                             </span>
                           </div>
                           <code className="text-xs font-mono text-foreground block truncate">
@@ -568,9 +567,7 @@ export default function TunnelPage() {
                             <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
                           </svg>
                         }
-                      >
-                        编辑
-                      </Button>
+                      > {t("m051836569928")} </Button>
                       <Button
                         size="sm"
                         variant="flat"
@@ -582,9 +579,7 @@ export default function TunnelPage() {
                             <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                           </svg>
                         }
-                      >
-                        诊断
-                      </Button>
+                      > {t("m40ff6300f981")} </Button>
                       <Button
                         size="sm"
                         variant="flat"
@@ -597,9 +592,7 @@ export default function TunnelPage() {
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 012 0v4a1 1 0 11-2 0V7zM12 7a1 1 0 012 0v4a1 1 0 11-2 0V7z" clipRule="evenodd" />
                           </svg>
                         }
-                      >
-                        删除
-                      </Button>
+                      > {t("m2f9daa828907")} </Button>
                     </div>
                   </CardBody>
                 </Card>
@@ -617,8 +610,8 @@ export default function TunnelPage() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-foreground">暂无隧道配置</h3>
-                  <p className="text-default-500 text-sm mt-1">还没有创建任何隧道配置，点击上方按钮开始创建</p>
+                  <h3 className="text-lg font-semibold text-foreground">{t("mcbacd090ca30")}</h3>
+                  <p className="text-default-500 text-sm mt-1">{t("m522c81d2605e")}</p>
                 </div>
               </div>
             </CardBody>
@@ -639,17 +632,17 @@ export default function TunnelPage() {
               <>
                 <ModalHeader className="flex flex-col gap-1">
                   <h2 className="text-xl font-bold">
-                    {isEdit ? '编辑隧道' : '新增隧道'}
+                    {isEdit ? t("m74e264d0fd40") : t("m40d98c6a2cb7")}
                   </h2>
                   <p className="text-small text-default-500">
-                    {isEdit ? '修改现有隧道配置的信息' : '创建新的隧道配置'}
+                    {isEdit ? t("m3908e06aa9f5") : t("m5c4a3716956d")}
                   </p>
                 </ModalHeader>
                 <ModalBody>
                   <div className="space-y-4">
                     <Input
-                      label="隧道名称"
-                      placeholder="请输入隧道名称"
+                      label={t("mb679939ed787")}
+                      placeholder={t("mef9be032cd0a")}
                       value={form.name}
                       onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
                       isInvalid={!!errors.name}
@@ -658,8 +651,8 @@ export default function TunnelPage() {
                     />
                     
                     <Select
-                      label="隧道类型"
-                      placeholder="请选择隧道类型"
+                      label={t("mbbc8e77768b6")}
+                      placeholder={t("m3f8d78f90d7e")}
                       selectedKeys={[form.type.toString()]}
                       onSelectionChange={(keys) => {
                         const selectedKey = Array.from(keys)[0] as string;
@@ -672,14 +665,14 @@ export default function TunnelPage() {
                       variant="bordered"
                       isDisabled={isEdit}
                     >
-                      <SelectItem key="1">端口转发</SelectItem>
-                      <SelectItem key="2">隧道转发</SelectItem>
+                      <SelectItem key="1">{t("mdae851b6621c")}</SelectItem>
+                      <SelectItem key="2">{t("mf13895bd3f8a")}</SelectItem>
                     </Select>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <Select
-                        label="流量计算"
-                        placeholder="请选择流量计算方式"
+                        label={t("md1a186f0f01d")}
+                        placeholder={t("m63dd98668bfa")}
                         selectedKeys={[form.flow.toString()]}
                         onSelectionChange={(keys) => {
                           const selectedKey = Array.from(keys)[0] as string;
@@ -690,16 +683,16 @@ export default function TunnelPage() {
                         isInvalid={!!errors.flow}
                         errorMessage={errors.flow}
                         variant="bordered"
-                        description="决定车友配额扣多快。中转机按流量计费就选双向,包月不限流量选单向"
+                        description={t("m2b479495d0c0")}
                       >
                         {/* 后端是 flow * flowType(1 或 2),不是"只算上传/只算下载",别再写成那样 */}
-                        <SelectItem key="1" textValue="单向计算">单向计算(用多少记多少)</SelectItem>
-                        <SelectItem key="2" textValue="双向计算">双向计算(进出都算,记两倍)</SelectItem>
+                        <SelectItem key="1" textValue={t("m663a6026f63b")}>{t("m6589ea58920b")}</SelectItem>
+                        <SelectItem key="2" textValue={t("m250c656d6264")}>{t("m6d173e13cded")}</SelectItem>
                       </Select>
 
                       <Input
-                        label="流量倍率"
-                        placeholder="请输入流量倍率"
+                        label={t("mef6bcac63110")}
+                        placeholder={t("m614f1e18d16a")}
                         type="number"
                         value={form.trafficRatio.toString()}
                         onChange={(e) => setForm(prev => ({ 
@@ -709,7 +702,7 @@ export default function TunnelPage() {
                         isInvalid={!!errors.trafficRatio}
                         errorMessage={errors.trafficRatio}
                         variant="bordered"
-                        description="在上面基础上再乘一个系数,默认 1 不加成"
+                        description={t("mae19ddacc453")}
                         endContent={
                           <div className="pointer-events-none flex items-center">
                             <span className="text-default-400 text-small">x</span>
@@ -719,11 +712,11 @@ export default function TunnelPage() {
                     </div>
 
                     <Divider />
-                    <h3 className="text-lg font-semibold">入口配置</h3>
+                    <h3 className="text-lg font-semibold">{t("m2810bb351c26")}</h3>
 
                     <Select
-                      label="入口转发机"
-                      placeholder="请选择入口转发机"
+                      label={t("m145479d5b0a3")}
+                      placeholder={t("m65503f8f148c")}
                       selectedKeys={form.inNodeId ? [form.inNodeId.toString()] : []}
                       onSelectionChange={(keys) => {
                         const selectedKey = Array.from(keys)[0] as string;
@@ -739,7 +732,7 @@ export default function TunnelPage() {
                       {nodes.map((node) => (
                         <SelectItem 
                           key={node.id}
-                          textValue={`${node.name} (${node.status === 1 ? '在线' : '离线'})`}
+                          textValue={`${node.name} (${node.status === 1 ? t("mb9086662b1df") : t("mbe1b4f3c6c1c")})`}
                         >
                           <div className="flex items-center justify-between">
                             <span>{node.name}</span>
@@ -748,7 +741,7 @@ export default function TunnelPage() {
                               variant="flat" 
                               size="sm"
                             >
-                              {node.status === 1 ? '在线' : '离线'}
+                              {node.status === 1 ? t("mb9086662b1df") : t("mbe1b4f3c6c1c")}
                             </Chip>
                           </div>
                         </SelectItem>
@@ -757,8 +750,8 @@ export default function TunnelPage() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <Input
-                        label="TCP监听地址"
-                        placeholder="请输入TCP监听地址"
+                        label={t("m30bc78c01a15")}
+                        placeholder={t("md49551d52d71")}
                         value={form.tcpListenAddr}
                         onChange={(e) => setForm(prev => ({ ...prev, tcpListenAddr: e.target.value }))}
                         isInvalid={!!errors.tcpListenAddr}
@@ -772,8 +765,8 @@ export default function TunnelPage() {
                       />
 
                       <Input
-                        label="UDP监听地址"
-                        placeholder="请输入UDP监听地址"
+                        label={t("mba1d1c945889")}
+                        placeholder={t("m124d9115dfd3")}
                         value={form.udpListenAddr}
                         onChange={(e) => setForm(prev => ({ ...prev, udpListenAddr: e.target.value }))}
                         isInvalid={!!errors.udpListenAddr}
@@ -790,8 +783,8 @@ export default function TunnelPage() {
                     {/* 隧道转发时显示出口网卡配置 */}
                     {form.type === 2 && (
                       <Input
-                        label="出口网卡名或IP（一般留空）"
-                        placeholder="留空即可（多IP本机才填，不是目标地址）"
+                        label={t("md4af1117db04")}
+                        placeholder={t("mdca162b8a535")}
                         value={form.interfaceName}
                         onChange={(e) => setForm(prev => ({ ...prev, interfaceName: e.target.value }))}
                         isInvalid={!!errors.interfaceName}
@@ -804,11 +797,11 @@ export default function TunnelPage() {
                     {form.type === 2 && (
                       <>
                         <Divider />
-                        <h3 className="text-lg font-semibold">出口配置</h3>
+                        <h3 className="text-lg font-semibold">{t("mf07b688e9d7f")}</h3>
 
                         <Select
-                          label="协议类型"
-                          placeholder="请选择协议类型"
+                          label={t("madda8cd0c302")}
+                          placeholder={t("md8fb4cf989a8")}
                           selectedKeys={[form.protocol]}
                           onSelectionChange={(keys) => {
                             const selectedKey = Array.from(keys)[0] as string;
@@ -829,8 +822,8 @@ export default function TunnelPage() {
                         </Select>
 
                         <Select
-                          label="出口转发机"
-                          placeholder="请选择出口转发机"
+                          label={t("m93f3f95828e9")}
+                          placeholder={t("mebdaa22e17f0")}
                           selectedKeys={form.outNodeId ? [form.outNodeId.toString()] : []}
                           onSelectionChange={(keys) => {
                             const selectedKey = Array.from(keys)[0] as string;
@@ -846,7 +839,7 @@ export default function TunnelPage() {
                           {nodes.map((node) => (
                             <SelectItem 
                               key={node.id}
-                              textValue={`${node.name} (${node.status === 1 ? '在线' : '离线'})`}
+                              textValue={`${node.name} (${node.status === 1 ? t("mb9086662b1df") : t("mbe1b4f3c6c1c")})`}
                             >
                               <div className="flex items-center justify-between">
                                 <span>{node.name}</span>
@@ -856,12 +849,10 @@ export default function TunnelPage() {
                                     variant="flat" 
                                     size="sm"
                                   >
-                                    {node.status === 1 ? '在线' : '离线'}
+                                    {node.status === 1 ? t("mb9086662b1df") : t("mbe1b4f3c6c1c")}
                                   </Chip>
                                   {form.inNodeId === node.id && (
-                                    <Chip color="warning" variant="flat" size="sm">
-                                      已选为入口
-                                    </Chip>
+                                    <Chip color="warning" variant="flat" size="sm"> {t("m8faf9f6730a8")} </Chip>
                                   )}
                                 </div>
                               </div>
@@ -874,29 +865,27 @@ export default function TunnelPage() {
                     <Alert
                         color="primary"
                         variant="flat"
-                        title="TCP,UDP监听地址"
-                        description="保持默认 [::] 就行——它是「监听本机所有网卡」的意思,不是要你填机器IP(机器已经在上面「入口转发机」里选好了)。纯 IPv4 环境可改 0.0.0.0。不懂就别动。"
+                        title={t("m055a8f4b87d2")}
+                        description={t("m0309fb8225d6")}
                         className="mt-4"
                       />
                       <Alert
                         color="primary"
                         variant="flat"
-                        title="出口网卡名或IP（一般留空）"
-                        description="仅本机有多个IP、要指定用哪个本地IP去连出口机时才填，且填的是【本机】的本地IP/网卡名，不是目标地址！填错（比如填成香港或落地IP）会连不上，不懂就留空。"
+                        title={t("md4af1117db04")}
+                        description={t("meccbb14d0d2f")}
                         className="mt-4"
                       />
                   </div>
                 </ModalBody>
                 <ModalFooter>
-                  <Button variant="light" onPress={onClose}>
-                    取消
-                  </Button>
+                  <Button variant="light" onPress={onClose}> {t("m2cd0f3be8738")} </Button>
                   <Button 
                     color="primary" 
                     onPress={handleSubmit}
                     isLoading={submitLoading}
                   >
-                    {submitLoading ? (isEdit ? '更新中...' : '创建中...') : (isEdit ? '更新' : '创建')}
+                    {submitLoading ? (isEdit ? t("ma2ef83d5a3e4") : t("m687d8f3ba99e")) : (isEdit ? t("m3055a035f0eb") : t("mcde2cd071d25"))}
                   </Button>
                 </ModalFooter>
               </>
@@ -917,22 +906,20 @@ export default function TunnelPage() {
             {(onClose) => (
               <>
                 <ModalHeader className="flex flex-col gap-1">
-                  <h2 className="text-xl font-bold">确认删除</h2>
+                  <h2 className="text-xl font-bold">{t("ma3ea3c17b401")}</h2>
                 </ModalHeader>
                 <ModalBody>
-                  <p>确定要删除隧道 <strong>"{tunnelToDelete?.name}"</strong> 吗？</p>
-                  <p className="text-small text-default-500">此操作不可恢复，请谨慎操作。</p>
+                  <p>{t("m4ac86a967b95")} <strong>"{tunnelToDelete?.name}"</strong> {t("m9d45d8943988")}</p>
+                  <p className="text-small text-default-500">{t("m85338c54047d")}</p>
                 </ModalBody>
                 <ModalFooter>
-                  <Button variant="light" onPress={onClose}>
-                    取消
-                  </Button>
+                  <Button variant="light" onPress={onClose}> {t("m2cd0f3be8738")} </Button>
                   <Button 
                     color="danger" 
                     onPress={confirmDelete}
                     isLoading={deleteLoading}
                   >
-                    {deleteLoading ? '删除中...' : '确认删除'}
+                    {deleteLoading ? t("m4669785ade95") : t("ma3ea3c17b401")}
                   </Button>
                 </ModalFooter>
               </>
@@ -953,7 +940,7 @@ export default function TunnelPage() {
             {(onClose) => (
               <>
                 <ModalHeader className="flex flex-col gap-1">
-                  <h2 className="text-xl font-bold">隧道诊断结果</h2>
+                  <h2 className="text-xl font-bold">{t("m5ed0a2c15fa9")}</h2>
                   {currentDiagnosisTunnel && (
                     <div className="flex items-center gap-2">
                       <span className="text-small text-default-500">{currentDiagnosisTunnel.name}</span>
@@ -962,7 +949,7 @@ export default function TunnelPage() {
                         variant="flat" 
                         size="sm"
                       >
-                        {currentDiagnosisTunnel.type === 1 ? '端口转发' : '隧道转发'}
+                        {currentDiagnosisTunnel.type === 1 ? t("mdae851b6621c") : t("mf13895bd3f8a")}
                       </Chip>
                     </div>
                   )}
@@ -972,7 +959,7 @@ export default function TunnelPage() {
                     <div className="flex items-center justify-center py-16">
                       <div className="flex items-center gap-3">
                         <Spinner size="sm" />
-                        <span className="text-default-600">正在诊断...</span>
+                        <span className="text-default-600">{t("mab6cbb6f75b8")}</span>
                       </div>
                     </div>
                   ) : diagnosisResult ? (
@@ -999,7 +986,7 @@ export default function TunnelPage() {
                                   color={result.success ? 'success' : 'danger'} 
                                   variant="flat"
                                 >
-                                  {result.success ? '成功' : '失败'}
+                                  {result.success ? t("m053461ce86d2") : t("m28384d7afd2e")}
                                 </Chip>
                               </div>
                             </CardHeader>
@@ -1009,11 +996,11 @@ export default function TunnelPage() {
                                   <div className="grid grid-cols-3 gap-4">
                                     <div className="text-center">
                                       <div className="text-2xl font-bold text-primary">{result.averageTime?.toFixed(0)}</div>
-                                      <div className="text-small text-default-500">平均延迟(ms)</div>
+                                      <div className="text-small text-default-500">{t("m4fcff8e0955a")}</div>
                                     </div>
                                     <div className="text-center">
                                       <div className="text-2xl font-bold text-warning">{result.packetLoss?.toFixed(1)}</div>
-                                      <div className="text-small text-default-500">丢包率(%)</div>
+                                      <div className="text-small text-default-500">{t("m0583a4dc458b")}</div>
                                     </div>
                                     <div className="text-center">
                                       {quality && (
@@ -1021,24 +1008,22 @@ export default function TunnelPage() {
                                           <Chip color={quality.color as any} variant="flat" size="lg">
                                             {quality.text}
                                           </Chip>
-                                          <div className="text-small text-default-500 mt-1">连接质量</div>
+                                          <div className="text-small text-default-500 mt-1">{t("ma69bbeb739a8")}</div>
                                         </>
                                       )}
                                     </div>
                                   </div>
-                                  <div className="text-small text-default-500">
-                                    目标地址: <code className="font-mono">{result.targetIp}{result.targetPort ? ':' + result.targetPort : ''}</code>
+                                  <div className="text-small text-default-500"> {t("m35c40d2223f1")} <code className="font-mono">{result.targetIp}{result.targetPort ? ':' + result.targetPort : ''}</code>
                                   </div>
                                 </div>
                               ) : (
                                 <div className="space-y-2">
-                                  <div className="text-small text-default-500">
-                                    目标地址: <code className="font-mono">{result.targetIp}{result.targetPort ? ':' + result.targetPort : ''}</code>
+                                  <div className="text-small text-default-500"> {t("m35c40d2223f1")} <code className="font-mono">{result.targetIp}{result.targetPort ? ':' + result.targetPort : ''}</code>
                                   </div>
                                   <Alert
                                     color="danger"
                                     variant="flat"
-                                    title="错误详情"
+                                    title={t("m4e4e753b5040")}
                                     description={result.message}
                                   />
                                 </div>
@@ -1055,22 +1040,18 @@ export default function TunnelPage() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                       </div>
-                      <h3 className="text-lg font-semibold text-foreground">暂无诊断数据</h3>
+                      <h3 className="text-lg font-semibold text-foreground">{t("mf63d8bb16d70")}</h3>
                     </div>
                   )}
                 </ModalBody>
                 <ModalFooter>
-                  <Button variant="light" onPress={onClose}>
-                    关闭
-                  </Button>
+                  <Button variant="light" onPress={onClose}> {t("m3fd47edce45b")} </Button>
                   {currentDiagnosisTunnel && (
                     <Button 
                       color="primary" 
                       onPress={() => handleDiagnose(currentDiagnosisTunnel)}
                       isLoading={diagnosisLoading}
-                    >
-                      重新诊断
-                    </Button>
+                    > {t("m471cada84e37")} </Button>
                   )}
                 </ModalFooter>
               </>
@@ -1080,4 +1061,4 @@ export default function TunnelPage() {
       </div>
     
   );
-} 
+}

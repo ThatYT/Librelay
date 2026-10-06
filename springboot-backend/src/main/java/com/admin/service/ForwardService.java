@@ -82,6 +82,7 @@ public interface ForwardService extends IService<Forward> {
 
 
     void updateForwardA(Forward forward);
+    R updateInboundForward(Forward forward);
 
     /**
      * 指定用户建端口转发,并把建好的 Forward 放进 R.data 返回(合体面板 InboundService 用)。

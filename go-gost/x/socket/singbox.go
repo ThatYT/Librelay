@@ -5,7 +5,8 @@ package socket
 //   1) 确保 sing-box 外部二进制已安装(没有则下载 v1.13.12,和 s-ui 同版);
 //   2) 写入面板生成的完整 sing-box 配置 JSON;
 //   3) 用 systemd 起/热重启 sing-box(自带崩溃重启,和 gost 同套路)。
-// sing-box 只在 127.0.0.1 监听,公网口由 gost 转发占用并限速(见 flux合体面板设计.md)。
+// Legacy protocols listen on loopback. Public Reality uses its selected port and
+// private per-user gost SOCKS services for accounting and limits.
 
 import (
 	"archive/tar"
@@ -26,8 +27,8 @@ import (
 )
 
 const (
-	installDir        = "/etc/gost" // 与 install.sh 的 INSTALL_DIR 一致,systemd WorkingDirectory 也是这
-	singboxVersion    = "1.13.12"   // 与 s-ui 内嵌的 sing-box 版本对齐,配置格式兼容
+	installDir         = "/etc/gost" // 与 install.sh 的 INSTALL_DIR 一致,systemd WorkingDirectory 也是这
+	singboxVersion     = "1.13.12"   // 与 s-ui 内嵌的 sing-box 版本对齐,配置格式兼容
 	singboxServiceUnit = "/etc/systemd/system/sing-box.service"
 )
 
@@ -102,10 +103,25 @@ func (w *WebSocketReporter) handleSetSingboxConfig(data interface{}) error {
 	if err := ensureSelfCert(); err != nil { // Hysteria2/TUIC/AnyTLS 用的自签证书,没有则生成
 		return err
 	}
-	if err := writeSingboxConfig(req.Config); err != nil {
+	previous, readErr := os.ReadFile(singboxConfigPath())
+	candidate := singboxConfigPath() + ".candidate"
+	if err := os.WriteFile(candidate, req.Config, 0o600); err != nil {
+		return err
+	}
+	defer os.Remove(candidate)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if out, err := exec.CommandContext(ctx, singboxBinPath(), "check", "-c", candidate).CombinedOutput(); err != nil {
+		return fmt.Errorf("invalid sing-box configuration: %v: %s", err, out)
+	}
+	if err := os.Rename(candidate, singboxConfigPath()); err != nil {
 		return err
 	}
 	if err := reloadSingbox(); err != nil {
+		if readErr == nil {
+			_ = writeSingboxConfig(previous)
+			_ = reloadSingbox()
+		}
 		return err
 	}
 	return nil
@@ -205,8 +221,9 @@ func (w *WebSocketReporter) handleGenerateRealityKeypair(data interface{}) (map[
 }
 
 // parseRealityKeypair 解析 `sing-box generate reality-keypair` 的输出:
-//   PrivateKey: xxxx
-//   PublicKey: yyyy
+//
+//	PrivateKey: xxxx
+//	PublicKey: yyyy
 func parseRealityKeypair(out string) (priv, pub string) {
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
@@ -307,6 +324,10 @@ func reloadSingbox() error {
 	_ = exec.Command("systemctl", "enable", "sing-box").Run()
 	if out, err := exec.Command("systemctl", "restart", "sing-box").CombinedOutput(); err != nil {
 		return fmt.Errorf("重启 sing-box 失败: %v, %s", err, string(out))
+	}
+	time.Sleep(300 * time.Millisecond)
+	if err := exec.Command("systemctl", "is-active", "--quiet", "sing-box").Run(); err != nil {
+		return fmt.Errorf("sing-box failed to start on this node; check for an occupied listening port (journalctl -u sing-box)")
 	}
 	return nil
 }

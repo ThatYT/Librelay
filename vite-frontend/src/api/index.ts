@@ -73,8 +73,9 @@ export const updateSpeedLimit = (data: any) => Network.post("/speed-limit/update
 export const deleteSpeedLimit = (id: number) => Network.post("/speed-limit/delete", { id });
 
 // 协议入站(合体面板:协议搭建 + 限速)
+export const updateInboundPort = (id: number, listenPort: number) => Network.post("/inbound/port", { id, listenPort });
 export const createInbound = (data: any) => Network.post("/inbound/create", data);
-export const oneClickInbound = (nodeId: number, sni?: string) => Network.post("/inbound/one-click", { nodeId, sni });
+export const oneClickInbound = (nodeId: number, sni?: string, listenPort?: number) => Network.post("/inbound/one-click", { nodeId, sni, listenPort });
 export const getInboundList = () => Network.post("/inbound/list");
 export const deleteInbound = (id: number) => Network.post("/inbound/delete", { id });
 export const deleteInboundsByNode = (nodeId: number, relay?: boolean, landingId?: number) => Network.post("/inbound/delete-by-node", { nodeId, relay, landingId });
@@ -100,7 +101,7 @@ export const getUserSub = (userId: number) => Network.post("/inbound/user-sub", 
 export const pushNodeConfig = (nodeId: number) => Network.post("/inbound/push-config", { nodeId });
 
 // 中转(前置机协议 + 落地出口):落地内联粘贴、测试、搭建
-export const oneClickRelay = (nodeId: number, link: string, name?: string, sni?: string) => Network.post("/inbound/one-click-relay", { nodeId, link, name, sni });
+export const oneClickRelay = (nodeId: number, link: string, name?: string, sni?: string, listenPort?: number) => Network.post("/inbound/one-click-relay", { nodeId, link, name, sni, listenPort });
 export const testLanding = (nodeId: number, link: string) => Network.post("/landing/test", { nodeId, link });
 export const getLandingList = () => Network.post("/landing/list");
 // 落地独立管理(「落地管理」页)。以前只能在搭中转时顺手建一条,建完就再也改不了 ——
@@ -139,4 +140,4 @@ export const updateConfig = (name: string, value: string) => Network.post("/conf
 // 验证码相关接口
 export const checkCaptcha = () => Network.post("/captcha/check");
 export const generateCaptcha = () => Network.post(`/captcha/generate`);
-export const verifyCaptcha = (data: { captchaId: string; trackData: string }) => Network.post("/captcha/verify", data); 
+export const verifyCaptcha = (data: { captchaId: string; trackData: string }) => Network.post("/captcha/verify", data);

@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@heroui/button";
@@ -12,6 +14,7 @@ import { updatePassword, getVersionInfo } from '@/api';
 import { safeLogout } from '@/utils/logout';
 import { siteConfig, SITE_CONFIG_UPDATED } from '@/config/site';
 import SkinPicker from '@/components/skin-picker';
+import LanguagePicker from '@/components/language-picker';
 
 interface MenuItem {
   path: string;
@@ -34,6 +37,7 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
+  useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
@@ -74,7 +78,7 @@ export default function AdminLayout({
   const menuItems: MenuItem[] = [
     {
       path: '/dashboard',
-      label: '仪表板',
+      label: t("m7e284c2df7cf"),
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
           <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
@@ -86,7 +90,7 @@ export default function AdminLayout({
     {
       // 车友的主页面;管理员也留着——「我自己用」开的那条订阅在这里随时能找回来
       path: '/my-sub',
-      label: '我的订阅',
+      label: t("m79aad303b15f"),
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd" />
@@ -95,7 +99,7 @@ export default function AdminLayout({
     },
     {
       path: '/forward',
-      label: '转发管理',
+      label: t("m7087a2ad1cad"),
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -106,7 +110,7 @@ export default function AdminLayout({
     },
     {
       path: '/inbound',
-      label: '协议管理',
+      label: t("mcf676c020118"),
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M10 1a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.715-5.349L11 6.477V16h2a1 1 0 110 2H7a1 1 0 110-2h2V6.477L6.237 7.582l1.715 5.349a1 1 0 01-.285 1.05A3.989 3.989 0 015 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.738-5.42-1.233-.616a1 1 0 01.894-1.79l1.599.8L9 3.323V2a1 1 0 011-1z" clipRule="evenodd" />
@@ -116,7 +120,7 @@ export default function AdminLayout({
     },
     {
       path: '/relay',
-      label: '中转',
+      label: t("m7f785150a8e2"),
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M8 4a1 1 0 00-1 1v1H4a1 1 0 000 2h9.586l-1.293 1.293a1 1 0 101.414 1.414l3-3a1 1 0 000-1.414l-3-3A1 1 0 0013 4.586V5a1 1 0 00-1-1H8zm4 12a1 1 0 001-1v-1h3a1 1 0 100-2H6.414l1.293-1.293a1 1 0 10-1.414-1.414l-3 3a1 1 0 000 1.414l3 3A1 1 0 007 15.414V15a1 1 0 001 1h4z" clipRule="evenodd" />
@@ -126,7 +130,7 @@ export default function AdminLayout({
     },
     {
       path: '/landing',
-      label: '落地管理',
+      label: t("m44989b913d7b"),
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M4.083 9h1.946c.089-1.546.383-2.97.837-4.118A6.004 6.004 0 004.083 9zM10 2a8 8 0 100 16 8 8 0 000-16zm0 2c-.076 0-.232.032-.465.262-.238.234-.497.623-.737 1.182-.389.907-.673 2.142-.766 3.556h3.936c-.093-1.414-.377-2.649-.766-3.556-.24-.56-.5-.948-.737-1.182C10.232 4.032 10.076 4 10 4zm3.971 5c-.089-1.546-.383-2.97-.837-4.118A6.004 6.004 0 0115.917 9h-1.946zm-2.003 2H8.032c.093 1.414.377 2.649.766 3.556.24.56.5.948.737 1.182.233.23.389.262.465.262.076 0 .232-.032.465-.262.238-.234.498-.623.737-1.182.389-.907.673-2.142.766-3.556zm1.166 4.118c.454-1.147.748-2.572.837-4.118h1.946a6.004 6.004 0 01-2.783 4.118zm-6.268 0C6.412 13.97 6.118 12.546 6.03 11H4.083a6.004 6.004 0 002.783 4.118z" clipRule="evenodd" />
@@ -136,7 +140,7 @@ export default function AdminLayout({
     },
     {
       path: '/tunnel',
-      label: '隧道管理',
+      label: t("me920f47d0c05"),
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd" />
@@ -146,7 +150,7 @@ export default function AdminLayout({
     },
     {
       path: '/node',
-      label: '转发机',
+      label: t("mc96d163471f3"),
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11.707 4.707a1 1 0 00-1.414-1.414L10 9.586 8.707 8.293a1 1 0 00-1.414 0l-2 2a1 1 0 101.414 1.414L8 10.414l1.293 1.293a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
@@ -156,7 +160,7 @@ export default function AdminLayout({
     },
     {
       path: '/limit',
-      label: '限速管理',
+      label: t("me39e26d1fc54"),
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
@@ -166,7 +170,7 @@ export default function AdminLayout({
     },
     {
       path: '/user',
-      label: '用户管理',
+      label: t("mfbf413d429bd"),
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
           <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
@@ -176,7 +180,7 @@ export default function AdminLayout({
     },
     {
       path: '/config',
-      label: '网站配置',
+      label: t("m0910d1f1e847"),
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
@@ -186,7 +190,7 @@ export default function AdminLayout({
     },
     {
       path: '/guide',
-      label: '使用说明',
+      label: t("mcb4ba40bf823"),
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
@@ -277,27 +281,27 @@ export default function AdminLayout({
   // 密码表单验证
   const validatePasswordForm = (): boolean => {
     if (!passwordForm.newUsername.trim()) {
-      toast.error('请输入新用户名');
+      toast.error(t("m12fdbbcc066a"));
       return false;
     }
     if (passwordForm.newUsername.length < 3) {
-      toast.error('用户名长度至少3位');
+      toast.error(t("md0931223450f"));
       return false;
     }
     if (!passwordForm.currentPassword) {
-      toast.error('请输入当前密码');
+      toast.error(t("mf1790d3384d0"));
       return false;
     }
     if (!passwordForm.newPassword) {
-      toast.error('请输入新密码');
+      toast.error(t("mba3c8c79cda3"));
       return false;
     }
     if (passwordForm.newPassword.length < 6) {
-      toast.error('新密码长度不能少于6位');
+      toast.error(t("m305e75f814f9"));
       return false;
     }
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      toast.error('两次输入密码不一致');
+      toast.error(t("mcf385c568f54"));
       return false;
     }
     return true;
@@ -311,15 +315,15 @@ export default function AdminLayout({
     try {
       const response = await updatePassword(passwordForm);
       if (response.code === 0) {
-        toast.success('密码修改成功，请重新登录');
+        toast.success(t("maeae7438cbd9"));
         onOpenChange();
         handleLogout();
       } else {
-        toast.error(response.msg || '密码修改失败');
+        toast.error(response.msg || t("m878b622b47ad"));
       }
     } catch (error) {
-      toast.error('修改密码时发生错误');
-      console.error('修改密码错误:', error);
+      toast.error(t("mc7955ad9b527"));
+      console.error(t("mb38d48b11765"), error);
     } finally {
       setPasswordLoading(false);
     }
@@ -382,11 +386,9 @@ export default function AdminLayout({
                      type="button"
                      onClick={updateModal.onOpen}
                      className="flex items-center gap-1 text-[10px] text-warning hover:opacity-70 transition-opacity"
-                     title="点击查看怎么更新"
+                     title={t("m561cac658f12")}
                    >
-                     <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
-                     有更新
-                   </button>
+                     <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" /> {t("m8cb47e4a228d")} </button>
                  )}
                </div>
              </div>
@@ -454,7 +456,7 @@ export default function AdminLayout({
 
           <div className="flex items-center gap-3">
             {/* 主题选择 */}
-            <SkinPicker />
+            <LanguagePicker /><SkinPicker />
             {/* 用户菜单 */}
              <Dropdown placement="bottom-end">
                <DropdownTrigger>
@@ -465,7 +467,7 @@ export default function AdminLayout({
                    </svg>
                  </Button>
                </DropdownTrigger>
-              <DropdownMenu aria-label="用户菜单">
+              <DropdownMenu aria-label={t("mc65e5e3b0b6a")}>
                 <DropdownItem
                   key="change-password"
                   startContent={
@@ -474,9 +476,7 @@ export default function AdminLayout({
                     </svg>
                   }
                   onPress={onOpen}
-                >
-                  修改密码
-                </DropdownItem>
+                > {t("m08d008062411")} </DropdownItem>
                 <DropdownItem
                   key="logout"
                   startContent={
@@ -487,9 +487,7 @@ export default function AdminLayout({
                   className="text-danger"
                   color="danger"
                   onPress={handleLogout}
-                >
-                  退出登录
-                </DropdownItem>
+                > {t("m3ab8cc15939f")} </DropdownItem>
               </DropdownMenu>
             </Dropdown>
           </div>
@@ -516,36 +514,36 @@ export default function AdminLayout({
                  <ModalContent>
            {(onClose: () => void) => (
             <>
-              <ModalHeader className="flex flex-col gap-1">修改密码</ModalHeader>
+              <ModalHeader className="flex flex-col gap-1">{t("m08d008062411")}</ModalHeader>
               <ModalBody>
                                  <div className="space-y-4">
                    <Input
-                     label="新用户名"
-                     placeholder="请输入新用户名（至少3位）"
+                     label={t("m0ccf18acc1c8")}
+                     placeholder={t("me12c044dc03e")}
                      value={passwordForm.newUsername}
                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPasswordForm(prev => ({ ...prev, newUsername: e.target.value }))}
                      variant="bordered"
                    />
                    <Input
-                     label="当前密码"
+                     label={t("ma114cfb687e6")}
                      type="password"
-                     placeholder="请输入当前密码"
+                     placeholder={t("mf1790d3384d0")}
                      value={passwordForm.currentPassword}
                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPasswordForm(prev => ({ ...prev, currentPassword: e.target.value }))}
                      variant="bordered"
                    />
                    <Input
-                     label="新密码"
+                     label={t("m515e9c7cf7b2")}
                      type="password"
-                     placeholder="请输入新密码（至少6位）"
+                     placeholder={t("medef5df61d32")}
                      value={passwordForm.newPassword}
                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))}
                      variant="bordered"
                    />
                    <Input
-                     label="确认密码"
+                     label={t("m81b17bc0c362")}
                      type="password"
-                     placeholder="请再次输入新密码"
+                     placeholder={t("m322ded8bb2cc")}
                      value={passwordForm.confirmPassword}
                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
                      variant="bordered"
@@ -553,16 +551,12 @@ export default function AdminLayout({
                  </div>
               </ModalBody>
               <ModalFooter>
-                <Button color="default" variant="light" onPress={onClose}>
-                  取消
-                </Button>
+                <Button color="default" variant="light" onPress={onClose}> {t("m2cd0f3be8738")} </Button>
                 <Button 
                   color="primary" 
                   onPress={handlePasswordSubmit}
                   isLoading={passwordLoading}
-                >
-                  确定
-                </Button>
+                > {t("mfac2a67ad878")} </Button>
               </ModalFooter>
             </>
           )}
@@ -580,23 +574,23 @@ export default function AdminLayout({
         <ModalContent>
           {(onClose: () => void) => (
             <>
-              <ModalHeader className="flex flex-col gap-1">发现新版本</ModalHeader>
+              <ModalHeader className="flex flex-col gap-1">{t("mac217e4d1ca4")}</ModalHeader>
               <ModalBody>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-default-500">当前版本</span>
+                    <span className="text-default-500">{t("m837bc9576721")}</span>
                     <span className="font-mono">
                       v{versionInfo?.panelVersion || siteConfig.version}
                       {versionInfo?.commit && versionInfo.commit !== 'dev' && `-${versionInfo.commit}`}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-default-500">最新版本</span>
+                    <span className="text-default-500">{t("mc2a497830ef7")}</span>
                     <span className="font-mono text-warning">{versionInfo?.latest || '-'}</span>
                   </div>
 
                   <div>
-                    <p className="text-sm text-default-500 mb-2">在面板服务器上执行:</p>
+                    <p className="text-sm text-default-500 mb-2">{t("mc054376e4550")}</p>
                     <div className="flex items-center gap-2 bg-default-100 rounded-lg px-3 py-2">
                       <code className="flex-1 font-mono text-sm select-all">tms update</code>
                       <Button
@@ -604,24 +598,22 @@ export default function AdminLayout({
                         variant="flat"
                         onPress={async () => {
                           (await copyTextToClipboard('tms update'))
-                            ? toast.success('已复制')
-                            : toast.error('复制失败,请手动选中命令');
+                            ? toast.success(t("m8f6f8d979c98"))
+                            : toast.error(t("m5673832463ee"));
                         }}
-                      >
-                        复制
-                      </Button>
+                      > {t("m63d90d977348")} </Button>
                     </div>
                   </div>
 
                   <div className="text-xs text-default-500 space-y-1">
-                    <p>· 更新过程面板会重启,大约 1-2 分钟</p>
-                    <p>· 节点和转发跑在各自的机器上,不受面板重启影响</p>
-                    <p>· 车友的订阅链接不变,不用重新分发</p>
+                    <p>{t("mb63df6cc28a0")}</p>
+                    <p>{t("m56ca91f880fa")}</p>
+                    <p>{t("mf3885d6fedea")}</p>
                   </div>
                 </div>
               </ModalBody>
               <ModalFooter>
-                <Button color="primary" onPress={onClose}>知道了</Button>
+                <Button color="primary" onPress={onClose}>{t("mde32e20193ad")}</Button>
               </ModalFooter>
             </>
           )}
@@ -629,4 +621,4 @@ export default function AdminLayout({
       </Modal>
     </div>
   );
-} 
+}

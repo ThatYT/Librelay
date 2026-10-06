@@ -1,9 +1,11 @@
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 import { useState, useEffect } from "react";
 import { Card, CardBody } from "@heroui/card";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import { Chip } from "@heroui/chip";
-import toast from "react-hot-toast";
+import toast from "@/utils/toast";
 import { getMyLines, getUserPackageInfo, deleteLine } from "@/api";
 import { isAdmin } from "@/utils/auth";
 import { JwtUtil } from "@/utils/jwt";
@@ -16,6 +18,7 @@ import { SubQrToggle } from "@/components/sub-qr";
  * 车友只管复制链接导客户端,内部的机器/端口/转发对他隐藏。
  */
 export default function MySubPage() {
+  useTranslation();
   const [lines, setLines] = useState<any[]>([]);
   // 「全部线路」聚合订阅:一条链接包含他所有线路,以后新开线路也不用重发
   const [allSubToken, setAllSubToken] = useState<string>("");
@@ -39,7 +42,7 @@ export default function MySubPage() {
       }
       if (pkg.code === 0) setAccount(pkg.data?.userInfo || null);
     } catch (e) {
-      toast.error("加载失败");
+      toast.error(t("md1d044826a45"));
     }
     setLoading(false);
   };
@@ -61,15 +64,13 @@ export default function MySubPage() {
   return (
     <div className="p-4 space-y-4 max-w-4xl">
       <div className="flex items-baseline gap-3">
-        <h1 className="text-xl font-bold">我的订阅</h1>
-        <span className="text-sm text-default-500">共 {lines.length} 条线路,每条各自独立</span>
+        <h1 className="text-xl font-bold">{t("m79aad303b15f")}</h1>
+        <span className="text-sm text-default-500">{t("m76e547a8fa54")} {lines.length} {t("m17f2bbb8b6fb")}</span>
       </div>
 
       {(accountDisabled || accountExpired) && (
         <Card className="border border-danger/40 bg-danger/5">
-          <CardBody className="text-sm text-danger">
-            ⚠️ 你的账号{accountExpired ? "已到期" : "已被停用"},所有线路暂时不可用,请联系管理员。
-          </CardBody>
+          <CardBody className="text-sm text-danger"> {t("m5f1fe6db40fa")}{accountExpired ? t("mb9d8853e0ce7") : t("m59c007695802")}{t("m10d6df652718")} </CardBody>
         </Card>
       )}
 
@@ -77,11 +78,10 @@ export default function MySubPage() {
         <Card className="border border-primary/40 bg-primary/5">
           <CardBody className="space-y-3">
             <div className="flex items-center gap-2 flex-wrap">
-              <Chip size="sm" color="primary" variant="flat">⭐ 全部线路</Chip>
-              <span className="text-sm text-default-600">一条链接包含下面所有线路,推荐用这条</span>
+              <Chip size="sm" color="primary" variant="flat">{t("m385a5053e4c5")}</Chip>
+              <span className="text-sm text-default-600">{t("m517c5f888be4")}</span>
               <Chip size="sm" variant="flat" className="ml-auto">
-                {lines.reduce((n: number, l: any) => n + (l.protocolCount || 0), 0)} 协议
-              </Chip>
+                {lines.reduce((n: number, l: any) => n + (l.protocolCount || 0), 0)} {t("mab2f31f30acf")} </Chip>
             </div>
             <Input
               readOnly
@@ -95,46 +95,32 @@ export default function MySubPage() {
                 color="primary"
                 onPress={async () => {
                   (await copyTextToClipboard(subUrl(allSubToken)))
-                    ? toast.success("已复制,去客户端粘贴")
-                    : toast.error("复制失败,点框内已全选,按 Ctrl+C");
+                    ? toast.success(t("mf428fcdd76c7"))
+                    : toast.error(t("md9c9f3be73c7"));
                 }}
-              >
-                复制订阅链接
-              </Button>
+              > {t("m1541c2076c07")} </Button>
               <SubQrToggle url={subUrl(allSubToken)} />
               <Button
                 size="sm"
                 variant="flat"
                 onPress={async () => {
                   (await copyTextToClipboard(clashUrl(allSubToken)))
-                    ? toast.success("已复制 Clash / Mihomo 版")
-                    : toast.error("复制失败,请手动选中");
+                    ? toast.success(t("m4208eddf743e"))
+                    : toast.error(t("m79b2fbf1e922"));
                 }}
-              >
-                Clash / Mihomo 版
-              </Button>
+              > {t("m8edcbedd09a7")} </Button>
             </div>
-            <div className="text-xs text-default-400">
-              节点名前面带线路标识(如「香港机器 VLESS」),方便区分从哪出口。
-              以后管理员给你新开线路,更新一下订阅就自动出现,不用再要新链接。
-            </div>
-            <div className="text-xs text-default-400">
-              用 <span className="text-default-500">v2rayN / 小火箭 / v2rayNG</span> 复制上面那条;
-              用 <span className="text-default-500">Clash Verge / ClashMeta / Mihomo</span> 复制「Clash / Mihomo 版」——
-              两种格式不通用,贴错了客户端里会是空的。
-            </div>
+            <div className="text-xs text-default-400"> {t("ma60ebbb0a571")} </div>
+            <div className="text-xs text-default-400"> {t("m04e45efb3be8")} <span className="text-default-500">{t("m608e0e1f41a5")}</span> {t("me2dbef49d664")} <span className="text-default-500">Clash Verge / ClashMeta / Mihomo</span> {t("m55395cf84f3d")} </div>
           </CardBody>
         </Card>
       )}
 
       {loading ? (
-        <div className="text-center text-default-400 py-8">加载中...</div>
+        <div className="text-center text-default-400 py-8">{t("m9dc0825fba54")}</div>
       ) : lines.length === 0 ? (
         <Card>
-          <CardBody className="text-center text-default-400 py-8">
-            还没有线路。管理员在「协议管理」或「中转」的机器卡上点「分配用户」给你开通;
-            如果你就是管理员、想自己用,点那张卡上的「🔑 我自己用」即可。
-          </CardBody>
+          <CardBody className="text-center text-default-400 py-8"> {t("m523ff309e600")} </CardBody>
         </Card>
       ) : (
         <div className="space-y-3">
@@ -151,26 +137,26 @@ export default function MySubPage() {
                   {/* 标题行:类型 + 机器 + 协议数 */}
                   <div className="flex items-center gap-2 flex-wrap">
                     <Chip size="sm" variant="flat" color={isRelay ? "warning" : "primary"}>
-                      {isRelay ? `🔀 中转${ln.landingName ? "→" + ln.landingName : ""}` : "🖥️ 直连"}
+                      {isRelay ? t("m7e92caa8ec8c", {v0: ln.landingName ? "→" + ln.landingName : ""}) : t("m01d28f2c903a")}
                     </Chip>
                     <span className="font-medium truncate">{ln.nodeName}</span>
-                    {stopped && <Chip size="sm" color="danger" variant="flat">已停用</Chip>}
-                    <Chip size="sm" variant="flat" className="ml-auto">{ln.protocolCount} 协议</Chip>
+                    {stopped && <Chip size="sm" color="danger" variant="flat">{t("ma8c3698b5b8c")}</Chip>}
+                    <Chip size="sm" variant="flat" className="ml-auto">{ln.protocolCount} {t("mab2f31f30acf")}</Chip>
                   </div>
 
                   {/* 这条订阅自己的套餐:流量 + 到期 */}
                   <div className="flex items-center gap-6 text-sm">
                     <div>
-                      <span className="text-default-500 text-xs">流量 </span>
+                      <span className="text-default-500 text-xs">{t("m81a9d0b5a2a2")} </span>
                       <span className="font-semibold">{fmtGB(used)}</span>
                       <span className="text-default-400">
-                        {quota > 0 ? ` / ${ln.quotaGb} GB` : " / 不限"}
+                        {quota > 0 ? ` / ${ln.quotaGb} GB` : t("m5f1ef15182bc")}
                       </span>
                     </div>
                     <div>
-                      <span className="text-default-500 text-xs">到期 </span>
+                      <span className="text-default-500 text-xs">{t("m1f29b74ad60c")} </span>
                       <span className="font-semibold">
-                        {ln.lineExpTime ? fmtDate(ln.lineExpTime) : "永久"}
+                        {ln.lineExpTime ? fmtDate(ln.lineExpTime) : t("m3e71ccc89a43")}
                       </span>
                     </div>
                   </div>
@@ -196,12 +182,10 @@ export default function MySubPage() {
                       color="primary"
                       onPress={async () => {
                         (await copyTextToClipboard(url))
-                          ? toast.success("已复制,去客户端粘贴")
-                          : toast.error("复制失败,点框内已全选,按 Ctrl+C");
+                          ? toast.success(t("mf428fcdd76c7"))
+                          : toast.error(t("md9c9f3be73c7"));
                       }}
-                    >
-                      复制订阅链接
-                    </Button>
+                    > {t("m1541c2076c07")} </Button>
                     <SubQrToggle url={url} />
                     {/* 删除只给管理员看。这一页车友也在用,而删线路是不可逆的 ——
                         端口会释放,以后要再用得管理员重新分配、重新发一遍链接。
@@ -216,21 +200,17 @@ export default function MySubPage() {
                           color="danger"
                           onPress={async () => {
                             const myId = JwtUtil.getUserIdFromToken();
-                            if (myId == null) return toast.error("登录状态异常,刷新一下再试");
-                            if (!confirm(`彻底删除「${ln.nodeName}」这条线路?
-该线路下 ${ln.protocolCount} 个协议的分配和转发会一并删掉,端口释放。
-这一步不可逆,以后要再用得重新分配。`)) return;
+                            if (myId == null) return toast.error(t("m030e2615abd3"));
+                            if (!confirm(t("m9036360d6bd4", {v0: ln.nodeName, v1: ln.protocolCount}))) return;
                             const res = await deleteLine(myId, ln.nodeId, ln.landingId ?? null);
                             if (res.code === 0) {
-                              toast.success("已删掉这条线路");
+                              toast.success(t("m76dbcf21457f"));
                               await load();
                             } else {
-                              toast.error(res.msg || "删除失败");
+                              toast.error(res.msg || t("mc228558cf257"));
                             }
                           }}
-                        >
-                          删除
-                        </Button>
+                        > {t("m2f9daa828907")} </Button>
                       </>
                     )}
                   </div>
@@ -244,16 +224,14 @@ export default function MySubPage() {
       {/* 用法 */}
       <Card>
         <CardBody className="space-y-2 text-sm text-default-600">
-          <div className="font-semibold">怎么用</div>
-          <div>复制上面任意一条订阅链接,在客户端里添加订阅:</div>
+          <div className="font-semibold">{t("m9fe7ee970509")}</div>
+          <div>{t("m54970f9c5592")}</div>
           <ul className="list-disc pl-5 space-y-1 text-default-500">
-            <li><b>v2rayN(Windows)</b>:订阅 → 订阅分组设置 → 添加 → 粘贴地址 → 确定 → 更新订阅</li>
-            <li><b>小火箭 / Shadowrocket(iOS)</b>:右上角 + → 类型选「Subscribe」→ 粘贴地址</li>
-            <li><b>v2rayNG(安卓)</b>:左侧菜单 → 订阅分组设置 → + → 粘贴地址 → 更新订阅</li>
+            <li><b>v2rayN(Windows)</b>{t("me9b379ddc89c")}</li>
+            <li><b>{t("mdc1dcf97bfde")}</b>{t("m3aa10183b9e4")}</li>
+            <li><b>{t("m7fb723cbcdb6")}</b>{t("m82436d9b4d6a")}</li>
           </ul>
-          <div className="text-xs text-default-400">
-            每条线路是独立的套餐:流量、到期各算各的,一条用完不影响另一条。管理员在某条线路上加了新协议,你更新订阅就自动出现。
-          </div>
+          <div className="text-xs text-default-400"> {t("m5a35279c1180")} </div>
         </CardBody>
       </Card>
     </div>

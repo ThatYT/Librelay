@@ -100,6 +100,9 @@ func (h *socks5Handler) handleUDP(ctx context.Context, conn net.Conn, ro *xrecor
 			limiter.ClientOption(string(clientID)),
 			limiter.SrcOption(conn.RemoteAddr().String()),
 		)
+		if h.serviceStats != nil {
+			cc = stats_wrapper.WrapPacketConn(cc, h.serviceStats)
+		}
 		if h.options.Observer != nil {
 			pstats := h.stats.Stats(string(clientID))
 			pstats.Add(stats.KindTotalConns, 1)

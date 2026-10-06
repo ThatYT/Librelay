@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 import { useState, useEffect } from "react";
 import { Card, CardBody } from "@heroui/card";
 import { Button } from "@heroui/button";
@@ -5,7 +7,7 @@ import { Input, Textarea } from "@heroui/input";
 import { Select, SelectItem } from "@heroui/select";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
 import { Chip } from "@heroui/chip";
-import toast from "react-hot-toast";
+import toast from "@/utils/toast";
 import {
   getLandingList,
   createLanding,
@@ -29,6 +31,7 @@ import { copyTextToClipboard } from "@/utils/clipboard";
  * 车友的订阅链接、UUID、端口都不变,只有出口 IP 变了。
  */
 export default function LandingPage() {
+  useTranslation();
   const [landings, setLandings] = useState<any[]>([]);
   const [inbounds, setInbounds] = useState<any[]>([]);
   const [nodes, setNodes] = useState<any[]>([]);
@@ -55,7 +58,7 @@ export default function LandingPage() {
       if (ib.code === 0) setInbounds(ib.data || []);
       if (nd.code === 0) setNodes(nd.data || []);
     } catch (e) {
-      toast.error("加载失败");
+      toast.error(t("md1d044826a45"));
     }
     setLoading(false);
   };
@@ -71,7 +74,7 @@ export default function LandingPage() {
     const nodeIds = Array.from(new Set(ibs.map((ib) => ib.nodeId))).filter((x) => x != null);
     return { count: ibs.length, nodeIds: nodeIds as number[] };
   };
-  const nodeName = (id: number) => nodes.find((n) => n.id === id)?.name || `机器#${id}`;
+  const nodeName = (id: number) => nodes.find((n) => n.id === id)?.name || t("mfb4424ab26ed", {v0: id});
 
   const typeColor = (t: string) =>
     t === "socks5" ? "warning" : t === "direct" ? "default" : "secondary";
@@ -93,22 +96,22 @@ export default function LandingPage() {
   };
 
   const handleTest = async () => {
-    if (!testNodeId) return toast.error("先选一台前置机(要经它去拨落地)");
-    if (!form.link.trim()) return toast.error("先填落地出口");
+    if (!testNodeId) return toast.error(t("m0b46d31120bb"));
+    if (!form.link.trim()) return toast.error(t("m112184666a49"));
     setTestLoading(true);
     setTestResult(null);
     try {
       const res = await testLanding(testNodeId, form.link.trim());
       if (res.code === 0) {
         setTestResult(res.data);
-        if (res.data?.skipped) toast.success(res.data?.msg || "格式已校验");
-        else if (res.data?.ok) toast.success(`通了,出口 IP ${res.data?.exitIp}`);
+        if (res.data?.skipped) toast.success(res.data?.msg || t("mcc453f867926"));
+        else if (res.data?.ok) toast.success(t("m3cb15fba3007", {v0: res.data?.exitIp}));
       } else {
         setTestResult({ ok: false, msg: res.msg });
-        toast.error(res.msg || "测试失败");
+        toast.error(res.msg || t("m77c9e582e855"));
       }
     } catch (e) {
-      toast.error("测试失败");
+      toast.error(t("m77c9e582e855"));
     }
     setTestLoading(false);
   };
@@ -129,8 +132,8 @@ export default function LandingPage() {
   };
 
   const handleSave = async () => {
-    if (!form.name.trim()) return toast.error("给落地起个名字,不然一堆 socks 分不清哪条是哪条");
-    if (!form.link.trim()) return toast.error("请填落地出口");
+    if (!form.name.trim()) return toast.error(t("m4fd70a48e0e0"));
+    if (!form.link.trim()) return toast.error(t("m56ce089a68ce"));
     setSaving(true);
     try {
       const payload = { name: form.name.trim(), link: form.link.trim(), remark: form.remark?.trim() || "" };
@@ -143,9 +146,9 @@ export default function LandingPage() {
         toast.success(
           form.id
             ? u.nodeIds.length
-              ? `已保存,并给 ${u.nodeIds.length} 台机器重推了配置(出口已切换)`
-              : "已保存"
-            : "落地已创建,去「中转」页就能选它了",
+              ? t("mca7642780c3e", {v0: u.nodeIds.length})
+              : t("m1bd91a7d0c53")
+            : t("mc5d7ea1c9fa4"),
         );
         finishSave();
       } else if (form.id && res.msg && res.msg.startsWith("落地已改")) {
@@ -154,10 +157,10 @@ export default function LandingPage() {
         toast(res.msg, { icon: "⚠️", duration: 8000 });
         finishSave();
       } else {
-        toast.error(res.msg || "保存失败");
+        toast.error(res.msg || t("m6309a3bb5ba4"));
       }
     } catch (e) {
-      toast.error("保存失败");
+      toast.error(t("m6309a3bb5ba4"));
     }
     setSaving(false);
   };
@@ -166,27 +169,27 @@ export default function LandingPage() {
     const u = usageOf(l.id);
     if (u.count > 0) {
       // 后端也会拦(口径一样),这里提前说清楚,省一次往返和一次困惑
-      toast.error(`「${l.name}」正在被 ${u.count} 个中转协议使用(${u.nodeIds.map(nodeName).join("、")})。先去「中转」页清空这些中转再删。`, { duration: 8000 });
+      toast.error(t("m99c74db4179f", {v0: l.name, v1: u.count, v2: u.nodeIds.map(nodeName).join("、")}), { duration: 8000 });
       return;
     }
-    if (!window.confirm(`确定删除落地「${l.name}」?`)) return;
+    if (!window.confirm(t("m1af27cc84027", {v0: l.name}))) return;
     try {
       const res = await deleteLanding(l.id);
       if (res.code === 0) {
-        toast.success("已删除");
+        toast.success(t("m077a6d37719a"));
         loadAll();
       } else {
-        toast.error(res.msg || "删除失败");
+        toast.error(res.msg || t("mc228558cf257"));
       }
     } catch (e) {
-      toast.error("删除失败");
+      toast.error(t("mc228558cf257"));
     }
   };
 
   // 行内快速测试:用正在跑它的那台机器去拨。没机器在用就测不了(测试必须经一台前置机)
   const handleRowTest = async (l: any) => {
     const nid = usageOf(l.id).nodeIds[0] ?? nodes[0]?.id;
-    if (!nid) return toast.error("还没有转发机,没法测");
+    if (!nid) return toast.error(t("m8e6798b23a99"));
     setRowTesting(l.id);
     try {
       const res = await testLanding(nid, l.link);
@@ -194,9 +197,9 @@ export default function LandingPage() {
         ...p,
         [l.id]: res.code === 0 ? { ...res.data, via: nodeName(nid) } : { ok: false, msg: res.msg, via: nodeName(nid) },
       }));
-      if (res.code !== 0) toast.error(res.msg || "测试失败");
+      if (res.code !== 0) toast.error(res.msg || t("m77c9e582e855"));
     } catch (e) {
-      toast.error("测试失败");
+      toast.error(t("m77c9e582e855"));
     }
     setRowTesting(null);
   };
@@ -204,18 +207,14 @@ export default function LandingPage() {
   return (
     <div className="p-4 space-y-4">
       <div className="flex justify-between items-center">
-        <h1 className="text-xl font-bold">落地管理</h1>
-        <Button color="warning" onPress={openCreate}>➕ 新建落地</Button>
+        <h1 className="text-xl font-bold">{t("m44989b913d7b")}</h1>
+        <Button color="warning" onPress={openCreate}>{t("mfcfef2cedf4b")}</Button>
       </div>
 
-      <div className="text-xs text-default-500">
-        落地 = 流量最终从哪台机器出网(住宅 socks5 / 机场节点 / 别人的协议)。一条落地可以给多台前置机复用。
-        在「中转」页搭中转时顺手填的落地也会出现在这里 —— 这页是<b>建完之后还能改</b>的地方:
-        换代理串、改名、删掉不用的。改完会自动给用到它的机器重推配置,车友的订阅链接不变。
-      </div>
+      <div className="text-xs text-default-500"> {t("m318b58da8754")}<b>{t("m61c2ab9c0b30")}</b>{t("ma0b3104d2fc7")} </div>
 
       {loading ? (
-        <div className="text-center text-default-400 py-8">加载中…</div>
+        <div className="text-center text-default-400 py-8">{t("m4927a53bcc88")}</div>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {landings.map((l) => {
@@ -233,7 +232,7 @@ export default function LandingPage() {
                       color={u.count > 0 ? "primary" : "default"}
                       className="ml-auto shrink-0"
                     >
-                      {u.count > 0 ? `${u.count} 协议在用` : "空闲"}
+                      {u.count > 0 ? t("mdff81dbfc0e0", {v0: u.count}) : t("mdae661d17c2d")}
                     </Chip>
                   </div>
 
@@ -247,8 +246,8 @@ export default function LandingPage() {
                       isIconOnly
                       onPress={async () => {
                         (await copyTextToClipboard(l.link))
-                          ? toast.success("已复制落地出口")
-                          : toast.error("复制失败");
+                          ? toast.success(t("m0d990a51f43e"))
+                          : toast.error(t("m753d8bb0da99"));
                       }}
                     >
                       📋
@@ -257,43 +256,37 @@ export default function LandingPage() {
 
                   {u.nodeIds.length > 0 && (
                     <div className="flex flex-wrap items-center gap-1 text-xs">
-                      <span className="text-default-500">用在 →</span>
+                      <span className="text-default-500">{t("m2f3c2efbf3a4")}</span>
                       {u.nodeIds.map((nid) => (
                         <Chip key={nid} size="sm" variant="flat" color="secondary">{nodeName(nid)}</Chip>
                       ))}
                     </div>
                   )}
 
-                  {l.remark && <div className="text-xs text-default-400">备注:{l.remark}</div>}
+                  {l.remark && <div className="text-xs text-default-400">{t("m53b2ca9aff9b")}{l.remark}</div>}
 
                   {r && (
                     <div className="text-xs">
                       {r.skipped ? (
                         <span className="text-default-500">{r.msg}</span>
                       ) : r.ok ? (
-                        <span className="text-success">✅ 通了 · 出口 IP <b className="font-mono">{r.exitIp}</b> · {r.latencyMs}ms · 经 {r.via}</span>
+                        <span className="text-success">{t("m271e92ef9033")} <b className="font-mono">{r.exitIp}</b> · {r.latencyMs}{t("m4090f813fb0b")} {r.via}</span>
                       ) : (
-                        <span className="text-danger">❌ {r.msg || "不通"}(经 {r.via})</span>
+                        <span className="text-danger">❌ {r.msg || t("m7badfabc6ef1")}{t("m9a2d0a6da781")} {r.via})</span>
                       )}
                     </div>
                   )}
 
                   <div className="flex gap-2">
-                    <Button size="sm" color="primary" variant="flat" className="flex-1" onPress={() => openEdit(l)}>
-                      ✏️ 编辑
-                    </Button>
+                    <Button size="sm" color="primary" variant="flat" className="flex-1" onPress={() => openEdit(l)}> {t("m0ed9861c7c8e")} </Button>
                     <Button
                       size="sm"
                       color="secondary"
                       variant="flat"
                       isLoading={rowTesting === l.id}
                       onPress={() => handleRowTest(l)}
-                    >
-                      🔌 测一下
-                    </Button>
-                    <Button size="sm" color="danger" variant="flat" onPress={() => handleDelete(l)}>
-                      删除
-                    </Button>
+                    > {t("md88530d313f0")} </Button>
+                    <Button size="sm" color="danger" variant="flat" onPress={() => handleDelete(l)}> {t("m2f9daa828907")} </Button>
                   </div>
                 </CardBody>
               </Card>
@@ -303,46 +296,40 @@ export default function LandingPage() {
       )}
 
       {!loading && landings.length === 0 && (
-        <div className="text-center text-default-400 py-8">
-          还没有落地。点右上角「➕ 新建落地」建一条,再去「中转」页把它挂到前置机上。
-        </div>
+        <div className="text-center text-default-400 py-8"> {t("m26880cce159a")} </div>
       )}
 
       {/* 新建 / 编辑 */}
       <Modal isOpen={open} onClose={() => setOpen(false)} size="2xl">
         <ModalContent>
-          <ModalHeader>{form.id ? `✏️ 编辑落地` : "➕ 新建落地"}</ModalHeader>
+          <ModalHeader>{form.id ? t("m7c7d3481d252") : t("mfcfef2cedf4b")}</ModalHeader>
           <ModalBody className="space-y-3">
             {form.id && usageOf(form.id).nodeIds.length > 0 && (
-              <div className="text-xs bg-warning-50 text-warning-700 dark:bg-warning-100/10 dark:text-warning-500 rounded-lg px-3 py-2">
-                ⚠️ 这条落地正在被 <b>{usageOf(form.id).nodeIds.map(nodeName).join("、")}</b> 使用。
-                保存后会立刻给这些机器重推配置,出口 IP 当场就变 ——
-                车友的订阅链接、UUID、端口都不变,不用重新发订阅。
-              </div>
+              <div className="text-xs bg-warning-50 text-warning-700 dark:bg-warning-100/10 dark:text-warning-500 rounded-lg px-3 py-2"> {t("mddec472285c3")} <b>{usageOf(form.id).nodeIds.map(nodeName).join("、")}</b> {t("me6dc70eb0065")} </div>
             )}
             <Input
-              label="落地名称"
-              placeholder="如 泰国住宅、日本机场"
+              label={t("m85ec36a512c9")}
+              placeholder={t("mbdd6a8231fe1")}
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
             <Textarea
-              label="落地出口"
-              placeholder="住宅socks: IP:端口:账号:密码    协议节点: ss:// / vmess:// / vless:// / trojan:// / hysteria2://"
+              label={t("mc22636f69e10")}
+              placeholder={t("m85ad1ee2ae49")}
               minRows={2}
               value={form.link}
               onChange={(e) => { setForm({ ...form, link: e.target.value }); setTestResult(null); }}
-              description="类型(socks5 / ss / vless…)由链接自动识别,不用自己选"
+              description={t("mc5085bcde78b")}
             />
             <Input
-              label="备注(可空)"
-              placeholder="如 每月 200G / 到期 12-31 / 卖家微信"
+              label={t("m97cf9a175f3d")}
+              placeholder={t("m7c5ca5319719")}
               value={form.remark}
               onChange={(e) => setForm({ ...form, remark: e.target.value })}
             />
             <div className="flex items-end gap-2">
               <Select
-                label="经哪台前置机测"
+                label={t("mf62bf36832a1")}
                 size="sm"
                 className="flex-1"
                 selectedKeys={testNodeId ? [String(testNodeId)] : []}
@@ -350,26 +337,24 @@ export default function LandingPage() {
               >
                 {nodes.map((n) => (<SelectItem key={n.id}>{n.name}</SelectItem>))}
               </Select>
-              <Button size="sm" variant="flat" color="secondary" isLoading={testLoading} onPress={handleTest}>
-                🔌 测试落地
-              </Button>
+              <Button size="sm" variant="flat" color="secondary" isLoading={testLoading} onPress={handleTest}> {t("m2a265b5af141")} </Button>
             </div>
             {testResult && (
               <div className="text-xs">
                 {testResult.skipped ? (
                   <span className="text-default-500">{testResult.msg}</span>
                 ) : testResult.ok ? (
-                  <span className="text-success">✅ 通了 · 出口 IP <b className="font-mono">{testResult.exitIp}</b> · {testResult.latencyMs}ms</span>
+                  <span className="text-success">{t("m271e92ef9033")} <b className="font-mono">{testResult.exitIp}</b> · {testResult.latencyMs}ms</span>
                 ) : (
-                  <span className="text-danger">❌ {testResult.msg || "不通"}</span>
+                  <span className="text-danger">❌ {testResult.msg || t("m7badfabc6ef1")}</span>
                 )}
               </div>
             )}
           </ModalBody>
           <ModalFooter>
-            <Button variant="light" onPress={() => setOpen(false)}>取消</Button>
+            <Button variant="light" onPress={() => setOpen(false)}>{t("m2cd0f3be8738")}</Button>
             <Button color="warning" isLoading={saving} onPress={handleSave}>
-              {form.id ? "保存并重推" : "创建"}
+              {form.id ? t("m493fd3b9d4a6") : t("mcde2cd071d25")}
             </Button>
           </ModalFooter>
         </ModalContent>

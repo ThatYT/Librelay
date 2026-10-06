@@ -30,6 +30,8 @@ services:
     container_name: springboot-backend
     restart: unless-stopped
     environment:
+      GITHUB_REPO: ${GITHUB_REPO:-Teminuosi/Tms}
+      GITHUB_REF: ${GITHUB_REF:-main}
       DB_HOST: mysql
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
@@ -38,7 +40,7 @@ services:
       LOG_DIR: /app/logs
       JAVA_OPTS: "-Xms256m -Xmx512m -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai"
     ports:
-      - "${BACKEND_PORT}:6365"
+      - "${BACKEND_PORT:-6365}:6365"
     volumes:
       - backend_logs:/app/logs
     depends_on:
@@ -58,7 +60,7 @@ services:
     container_name: vite-frontend
     restart: unless-stopped
     ports:
-      - "${FRONTEND_PORT}:80"
+      - "${FRONTEND_PORT:-2095}:80"
     depends_on:
       backend:
         condition: service_healthy

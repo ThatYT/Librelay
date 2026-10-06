@@ -12,28 +12,69 @@ export LC_ALL=C
 # 确实需要 Docker 内部 IPv6 的,安装时加 TMS_IPV6=1 开启。
 TMS_IPV6="${TMS_IPV6:-0}"
 
+# The only repository default. Override for another fork without editing download URLs.
+GITHUB_REPO="${GITHUB_REPO:-ThatYT/Tms_EN}"
+GITHUB_REF="${GITHUB_REF:-main}"
+INSTALL_DIR="${INSTALL_DIR:-/opt/tms}"
+INSTALL_DOMAIN=""
+INSTALL_DIR_EXPLICIT=0
+PORT_REQUESTED=0
+
+prepare_host() {
+  [ "$(id -u)" -eq 0 ] || { echo "Root privileges are required." >&2; exit 1; }
+  [ "$(uname -s)" = Linux ] || { echo "Only Linux is supported." >&2; exit 1; }
+  [ -r /etc/os-release ] || { echo "Cannot detect Linux distribution." >&2; exit 1; }
+  . /etc/os-release
+  case "$ID" in
+    ubuntu|debian|raspbian)
+      if ! command -v curl >/dev/null || ! command -v ss >/dev/null || ! command -v openssl >/dev/null || ! command -v tar >/dev/null || ! command -v gzip >/dev/null; then
+        apt-get update
+        apt-get install -y curl ca-certificates openssl iproute2 tar gzip
+      fi ;;
+    fedora|centos|rhel|rocky|almalinux)
+      if ! command -v curl >/dev/null || ! command -v ss >/dev/null || ! command -v openssl >/dev/null || ! command -v tar >/dev/null || ! command -v gzip >/dev/null; then
+        if command -v dnf >/dev/null; then dnf install -y curl ca-certificates openssl iproute tar gzip
+        else yum install -y curl ca-certificates openssl iproute tar gzip; fi
+      fi ;;
+    *) echo "Unsupported Linux distribution: $ID" >&2; exit 1 ;;
+  esac
+}
+
+valid_port() { [[ "$1" =~ ^[0-9]{1,5}$ ]] && (( 10#$1 >= 1 && 10#$1 <= 65535 )); }
+
+# Download into staging; build the actual fork, never silently deploy upstream images.
+download_source() {
+  local staging
+  staging=$(mktemp -d "$PWD/.source.XXXXXX")
+  if ! curl -fLsS --retry 3 "https://codeload.github.com/${GITHUB_REPO}/tar.gz/${GITHUB_REF}" -o "$staging/source.tar.gz"; then
+    rm -rf "$staging"; return 1
+  fi
+  tar -xzf "$staging/source.tar.gz" --strip-components=1 -C "$staging"
+  rm "$staging/source.tar.gz"
+  [ -f "$staging/docker-compose-hybrid.yml" ] && [ -f "$staging/gost.sql" ] || { rm -rf "$staging"; return 1; }
+  sed 's@context: ./springboot-backend@context: ./.source/springboot-backend@;s@context: ./vite-frontend@context: ./.source/vite-frontend@' "$staging/docker-compose-hybrid.yml" > docker-compose.yml.new
+  if ! $DOCKER_CMD --env-file .env -f docker-compose.yml.new config --quiet; then
+    rm -f docker-compose.yml.new; rm -rf "$staging"; return 1
+  fi
+  rm -rf .source.previous
+  [ ! -d .source ] || mv .source .source.previous
+  mv "$staging" .source
+  mv docker-compose.yml.new docker-compose.yml
+  if [ ! -f gost.sql ]; then cp .source/gost.sql gost.sql; fi
+  rm -rf .source.previous
+}
+
 # 全局下载地址配置
 # 【必须用 raw main,别用 releases/latest】:
 # 节点的 gost 是按 gost-vN 单独发版的,一发版 GitHub 的 "latest release" 就会指向它,
 # 而那个 release 里没有 compose 和 gost.sql —— 于是这里会下到 9 字节的 "Not Found",
 # 把 docker-compose.yml 覆盖成垃圾、面板直接起不来(踩过)。
 # raw main 永远是仓库当前内容,不受发版影响。
-DOCKER_COMPOSEV4_URL="https://raw.githubusercontent.com/Teminuosi/Tms/main/docker-compose-v4.yml"
-DOCKER_COMPOSEV6_URL="https://raw.githubusercontent.com/Teminuosi/Tms/main/docker-compose-v6.yml"
-GOST_SQL_URL="https://raw.githubusercontent.com/Teminuosi/Tms/main/gost.sql"
+DOCKER_COMPOSEV4_URL="https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_REF}/docker-compose-v4.yml"
+DOCKER_COMPOSEV6_URL="https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_REF}/docker-compose-v6.yml"
+GOST_SQL_URL="https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_REF}/gost.sql"
 # 管理脚本自身的 raw 地址(curl|bash 场景下 tms 命令的兜底下载源)
-PANEL_INSTALL_RAW_URL="https://raw.githubusercontent.com/Teminuosi/Tms/main/panel_install.sh"
-
-COUNTRY=$(curl -s --max-time 5 https://ipinfo.io/country || true)
-if [ "$COUNTRY" = "CN" ]; then
-    # 拼接 URL
-    DOCKER_COMPOSEV4_URL="https://ghfast.top/${DOCKER_COMPOSEV4_URL}"
-    DOCKER_COMPOSEV6_URL="https://ghfast.top/${DOCKER_COMPOSEV6_URL}"
-    GOST_SQL_URL="https://ghfast.top/${GOST_SQL_URL}"
-    PANEL_INSTALL_RAW_URL="https://ghfast.top/${PANEL_INSTALL_RAW_URL}"
-fi
-
-
+PANEL_INSTALL_RAW_URL="https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_REF}/panel_install.sh"
 
 # 根据IPv6支持情况选择docker-compose URL
 get_docker_compose_url() {
@@ -77,22 +118,26 @@ check_docker() {
     fi
   fi
 
-  if command -v docker-compose &> /dev/null; then
-    DOCKER_CMD="docker-compose"
-  elif command -v docker &> /dev/null; then
-    if docker compose version &> /dev/null; then
-      DOCKER_CMD="docker compose"
-    else
-      echo "错误：检测到 docker，但不支持 'docker compose' 命令。请更新 docker 版本。"
-      exit 1
-    fi
-  else
-    echo "错误：Docker 自动安装失败。"
-    echo "      已经试过:官方脚本 get.docker.com、dnf 源、yum 源。"
-    echo "      系统信息(发给作者能快很多):"
-    ( . /etc/os-release 2>/dev/null && echo "      $PRETTY_NAME" ) || uname -a
-    echo "      手动装好 Docker(docker --version 能出版本)后重跑本脚本即可。"
-    exit 1
+  command -v docker >/dev/null || { echo "Docker installation failed." >&2; exit 1; }
+  if ! docker compose version >/dev/null 2>&1; then
+    echo "Installing the Docker Compose plugin..."
+    local compose_arch compose_candidate
+    case "$(uname -m)" in
+      x86_64) compose_arch=x86_64 ;;
+      aarch64|arm64) compose_arch=aarch64 ;;
+      *) echo "Unsupported Docker Compose architecture" >&2; exit 1 ;;
+    esac
+    mkdir -p /usr/local/lib/docker/cli-plugins
+    compose_candidate=$(mktemp)
+    curl -fLsS --retry 3 "https://github.com/docker/compose/releases/download/v2.32.1/docker-compose-linux-${compose_arch}" -o "$compose_candidate" || { rm -f "$compose_candidate"; exit 1; }
+    install -m 755 "$compose_candidate" /usr/local/lib/docker/cli-plugins/docker-compose
+    rm -f "$compose_candidate"
+    docker compose version >/dev/null || { echo "Docker Compose plugin installation failed." >&2; exit 1; }
+  fi
+  DOCKER_CMD="docker compose"
+  if ! docker info >/dev/null 2>&1; then
+    systemctl enable --now docker
+    docker info >/dev/null || { echo "Docker daemon is unavailable." >&2; exit 1; }
   fi
   echo "检测到 Docker 命令：$DOCKER_CMD"
 }
@@ -227,7 +272,7 @@ print_access_box() {
   local ip="$1" fport="$2"
   echo ""
   echo "╔══════════════════════════════════════════════════════╗"
-  echo "║              TMS 面板安装完成                        ║"
+  echo "║              TMS Panel                                ║"
   echo "╚══════════════════════════════════════════════════════╝"
   echo ""
   echo "    访问地址 :  http://${ip}:${fport}"
@@ -238,7 +283,7 @@ print_access_box() {
   echo ""
   echo "  ──────────────────────────────────────────────────────"
   echo "    管理面板 :  输入  tms  (更新/卸载/彻底清理/查看状态)"
-  echo "    项目地址 :  https://github.com/Teminuosi/Tms"
+  echo "    项目地址 :  https://github.com/${GITHUB_REPO}"
   echo "  ──────────────────────────────────────────────────────"
   echo ""
 }
@@ -250,17 +295,19 @@ install_tms_command() {
   panel_dir="$(pwd)"
   self="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
   # 把当前脚本持久化为管理脚本;拿不到自身(curl|bash)则现下载一份
-  if [ -f "$self" ]; then
+  if [ -f "$self" ] && [ -s "$self" ]; then
     cp -f "$self" /usr/local/bin/tms-panel.sh 2>/dev/null || true
   fi
   if [ ! -f /usr/local/bin/tms-panel.sh ]; then
-    curl -L "$PANEL_INSTALL_RAW_URL" -o /usr/local/bin/tms-panel.sh 2>/dev/null || true
+    curl -fLsS "$PANEL_INSTALL_RAW_URL" -o /usr/local/bin/tms-panel.sh 2>/dev/null || true
   fi
   chmod +x /usr/local/bin/tms-panel.sh 2>/dev/null || true
   # tms 启动器:cd 回面板目录再进管理菜单(compose 操作需要工作目录)
   cat > /usr/local/bin/tms <<EOF
 #!/bin/bash
 # TMS 面板管理命令(类似 x-ui)。直接输 tms 打开管理菜单。
+export GITHUB_REPO="$GITHUB_REPO"
+export GITHUB_REF="$GITHUB_REF"
 TMS_DIR="$panel_dir"
 [ -d "\$TMS_DIR" ] && cd "\$TMS_DIR"
 # 参数要全部透传:tms domain a.com 有两个参数,只传 \$1 会把域名丢掉
@@ -307,11 +354,11 @@ resolve_a_record() {
   fi
   echo "$ip"
 }
-# 取面板前端端口(.env 里的,默认 6366)
+# 取面板前端端口(.env 里的,默认 2095)
 get_frontend_port() {
   local fport=""
   [ -f ".env" ] && fport="$(grep '^FRONTEND_PORT=' .env | cut -d'=' -f2)"
-  [ -z "$fport" ] && fport="6366"
+  [ -z "$fport" ] && fport="2095"
   echo "$fport"
 }
 
@@ -321,6 +368,7 @@ show_access_info() {
   local d
   d="$(current_domain)"
   [ -n "$d" ] && echo "🌐 已配置域名,也可以用: https://$d"
+  return 0
 }
 
 # 彻底清理 / 完整卸载:容器、镜像、数据卷、网络、配置、管理命令 全部删除,不依赖任何文件
@@ -385,13 +433,13 @@ purge_panel() {
 # 获取用户输入的配置参数
 # 端口被占就往后找一个空闲的。
 #
-# TMS 默认用 6365/6366,同机再装 s-ui(2095/2096)或 3x-ui 通常不冲突,
+# Panel defaults to 2095; backend defaults to 6365. Check both on the panel host.
 # 但装过两次 TMS、或机器上跑着别的服务时照样会撞。撞了的表现是容器起不来
 # 或者反复重启,日志里只有 "address already in use" 一行,不看仔细很难发现。
 #
 # 整行匹配「:端口 + 空白/行尾」而不是按 ss 输出的第几列取 —— 不同版本 ss 的
 # 列数不一样,按列取会悄悄失效,而失效表现是「误判端口空闲」,比报错更难查。
-# 末尾的边界防止 16366 这种包含关系被误判成 6366。
+# Match a full port, so 12095 cannot be mistaken for 2095.
 port_in_use() {
   local port="$1"
   if command -v ss >/dev/null 2>&1; then
@@ -423,73 +471,71 @@ pick_free_port() {
 }
 
 get_config_params() {
-  echo "🔧 自动配置参数（全自动安装，无需交互）..."
-
-  # 端口可用环境变量覆盖(FRONTEND_PORT=xxx BACKEND_PORT=xxx),否则用默认值,不再交互
-  FRONTEND_PORT=${FRONTEND_PORT:-6366}
   BACKEND_PORT=${BACKEND_PORT:-6365}
-
-  # 端口被别的服务占着的话自动往后挪,免得容器起不来只在日志里留一行
-  # "address already in use" —— 那种失败看着像面板装坏了,其实只是端口冲突
-  local want_f="$FRONTEND_PORT" want_b="$BACKEND_PORT"
-  FRONTEND_PORT=$(pick_free_port "$FRONTEND_PORT")
-  BACKEND_PORT=$(pick_free_port "$BACKEND_PORT")
-  [ "$FRONTEND_PORT" != "$want_f" ] && echo "   ⚠️ 端口 $want_f 被占用,前端改用 $FRONTEND_PORT"
-  [ "$BACKEND_PORT" != "$want_b" ] && echo "   ⚠️ 端口 $want_b 被占用,后端改用 $BACKEND_PORT"
-
-  echo "   前端端口：$FRONTEND_PORT   后端端口：$BACKEND_PORT"
-
-  DB_NAME=$(generate_random)
-  DB_USER=$(generate_random)
-  DB_PASSWORD=$(generate_random)
-  JWT_SECRET=$(generate_random)
+  if [ -z "${FRONTEND_PORT:-}" ]; then
+    FRONTEND_PORT=2095
+    if [ -t 0 ]; then
+      while true; do
+        read -rp "Panel port [2095]: " panel_input
+        panel_input=${panel_input:-2095}
+        if valid_port "$panel_input" && ! port_in_use "$panel_input"; then
+          FRONTEND_PORT=$((10#$panel_input)); break
+        fi
+        echo "Invalid or occupied TCP port. Choose a port between 1 and 65535."
+      done
+    fi
+  fi
+  valid_port "$FRONTEND_PORT" || { echo "Invalid panel port: $FRONTEND_PORT" >&2; exit 1; }
+  valid_port "$BACKEND_PORT" || { echo "Invalid backend port: $BACKEND_PORT" >&2; exit 1; }
+  FRONTEND_PORT=$((10#$FRONTEND_PORT))
+  BACKEND_PORT=$((10#$BACKEND_PORT))
+  if [ -n "$INSTALL_DOMAIN" ] && { [ "$FRONTEND_PORT" = 80 ] || [ "$FRONTEND_PORT" = 443 ] || [ "$BACKEND_PORT" = 80 ] || [ "$BACKEND_PORT" = 443 ]; }; then
+    echo "Caddy needs panel-host ports 80 and 443. Choose separate panel/backend ports." >&2; exit 1
+  fi
+  [ "$FRONTEND_PORT" != "$BACKEND_PORT" ] || { echo "Panel and backend ports must differ." >&2; exit 1; }
+  ! port_in_use "$FRONTEND_PORT" || { echo "Panel TCP port $FRONTEND_PORT is already occupied." >&2; exit 1; }
+  ! port_in_use "$BACKEND_PORT" || { echo "Backend TCP port $BACKEND_PORT is already occupied." >&2; exit 1; }
+  DB_NAME=gost
+  DB_USER=gost
+  DB_PASSWORD=$(openssl rand -hex 32)
+  JWT_SECRET=$(openssl rand -hex 48)
 }
 
 # 安装功能
 install_panel() {
   echo "🚀 开始安装面板..."
+  if [ -f .env ]; then
+    echo "Existing installation found. .env and database preserved. Use: tms update"
+    [ -z "${FRONTEND_PORT:-}" ] || { echo "Port changes require editing the existing FRONTEND_PORT in .env." >&2; return 1; }
+    show_access_info
+    return 0
+  fi
   check_docker
+  if docker volume inspect mysql_data >/dev/null 2>&1; then
+    echo "Existing mysql_data volume found without .env. Restore the original credentials before installing." >&2
+    return 1
+  fi
   get_config_params
-
-  echo "[1/4] 下载配置文件..."
-  DOCKER_COMPOSE_URL=$(get_docker_compose_url)
-  # -fsSL:404 直接失败而不是把 "Not Found" 写进文件;静默但保留错误提示
-  curl -fsSL -o docker-compose.yml "$DOCKER_COMPOSE_URL" || { echo "❌ 下载配置文件失败,请检查网络"; exit 1; }
-  grep -q "services:" docker-compose.yml || { echo "❌ 配置文件内容不对(可能下到了错误页),请重试"; exit 1; }
-  if [[ ! -f "gost.sql" ]]; then
-    curl -fsSL -o gost.sql "$GOST_SQL_URL" || { echo "❌ 下载数据库文件失败,请检查网络"; exit 1; }
-    grep -qi "CREATE TABLE" gost.sql || { echo "❌ 数据库文件内容不对,请重试"; exit 1; }
-  fi
-  echo "      ✔ 完成"
-
-  # IPv6 默认关闭(避免改 Docker daemon 导致 mysql 启动失败);需要时用 TMS_IPV6=1 开启
-  if [ "$TMS_IPV6" = "1" ]; then
-    echo "🚀 TMS_IPV6=1，启用 Docker IPv6 配置..."
-    configure_docker_ipv6
-  fi
+  umask 077
 
   cat > .env <<EOF
 DB_NAME=$DB_NAME
 DB_USER=$DB_USER
 DB_PASSWORD=$DB_PASSWORD
 JWT_SECRET=$JWT_SECRET
+GITHUB_REPO=$GITHUB_REPO
+GITHUB_REF=$GITHUB_REF
 FRONTEND_PORT=$FRONTEND_PORT
 BACKEND_PORT=$BACKEND_PORT
 EOF
 
-  # 清理上一次失败/中断留下的旧容器与数据卷。
-  # 关键坑:MySQL 初始化中断过一次后,mysql_data 卷里会残留半拉子文件,
-  # 再启动时报 "--initialize specified but the data directory has files in it. Aborting.",
-  # 容器一直 unhealthy。全新安装本就该是干净空卷,这里强制清一遍,保证一键装到底。
-  echo "[2/4] 清理旧容器与数据卷(确保全新安装干净)..."
-  $DOCKER_CMD down -v --remove-orphans >/dev/null 2>&1 || true
-  docker rm -f gost-mysql springboot-backend vite-frontend >/dev/null 2>&1 || true
-  docker volume rm mysql_data backend_logs >/dev/null 2>&1 || true
-  echo "      ✔ 完成"
+  install_tms_command
+  echo "Downloading source from $GITHUB_REPO ($GITHUB_REF)..."
+  download_source || { echo "Source download failed; .env retained for recovery." >&2; exit 1; }
 
   echo "[3/4] 拉取镜像并启动服务(首次约 1-3 分钟,请耐心等待)..."
   # 进度条太吵会把最后的访问信息刷走,这里只留结果;失败时再把日志打出来
-  if ! $DOCKER_CMD up -d >/tmp/tms_up.log 2>&1; then
+  if ! $DOCKER_CMD up -d --build >/tmp/tms_up.log 2>&1; then
     echo "      ✘ 启动失败,以下是错误信息:"
     tail -30 /tmp/tms_up.log
     exit 1
@@ -499,7 +545,7 @@ EOF
   # 自动写入「面板后端地址」(转发机对接要用),省得登录后再手动到网站配置里填
   echo "[4/4] 检测公网IP并配置面板后端地址..."
   PUBLIC_IP=$(curl -s --max-time 8 https://api.ipify.org || curl -s --max-time 8 https://ipinfo.io/ip || echo "")
-  if [ -n "$PUBLIC_IP" ]; then
+  if [[ "$PUBLIC_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
     for i in $(seq 1 30); do
       if docker exec gost-mysql mysqladmin ping -h localhost --silent >/dev/null 2>&1; then
         if docker exec gost-mysql mysql -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" \
@@ -518,7 +564,10 @@ EOF
   install_tms_command >/dev/null 2>&1
 
   # 收尾信息框:安装过程刷屏很正常,最后必须让人一眼看到地址/账号/密码
-  print_access_box "${PUBLIC_IP:-你的服务器IP}" "$FRONTEND_PORT"
+  echo "TMS installed successfully"
+  print_access_box "${PUBLIC_IP:-SERVER_IP}" "$FRONTEND_PORT"
+  echo "Commands: tms | tms status | tms info | tms update | tms domain example.com"
+  [ -z "$INSTALL_DOMAIN" ] || setup_domain "$INSTALL_DOMAIN"
 
 
 }
@@ -549,32 +598,17 @@ update_panel() {
   echo "🔄 开始更新面板..."
   check_docker
 
-  echo "🔽 下载最新配置文件..."
-  DOCKER_COMPOSE_URL=$(get_docker_compose_url)
-  # 先下到临时文件并校验,确认是正经 compose 再覆盖:
-  # 直接 curl -o docker-compose.yml 的话,一旦 404("Not Found" 9 字节)就把现有配置
-  # 冲成垃圾,面板当场起不来、还回不去(踩过)。
-  if curl -fsSL -o docker-compose.yml.new "$DOCKER_COMPOSE_URL" && grep -q "services:" docker-compose.yml.new; then
-    mv -f docker-compose.yml.new docker-compose.yml
-    echo "      ✔ 配置文件已更新"
-  else
-    rm -f docker-compose.yml.new
-    echo "      ✘ 配置文件下载失败,保留原有配置继续更新(不影响已有服务)"
+  [ -f .env ] || { echo "Missing .env; restore it before updating." >&2; return 1; }
+  if ! grep -q '^GITHUB_REPO=' .env; then
+    echo "Adding repository identity to .env; existing credentials and ports are unchanged."
+    printf '\nGITHUB_REPO=%s\n' "$GITHUB_REPO" >> .env
   fi
-
-  # IPv6 默认关闭(避免改 Docker daemon 导致 mysql 启动失败);需要时用 TMS_IPV6=1 开启
-  if [ "$TMS_IPV6" = "1" ]; then
-    echo "🚀 TMS_IPV6=1，启用 Docker IPv6 配置..."
-    configure_docker_ipv6
-  fi
-
-  echo "🛑 停止当前服务..."
-  $DOCKER_CMD down
-
-  echo "⬇️ 拉取最新镜像..."
-  $DOCKER_CMD pull
-
-  echo "🚀 启动更新后的服务..."
+  if ! grep -q '^GITHUB_REF=' .env; then printf 'GITHUB_REF=%s\n' "$GITHUB_REF" >> .env; fi
+  chmod 600 .env
+  unset FRONTEND_PORT BACKEND_PORT
+  download_source || { echo "Source download failed; existing installation preserved." >&2; return 1; }
+  # Build before touching running containers. Named volumes and .env are unchanged.
+  $DOCKER_CMD build
   $DOCKER_CMD up -d
 
   # 等待服务启动
@@ -1771,12 +1805,52 @@ restore_migration_sql() {
 #   ./panel_install.sh uninstall  卸载
 #   ./panel_install.sh menu       交互式菜单
 main() {
-  case "${1:-install}" in
-    install)   install_panel; delete_self ;;
-    update)    update_panel; delete_self ;;
-    uninstall) uninstall_panel; delete_self ;;
-    purge)     purge_panel; delete_self ;;
-    export)    export_migration_sql; delete_self ;;
+  local command=install
+  local args=()
+  if [[ "${1:-}" != -* && $# -gt 0 ]]; then command="$1"; shift; fi
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --port|-p) [ $# -ge 2 ] || { echo "Missing port." >&2; exit 1; }; FRONTEND_PORT="$2"; PORT_REQUESTED=1; valid_port "$FRONTEND_PORT" || { echo "Invalid panel port: $FRONTEND_PORT" >&2; exit 1; }; shift 2 ;;
+      --domain) [ $# -ge 2 ] || { echo "Missing domain." >&2; exit 1; }; INSTALL_DOMAIN="$2"; shift 2 ;;
+      --install-dir) [ $# -ge 2 ] || { echo "Missing install directory." >&2; exit 1; }; INSTALL_DIR="$2"; INSTALL_DIR_EXPLICIT=1; shift 2 ;;
+      --help|-h) echo "Usage: panel_install.sh [install|update|status|info|domain DOMAIN] [--port PORT|-p PORT] [--domain DOMAIN] [--install-dir /opt/tms]"; return ;;
+      -*) echo "Unknown option: $1" >&2; exit 1 ;;
+      *) args+=("$1"); shift ;;
+    esac
+  done
+  [[ "$GITHUB_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "Invalid GITHUB_REPO" >&2; exit 1; }
+  [[ "$GITHUB_REF" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "Invalid GITHUB_REF" >&2; exit 1; }
+  [[ "$INSTALL_DIR" =~ ^/[A-Za-z0-9_./-]+$ && "$INSTALL_DIR" != / ]] || { echo "Invalid install directory" >&2; exit 1; }
+  if [ -n "$INSTALL_DOMAIN" ]; then
+    [[ "$INSTALL_DOMAIN" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,}$ ]] || { echo "Invalid domain" >&2; exit 1; }
+  fi
+  prepare_host
+  # Management launcher already enters the saved directory. Standalone commands may reuse cwd.
+  if [ "$INSTALL_DIR_EXPLICIT" = 1 ] || [ ! -f .env ]; then mkdir -p "$INSTALL_DIR"; cd "$INSTALL_DIR"; fi
+  if [ -f .env ]; then
+    saved_repo=$(sed -n 's/^GITHUB_REPO=//p' .env | head -1)
+    saved_ref=$(sed -n 's/^GITHUB_REF=//p' .env | head -1)
+    if [ -n "$saved_repo" ]; then
+      [[ "$saved_repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "Invalid repository in .env" >&2; exit 1; }
+      GITHUB_REPO="$saved_repo"
+    fi
+    if [ -n "$saved_ref" ]; then
+      [[ "$saved_ref" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "Invalid ref in .env" >&2; exit 1; }
+      GITHUB_REF="$saved_ref"
+    fi
+    PANEL_INSTALL_RAW_URL="https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_REF}/panel_install.sh"
+  fi
+  if [ "$PORT_REQUESTED" = 1 ] && [ "$command" != install ]; then
+    echo "--port applies to new installations. Change FRONTEND_PORT in the existing .env, then run tms update." >&2
+    exit 1
+  fi
+  set -- "$command" ${args[@]+"${args[@]}"}
+  case "$command" in
+    install)   install_panel ;;
+    update)    update_panel ;;
+    uninstall) uninstall_panel ;;
+    purge)     purge_panel ;;
+    export)    export_migration_sql ;;
     # 迁移到新机器:旧机 tms export → 拷走 .sql → 新机装好面板后 tms restore
     # 【不 delete_self】恢复可能要因为守卫提示再跑一次(加 --force),把脚本删了就得重下
     restore)   restore_migration_sql "$2" "$3" ;;
@@ -1801,7 +1875,7 @@ menu_loop() {
     read -p "请输入选项: " choice
 
     case $choice in
-      1) install_panel; delete_self; break ;;
+      1) install_panel; break ;;
       2) update_panel; break ;;
       3) uninstall_panel; break ;;
       4) purge_panel; break ;;
@@ -1823,4 +1897,4 @@ menu_loop() {
 }
 
 # 执行主函数
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi

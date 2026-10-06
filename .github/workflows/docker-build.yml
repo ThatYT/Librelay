@@ -154,11 +154,12 @@ jobs:
       - name: Build and push Vite Docker images
         run: |
           VERSION="${{ needs.check-version.outputs.version }}"
-          TAGS="-t ghcr.io/teminuosi/vite-frontend:latest"
+          IMAGE_OWNER=$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+          TAGS="-t ghcr.io/${IMAGE_OWNER}/vite-frontend:latest"
           # 版本号镜像只在该版本【首次发布】时打,否则同一个 1.0.x 会被后来的提交覆盖、
           # 版本号就失去意义了。:latest 每次都更新,安装脚本用的就是它。
           if [ "${{ needs.check-version.outputs.should_build }}" = "true" ]; then
-            TAGS="$TAGS -t ghcr.io/teminuosi/vite-frontend:${VERSION}"
+            TAGS="$TAGS -t ghcr.io/${IMAGE_OWNER}/vite-frontend:${VERSION}"
           fi
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
@@ -204,10 +205,11 @@ jobs:
       - name: Build and push Java Docker images
         run: |
           VERSION="${{ needs.check-version.outputs.version }}"
-          TAGS="-t ghcr.io/teminuosi/springboot-backend:latest"
+          IMAGE_OWNER=$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+          TAGS="-t ghcr.io/${IMAGE_OWNER}/springboot-backend:latest"
           # 版本号镜像只在该版本首次发布时打(同上)
           if [ "${{ needs.check-version.outputs.should_build }}" = "true" ]; then
-            TAGS="$TAGS -t ghcr.io/teminuosi/springboot-backend:${VERSION}"
+            TAGS="$TAGS -t ghcr.io/${IMAGE_OWNER}/springboot-backend:${VERSION}"
           fi
           # 注入构建标识:面板拿它跟 GitHub 上 main 的最新 commit 比,判断有没有新版本
           docker buildx build \

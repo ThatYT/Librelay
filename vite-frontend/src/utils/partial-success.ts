@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 /**
  * 认出「活已经干了,只差最后一步」的那类后端返回。
  *
@@ -60,7 +61,7 @@ export function toastResult(
     // 黄条:红色的潜台词是"什么都没发生,重试即可",而事实相反 ——
     // 再点一次只会重复建或者撞端口。后端原话一字不改地保留,
     // 那里写着具体是哪台机器、哪个协议没成。
-    toast(`⚠️ 做了一部分:${msg}`, { duration: 8000 });
+    toast(t("m041615056966", {v0: msg}), { duration: 8000 });
     return true;
   }
   toast.error(msg || failPrefix);

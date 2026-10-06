@@ -42,8 +42,8 @@ public class VersionController extends BaseController {
      * 按构建成功的 head_sha 比,提示亮起来时镜像一定已经在 GHCR 上了。
      */
     private static final String RUNS_API =
-            "https://api.github.com/repos/Teminuosi/Tms/actions/runs"
-                    + "?branch=main&status=success&per_page=1";
+            "https://api.github.com/repos/" + com.admin.common.utils.RepositoryConfig.repo() + "/actions/runs"
+                    + "?branch=" + com.admin.common.utils.RepositoryConfig.ref() + "&status=success&per_page=1";
 
     /** GitHub 未认证接口每小时每 IP 只有 60 次,而且国内机大概率连不上,查一次缓存 6 小时 */
     private static final long CACHE_TTL_MS = 6 * 60 * 60 * 1000L;

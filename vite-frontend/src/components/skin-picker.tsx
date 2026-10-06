@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 import { useState } from "react";
 import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@heroui/dropdown";
 import { Button } from "@heroui/button";
@@ -5,6 +7,7 @@ import { SKINS, savedSkin, applySkin } from "@/config/skins";
 
 // 头部的主题(皮肤)选择器,自包含状态,不依赖布局。
 export default function SkinPicker() {
+  useTranslation();
   const [current, setCurrent] = useState<string>(savedSkin().id);
 
   const swatch = (bg: string) => (
@@ -25,12 +28,12 @@ export default function SkinPicker() {
   return (
     <Dropdown placement="bottom-end">
       <DropdownTrigger>
-        <Button isIconOnly variant="light" aria-label="主题">
+        <Button isIconOnly variant="light" aria-label={t("m788db1cfec2a")}>
           {swatch(currentSwatch)}
         </Button>
       </DropdownTrigger>
       <DropdownMenu
-        aria-label="主题"
+        aria-label={t("m788db1cfec2a")}
         onAction={(key) => {
           applySkin(String(key));
           setCurrent(String(key));

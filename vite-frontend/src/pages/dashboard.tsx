@@ -1,8 +1,10 @@
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Button } from "@heroui/button";
 import { Modal, ModalContent, ModalHeader, ModalBody } from "@heroui/modal";
 import { useState, useEffect } from "react";
-import toast from 'react-hot-toast';
+import toast from '@/utils/toast';
 import { copyTextToClipboard } from "@/utils/clipboard";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -59,6 +61,7 @@ interface StatisticsFlow {
 }
 
 export default function DashboardPage() {
+  useTranslation();
   const [loading, setLoading] = useState(true);
   const [userInfo, setUserInfo] = useState<UserInfo>({} as UserInfo);
   const [userTunnels, setUserTunnels] = useState<UserTunnel[]>([]);
@@ -94,13 +97,13 @@ export default function DashboardPage() {
         if (diffDays <= 7 && diffDays > 0) {
           hasNotification = true;
           if (diffDays === 1) {
-            toast('账户将于明天过期，请及时续费', { 
+            toast(t("mf9d923f7d4dd"), {
               icon: '⚠️',
               duration: 6000,
               style: { background: '#f59e0b', color: '#fff' }
             });
           } else {
-            toast(`账户将于${diffDays}天后过期，请及时续费`, { 
+            toast(t("medb69039060b", {v0: diffDays}), {
               icon: '⚠️',
               duration: 6000,
               style: { background: '#f59e0b', color: '#fff' }
@@ -108,7 +111,7 @@ export default function DashboardPage() {
           }
         } else if (diffDays <= 0) {
           hasNotification = true;
-          toast('账户已过期，请立即续费', { 
+          toast(t("m0946cefb9416"), {
             icon: '⚠️',
             duration: 8000,
             style: { background: '#ef4444', color: '#fff' }
@@ -130,13 +133,13 @@ export default function DashboardPage() {
           if (diffDays <= 7 && diffDays > 0) {
             hasNotification = true;
             if (diffDays === 1) {
-              toast(`隧道"${tunnel.tunnelName}"将于明天过期`, { 
+              toast(t("md08eb4f70550", {v0: tunnel.tunnelName}), {
                 icon: '⚠️',
                 duration: 5000,
                 style: { background: '#f59e0b', color: '#fff' }
               });
             } else {
-              toast(`隧道"${tunnel.tunnelName}"将于${diffDays}天后过期`, { 
+              toast(t("maa8c0357d012", {v0: tunnel.tunnelName, v1: diffDays}), {
                 icon: '⚠️',
                 duration: 5000,
                 style: { background: '#f59e0b', color: '#fff' }
@@ -144,7 +147,7 @@ export default function DashboardPage() {
             }
           } else if (diffDays <= 0) {
             hasNotification = true;
-            toast(`隧道"${tunnel.tunnelName}"已过期`, { 
+            toast(t("m5a84bd89c103", {v0: tunnel.tunnelName}), {
               icon: '⚠️',
               duration: 6000,
               style: { background: '#ef4444', color: '#fff' }
@@ -190,11 +193,11 @@ export default function DashboardPage() {
         // 检查有效期并显示通知
         checkExpirationNotifications(data.userInfo, data.tunnelPermissions || []);
       } else {
-        toast.error(res.msg || '获取套餐信息失败');
+        toast.error(res.msg || t("m05df9f75aae8"));
       }
     } catch (error) {
-      console.error('获取套餐信息失败:', error);
-      toast.error('获取套餐信息失败');
+      console.error(t("md77307a41653"), error);
+      toast.error(t("m05df9f75aae8"));
     } finally {
       setLoading(false);
     }
@@ -203,7 +206,7 @@ export default function DashboardPage() {
   const formatFlow = (value: number, unit: string = 'bytes'): string => {
     // 99999 表示无限制
     if (value === 99999) {
-      return '无限制';
+      return t("m9ee3c076a148");
     }
     
     if (unit === 'gb') {
@@ -220,7 +223,7 @@ export default function DashboardPage() {
   const formatNumber = (value: number): string => {
     // 99999 表示无限制
     if (value === 99999) {
-      return '无限制';
+      return t("m9ee3c076a148");
     }
     return value.toString();
   };
@@ -256,7 +259,7 @@ export default function DashboardPage() {
     if (!expTime) return { 
       color: 'text-green-600 dark:text-green-400', 
       bg: 'bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/20',
-      text: '永久' 
+      text: t("m3e71ccc89a43")
     };
 
     const now = new Date();
@@ -266,7 +269,7 @@ export default function DashboardPage() {
       return { 
         color: 'text-gray-600 dark:text-gray-400', 
         bg: 'bg-gray-50 dark:bg-black/10 border-gray-200 dark:border-gray-500/20',
-        text: '无效' 
+        text: t("m2c1bdb2ae6a3")
       };
     }
 
@@ -274,7 +277,7 @@ export default function DashboardPage() {
       return { 
         color: 'text-red-600 dark:text-red-400', 
         bg: 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20',
-        text: '已过期' 
+        text: t("m2fe0e3339ac4")
       };
     }
 
@@ -285,19 +288,19 @@ export default function DashboardPage() {
       return { 
         color: 'text-red-600 dark:text-red-400', 
         bg: 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20',
-        text: `${diffDays}天后过期` 
+        text: t("ma326822b646d", {v0: diffDays})
       };
     } else if (diffDays <= 30) {
       return { 
         color: 'text-orange-600 dark:text-orange-400', 
         bg: 'bg-orange-50 dark:bg-orange-500/10 border-orange-200 dark:border-orange-500/20',
-        text: `${diffDays}天后过期` 
+        text: t("ma326822b646d", {v0: diffDays})
       };
     } else {
       return { 
         color: 'text-green-600 dark:text-green-400', 
         bg: 'bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/20',
-        text: `${diffDays}天后过期` 
+        text: t("ma326822b646d", {v0: diffDays})
       };
     }
   };
@@ -385,7 +388,7 @@ export default function DashboardPage() {
 
   const formatResetTime = (resetDay?: number): string => {
     if (resetDay === undefined || resetDay === null) return '';
-    if (resetDay === 0) return '不重置';
+    if (resetDay === 0) return t("m09cb21113af0");
     
     const now = new Date();
     const currentDay = now.getDate();
@@ -402,18 +405,18 @@ export default function DashboardPage() {
     }
     
     if (daysUntilReset === 0) {
-      return '今日重置';
+      return t("m24bae79e47ed");
     } else if (daysUntilReset === 1) {
-      return '明日重置';
+      return t("m94663b7740f3");
     } else {
-      return `${daysUntilReset}天后重置`;
+      return t("m11a63724641c", {v0: daysUntilReset});
     }
   };
 
   const groupedForwards = () => {
     const groups: { [key: string]: { tunnelName: string; forwards: Forward[] } } = {};
     forwardList.forEach(forward => {
-      const tunnelName = forward.tunnelName || '未知隧道';
+      const tunnelName = forward.tunnelName || t("m395f2d070d5c");
       if (!groups[tunnelName]) {
         groups[tunnelName] = {
           tunnelName,
@@ -505,7 +508,7 @@ export default function DashboardPage() {
     });
     
     setAddressList(formattedList);
-    setAddressModalTitle(`${title} (${ips.length}个)`);
+    setAddressModalTitle(t("m4c2a1ddfaff9", {v0: title, v1: ips.length}));
     setAddressModalOpen(true);
   };
 
@@ -529,15 +532,15 @@ export default function DashboardPage() {
     });
     
     setAddressList(formattedList);
-    setAddressModalTitle(`${title} (${addresses.length}个)`);
+    setAddressModalTitle(t("m4c2a1ddfaff9", {v0: title, v1: addresses.length}));
     setAddressModalOpen(true);
   };
 
   const copyToClipboard = async (text: string) => {
     if (await copyTextToClipboard(text)) {
-      toast.success(`已复制`);
+      toast.success(t("m8f6f8d979c98"));
     } else {
-      toast.error('复制失败,请手动选择文本复制');
+      toast.error(t("mf0e3d968271a"));
     }
   };
 
@@ -548,7 +551,7 @@ export default function DashboardPage() {
       ));
       await copyToClipboard(addressItem.address);
     } catch (error) {
-      toast.error('复制失败');
+      toast.error(t("m753d8bb0da99"));
     } finally {
       setAddressList(prev => prev.map(item => 
         item.id === addressItem.id ? { ...item, copying: false } : item
@@ -579,7 +582,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-center h-64">
               <div className="flex items-center gap-3">
                 <div className="animate-spin h-5 w-5 border-2 border-gray-200 dark:border-gray-700 border-t-gray-600 dark:border-t-gray-300 rounded-full"></div>
-                <span className="text-default-600">正在加载数据...</span>
+                <span className="text-default-600">{t("m0471dd8647e9")}</span>
               </div>
             </div>
           </div>
@@ -597,7 +600,7 @@ export default function DashboardPage() {
              <CardBody className="p-3 lg:p-4">
                <div className="flex flex-col space-y-2">
                  <div className="flex items-center justify-between">
-                   <p className="text-xs lg:text-sm text-default-600 truncate">总流量</p>
+                   <p className="text-xs lg:text-sm text-default-600 truncate">{t("mdbc503758f6c")}</p>
                    <div className="p-1.5 lg:p-2 bg-blue-100 dark:bg-blue-500/20 rounded-lg flex-shrink-0">
                      <svg className="w-4 h-4 lg:w-5 lg:h-5 text-blue-600 dark:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
                        <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
@@ -613,7 +616,7 @@ export default function DashboardPage() {
              <CardBody className="p-3 lg:p-4">
                <div className="flex flex-col space-y-2">
                  <div className="flex items-center justify-between">
-                   <p className="text-xs lg:text-sm text-default-600 truncate">已用流量</p>
+                   <p className="text-xs lg:text-sm text-default-600 truncate">{t("mdecb065f369c")}</p>
                    <div className="p-1.5 lg:p-2 bg-green-100 dark:bg-green-500/20 rounded-lg flex-shrink-0">
                      <svg className="w-4 h-4 lg:w-5 lg:h-5 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20">
                        <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clipRule="evenodd" />
@@ -625,7 +628,7 @@ export default function DashboardPage() {
                    {renderProgressBar(calculateUsagePercentage('flow'), 'sm', userInfo.flow === 99999)}
                    <div className="flex items-center justify-between mt-1">
                      <p className="text-xs text-default-500 truncate">
-                       {userInfo.flow === 99999 ? '无限制' : `${calculateUsagePercentage('flow').toFixed(1)}%`}
+                       {userInfo.flow === 99999 ? t("m9ee3c076a148") : `${calculateUsagePercentage('flow').toFixed(1)}%`}
                      </p>
                      {(userInfo.flowResetTime !== undefined && userInfo.flowResetTime !== null) && (
                        <div className="text-xs text-default-500 flex items-center gap-1">
@@ -647,7 +650,7 @@ export default function DashboardPage() {
              <CardBody className="p-3 lg:p-4">
                <div className="flex flex-col space-y-2">
                  <div className="flex items-center justify-between">
-                   <p className="text-xs lg:text-sm text-default-600 truncate">转发配额</p>
+                   <p className="text-xs lg:text-sm text-default-600 truncate">{t("m7e63f5909f99")}</p>
                    <div className="p-1.5 lg:p-2 bg-purple-100 dark:bg-purple-500/20 rounded-lg flex-shrink-0">
                      <svg className="w-4 h-4 lg:w-5 lg:h-5 text-purple-600 dark:text-purple-400" fill="currentColor" viewBox="0 0 20 20">
                        <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -665,7 +668,7 @@ export default function DashboardPage() {
              <CardBody className="p-3 lg:p-4">
                <div className="flex flex-col space-y-2">
                  <div className="flex items-center justify-between">
-                   <p className="text-xs lg:text-sm text-default-600 truncate">已用转发</p>
+                   <p className="text-xs lg:text-sm text-default-600 truncate">{t("m2450ea970396")}</p>
                    <div className="p-1.5 lg:p-2 bg-orange-100 dark:bg-orange-500/20 rounded-lg flex-shrink-0">
                      <svg className="w-4 h-4 lg:w-5 lg:h-5 text-orange-600 dark:text-orange-400" fill="currentColor" viewBox="0 0 20 20">
                        <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd" />
@@ -676,7 +679,7 @@ export default function DashboardPage() {
                  <div className="mt-1">
                    {renderProgressBar(calculateUsagePercentage('forwards'), 'sm', userInfo.num === 99999)}
                    <p className="text-xs text-default-500 mt-1 truncate">
-                     {userInfo.num === 99999 ? '无限制' : `${calculateUsagePercentage('forwards').toFixed(1)}%`}
+                     {userInfo.num === 99999 ? t("m9ee3c076a148") : `${calculateUsagePercentage('forwards').toFixed(1)}%`}
                    </p>
                  </div>
                </div>
@@ -693,7 +696,7 @@ export default function DashboardPage() {
                  <path d="M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z" />
                  <path d="M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z" />
                </svg>
-               <h2 className="text-lg lg:text-xl font-semibold text-foreground">24小时流量统计</h2>
+               <h2 className="text-lg lg:text-xl font-semibold text-foreground">{t("mc68779db456e")}</h2>
              </div>
            </CardHeader>
            <CardBody className="pt-0">
@@ -702,7 +705,7 @@ export default function DashboardPage() {
                  <svg className="w-12 h-12 text-default-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                  </svg>
-                 <p className="text-default-500">暂无流量统计数据</p>
+                 <p className="text-default-500">{t("m3bdaec0c38d8")}</p>
                </div>
              ) : (
                <div className="space-y-4">
@@ -735,9 +738,9 @@ export default function DashboardPage() {
                              if (active && payload && payload.length) {
                                return (
                                  <div className="bg-white dark:bg-default-100 border border-default-200 rounded-lg shadow-lg p-3">
-                                   <p className="font-medium text-foreground">{`时间: ${label}`}</p>
+                                   <p className="font-medium text-foreground">{t("m46674e6d774e", {v0: label})}</p>
                                    <p className="text-primary">
-                                     {`流量: ${formatFlow(payload[0]?.value as number || 0)}`}
+                                     {t("m53be20fb4a20", {v0: formatFlow(payload[0]?.value as number || 0)})}
                                    </p>
                                  </div>
                                );
@@ -769,7 +772,7 @@ export default function DashboardPage() {
                <svg className="w-5 h-5 text-primary" fill="currentColor" viewBox="0 0 20 20">
                  <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd" />
                </svg>
-               <h2 className="text-lg lg:text-xl font-semibold text-foreground">隧道权限</h2>
+               <h2 className="text-lg lg:text-xl font-semibold text-foreground">{t("m71c10b875f67")}</h2>
                <span className="px-2 py-1 bg-default-100 dark:bg-default-50 text-default-600 rounded-full text-xs">
                  {userTunnels.length}
                </span>
@@ -781,7 +784,7 @@ export default function DashboardPage() {
                 <svg className="w-12 h-12 text-default-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                 </svg>
-                <p className="text-default-500">暂无隧道权限</p>
+                <p className="text-default-500">{t("m1515985eaa3d")}</p>
               </div>
             ) : (
                              <div className="space-y-3">
@@ -794,7 +797,7 @@ export default function DashboardPage() {
                            <h3 className="font-semibold text-foreground">{tunnel.tunnelName} ID: {tunnel.id}</h3>
                            <div className="flex flex-wrap items-center gap-2 mt-1">
                              <span className={`px-2 py-1 rounded-md text-xs font-medium ${tunnel.tunnelFlow === 1 ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300' : 'bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-300'}`}>
-                               {tunnel.tunnelFlow === 1 ? '单向计费' : '双向计费'}
+                               {tunnel.tunnelFlow === 1 ? t("m50c1d1849e82") : t("mb62e7f15d0d4")}
                              </span>
                              <span className={`px-2 py-1 rounded-md text-xs font-medium border ${tunnelExpStatus.bg} ${tunnelExpStatus.color}`}>
                                {tunnelExpStatus.text}
@@ -810,22 +813,22 @@ export default function DashboardPage() {
                        
                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
                          <div>
-                           <p className="text-sm text-default-600 mb-1">流量配额</p>
+                           <p className="text-sm text-default-600 mb-1">{t("mff97e9e9954c")}</p>
                            <p className="font-semibold text-foreground">{formatFlow(tunnel.flow, 'gb')}</p>
                          </div>
                          <div>
-                           <p className="text-sm text-default-600 mb-1">已用流量</p>
+                           <p className="text-sm text-default-600 mb-1">{t("mdecb065f369c")}</p>
                            <p className="font-semibold text-foreground">{formatFlow(calculateTunnelUsedFlow(tunnel))}</p>
                            <div className="mt-1">
                              {renderProgressBar(calculateTunnelFlowPercentage(tunnel), 'sm', tunnel.flow === 99999)}
                            </div>
                          </div>
                          <div>
-                           <p className="text-sm text-default-600 mb-1">转发配额</p>
+                           <p className="text-sm text-default-600 mb-1">{t("m7e63f5909f99")}</p>
                            <p className="font-semibold text-foreground">{formatNumber(tunnel.num)}</p>
                          </div>
                          <div>
-                           <p className="text-sm text-default-600 mb-1">已用转发</p>
+                           <p className="text-sm text-default-600 mb-1">{t("m2450ea970396")}</p>
                            <p className="font-semibold text-foreground">{getTunnelUsedForwards(tunnel.tunnelId)}</p>
                            <div className="mt-1">
                              {renderProgressBar(calculateTunnelForwardPercentage(tunnel), 'sm', tunnel.num === 99999)}
@@ -849,7 +852,7 @@ export default function DashboardPage() {
                <svg className="w-5 h-5 text-primary" fill="currentColor" viewBox="0 0 20 20">
                  <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
                </svg>
-               <h2 className="text-lg lg:text-xl font-semibold text-foreground">转发配置</h2>
+               <h2 className="text-lg lg:text-xl font-semibold text-foreground">{t("me32ebcbe628f")}</h2>
                <span className="px-2 py-1 bg-default-100 dark:bg-default-50 text-default-600 rounded-full text-xs">
                  {forwardList.length}
                </span>
@@ -861,7 +864,7 @@ export default function DashboardPage() {
                 <svg className="w-12 h-12 text-default-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
                 </svg>
-                <p className="text-default-500">暂无转发配置</p>
+                <p className="text-default-500">{t("m3f811d9a0983")}</p>
               </div>
             ) : (
                              <div className="space-y-4">
@@ -870,8 +873,7 @@ export default function DashboardPage() {
                      <div className="flex items-center justify-between mb-3">
                        <h3 className="font-semibold text-foreground">{group.tunnelName}</h3>
                        <span className="px-2 py-1 bg-primary-100 dark:bg-primary-500/20 text-primary-700 dark:text-primary-300 rounded-md text-sm">
-                         {group.forwards.length} 个转发
-                       </span>
+                         {group.forwards.length} {t("m0d49ec2be8f8")} </span>
                      </div>
                      
                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
@@ -883,7 +885,7 @@ export default function DashboardPage() {
                               <div className="space-y-1">
                                 <code 
                                   className={`block px-2 py-1 bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-300 rounded font-mono text-xs truncate ${hasMultipleIps(forward.inIp) ? 'cursor-pointer hover:bg-green-200 dark:hover:bg-green-500/30' : ''}`}
-                                  onClick={() => hasMultipleIps(forward.inIp) && showAddressModal(forward.inIp, forward.inPort, '入口地址')}
+                                  onClick={() => hasMultipleIps(forward.inIp) && showAddressModal(forward.inIp, forward.inPort, t("m8d1743769a19"))}
                                   title={formatInAddress(forward.inIp, forward.inPort)}
                                 >
                                   {formatInAddress(forward.inIp, forward.inPort)}
@@ -891,7 +893,7 @@ export default function DashboardPage() {
                                 <div className="text-center text-default-400 text-xs">↓</div>
                                 <code 
                                   className={`block px-2 py-1 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 rounded font-mono text-xs truncate ${hasMultipleRemoteAddresses(forward.remoteAddr) ? 'cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-500/30' : ''}`}
-                                  onClick={() => hasMultipleRemoteAddresses(forward.remoteAddr) && showRemoteAddressModal(forward.remoteAddr, '出口地址')}
+                                  onClick={() => hasMultipleRemoteAddresses(forward.remoteAddr) && showRemoteAddressModal(forward.remoteAddr, t("m262aa27374d0"))}
                                   title={formatRemoteAddress(forward.remoteAddr)}
                                 >
                                   {formatRemoteAddress(forward.remoteAddr)}
@@ -902,15 +904,15 @@ export default function DashboardPage() {
                             <div className="pt-2 border-t border-gray-200 dark:border-default-200">
                               <div className="grid grid-cols-3 gap-1 text-xs">
                                 <div className="text-center">
-                                  <div className="text-default-500 mb-1">上传</div>
+                                  <div className="text-default-500 mb-1">{t("m9e07e3c0532d")}</div>
                                   <div className="font-medium text-green-600 dark:text-green-400 truncate">{formatFlow(forward.inFlow || 0)}</div>
                                 </div>
                                 <div className="text-center">
-                                  <div className="text-default-500 mb-1">下载</div>
+                                  <div className="text-default-500 mb-1">{t("m4673a2306165")}</div>
                                   <div className="font-medium text-orange-600 dark:text-orange-400 truncate">{formatFlow(forward.outFlow || 0)}</div>
                                 </div>
                                 <div className="text-center">
-                                  <div className="text-default-500 mb-1">计费</div>
+                                  <div className="text-default-500 mb-1">{t("m251d9be11de0")}</div>
                                   <div className="font-medium text-primary truncate">{formatFlow(calculateForwardBillingFlow(forward))}</div>
                                 </div>
                               </div>
@@ -936,9 +938,7 @@ export default function DashboardPage() {
             <ModalHeader className="text-base">{addressModalTitle}</ModalHeader>
             <ModalBody className="pb-6">
               <div className="mb-4 text-right">
-                <Button size="sm" onClick={copyAllAddresses}>
-                  复制全部
-                </Button>
+                <Button size="sm" onClick={copyAllAddresses}> {t("m75c393923f87")} </Button>
               </div>
               
               <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -950,9 +950,7 @@ export default function DashboardPage() {
                       variant="light"
                       isLoading={item.copying}
                       onClick={() => copyAddress(item)}
-                    >
-                      复制
-                    </Button>
+                    > {t("m63d90d977348")} </Button>
                   </div>
                 ))}
               </div>
@@ -962,4 +960,4 @@ export default function DashboardPage() {
       </div>
           
   );
-} 
+}

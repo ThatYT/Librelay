@@ -1,0 +1,45 @@
+name: Validate deployment and protocol changes
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go-gost/go.mod
+      - name: Backend tests and build
+        run: mvn -B -f springboot-backend/pom.xml test package
+      - name: Frontend tests and production build
+        working-directory: vite-frontend
+        run: |
+          npm install -g pnpm@11.19.0
+          pnpm install --frozen-lockfile
+          pnpm test
+          pnpm build
+      - name: Node regression and Linux build
+        run: |
+          cd go-gost/x
+          go test ./socket ./handler/socks/v5 ./config/parsing/service
+          cd ..
+          CGO_ENABLED=0 go build -mod=mod -o /tmp/tms-gost .
+      - name: Installer and Compose validation
+        run: |
+          bash -n panel_install.sh install.sh tms-hybrid.sh
+          bash tests/installer_test.sh
+          for compose in docker-compose-v4.yml docker-compose-v6.yml docker-compose-hybrid.yml; do
+            docker compose --env-file .env.example -f "$compose" config --quiet
+          done
+          git diff --check

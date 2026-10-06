@@ -368,20 +368,17 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
         ViteConfig viteConfig = viteConfigService.getOne(new QueryWrapper<ViteConfig>().eq("name", "ip"));
         if (viteConfig == null) return R.err("请先前往网站配置中设置ip");
 
+        String repository = com.admin.common.utils.RepositoryConfig.repo();
+        String ref = com.admin.common.utils.RepositoryConfig.ref();
+        String url = "https://raw.githubusercontent.com/" + repository + "/" + ref + "/install.sh";
         StringBuilder command = new StringBuilder();
-        
-        // 第一部分：下载安装脚本  
-        command.append("curl -L https://github.com/Teminuosi/Tms/releases/latest/download/install.sh")
-               .append(" -o ./install.sh && chmod +x ./install.sh && ");
-        
-        // 处理服务器地址，如果是IPv6需要添加方括号
-        String processedServerAddr = processServerAddress(viteConfig.getValue());
-        
-        // 第二部分：执行安装脚本（去掉-u参数）
-        command.append("./install.sh")
-               .append(" -a ").append(processedServerAddr)  // 服务器地址
-               .append(" -s ").append(node.getSecret());    // 节点密钥
-        
+        command.append("curl -fLsS ").append(com.admin.common.utils.RepositoryConfig.shellQuote(url))
+                .append(" -o /tmp/tms-node.sh && GITHUB_REPO=")
+                .append(com.admin.common.utils.RepositoryConfig.shellQuote(repository))
+                .append(" GITHUB_REF=").append(com.admin.common.utils.RepositoryConfig.shellQuote(ref))
+                .append(" bash /tmp/tms-node.sh -a ")
+                .append(com.admin.common.utils.RepositoryConfig.shellQuote(processServerAddress(viteConfig.getValue())))
+                .append(" -s ").append(com.admin.common.utils.RepositoryConfig.shellQuote(node.getSecret()));
         return R.ok(command.toString());
     }
 

@@ -1,9 +1,11 @@
+import { useTranslation } from "react-i18next";
+import { t } from "@/i18n";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import toast from 'react-hot-toast';
+import toast from '@/utils/toast';
 import axios from 'axios';
 import { isWebViewFunc } from '@/utils/panel';
 import { siteConfig } from '@/config/site';
@@ -42,6 +44,7 @@ interface CaptchaStyle {
 }
 
 export default function IndexPage() {
+  useTranslation();
   const [form, setForm] = useState<LoginForm>({
     username: "",
     password: "",
@@ -72,13 +75,13 @@ export default function IndexPage() {
     const newErrors: Partial<LoginForm> = {};
 
     if (!form.username.trim()) {
-      newErrors.username = '请输入用户名';
+      newErrors.username = t("mc723b1fab58f");
     }
 
     if (!form.password.trim()) {
-      newErrors.password = '请输入密码';
+      newErrors.password = t("m728a7b601c56");
     } else if (form.password.length < 6) {
-      newErrors.password = '密码长度至少6位';
+      newErrors.password = t("m8eee17404155");
     }
 
 
@@ -138,9 +141,7 @@ export default function IndexPage() {
       };
 
       // 检测暗黑模式
-      const isDarkMode = document.documentElement.classList.contains('dark') || 
-                        document.documentElement.getAttribute('data-theme') === 'dark' ||
-                        window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const isDarkMode = document.documentElement.classList.contains('dark');
       
       // 根据主题调整颜色
       const trackColor = isDarkMode ? "#4a5568" : "#7db0be"; // 暗黑模式使用更深的灰蓝色
@@ -156,8 +157,8 @@ export default function IndexPage() {
       tacInstanceRef.current.init();
 
     } catch (error) {
-      console.error('初始化验证码失败:', error);
-      toast.error('验证码初始化失败，请刷新页面重试');
+      console.error(t("m1954f6b82f35"), error);
+      toast.error(t("ma32576b7bd50"));
       setShowCaptcha(false);
       setLoading(false);
     }
@@ -177,7 +178,7 @@ export default function IndexPage() {
       const response = await login(loginData);
       
       if (response.code !== 0) {
-        toast.error(response.msg || "登录失败");
+        toast.error(response.msg || t("me4343921c928"));
         return;
       }
 
@@ -187,7 +188,7 @@ export default function IndexPage() {
         localStorage.setItem("role_id", response.data.role_id.toString());
         localStorage.setItem("name", response.data.name);
         localStorage.setItem("admin", (response.data.role_id === 0).toString());
-        toast.success('检测到默认密码，即将跳转到修改密码页面');
+        toast.success(t("mf2e6b6b143b5"));
         navigate("/change-password");
         return;
       }
@@ -199,12 +200,12 @@ export default function IndexPage() {
       localStorage.setItem("admin", (response.data.role_id === 0).toString());
 
       // 登录成功:管理员进仪表板;车友进「我的订阅」
-      toast.success('登录成功');
+      toast.success(t("m645b934deb86"));
       navigate(response.data.role_id === 0 ? "/dashboard" : "/my-sub");
 
     } catch (error) {
-      console.error('登录错误:', error);
-      toast.error("网络错误，请稍后重试");
+      console.error(t("mbb3c9c8d1a92"), error);
+      toast.error(t("mf5ef472e3e82"));
     } finally {
       setLoading(false);
     }
@@ -220,7 +221,7 @@ export default function IndexPage() {
       const checkResponse = await checkCaptcha();
       
       if (checkResponse.code !== 0) {
-        toast.error("检查验证码状态失败，请重试" + checkResponse.msg);
+        toast.error(t("m0672a84de8c9") + checkResponse.msg);
         setLoading(false);
         return;
       }
@@ -238,8 +239,8 @@ export default function IndexPage() {
         }, 100);
       }
     } catch (error) {
-      console.error('检查验证码状态错误:', error);
-      toast.error("网络错误，请稍后重试" + error);
+      console.error(t("m95fa917202a0"), error);
+      toast.error(t("mf5ef472e3e82") + error);
       setLoading(false);
     }
   };
@@ -257,14 +258,14 @@ export default function IndexPage() {
         <div className="w-full max-w-md px-4 sm:px-0">
           <Card className="w-full">
             <CardHeader className="pb-0 pt-6 px-6 flex-col items-center">
-              <h1 className={title({ size: "sm" })}>登陆</h1>
-              <p className="text-small text-default-500 mt-2">请输入您的账号信息</p>
+              <h1 className={title({ size: "sm" })}>{t("mafc7352ab0ba")}</h1>
+              <p className="text-small text-default-500 mt-2">{t("mf272da789643")}</p>
             </CardHeader>
             <CardBody className="px-6 py-6">
               <div className="flex flex-col gap-4">
                 <Input
-                  label="用户名"
-                  placeholder="请输入用户名"
+                  label={t("m1a3f0617d6de")}
+                  placeholder={t("mc723b1fab58f")}
                   value={form.username}
                   onChange={(e) => handleInputChange('username', e.target.value)}
                   onKeyDown={handleKeyPress}
@@ -275,8 +276,8 @@ export default function IndexPage() {
                 />
                 
                 <Input
-                  label="密码"
-                  placeholder="请输入密码"
+                  label={t("ma621ab606db2")}
+                  placeholder={t("m728a7b601c56")}
                   type="password"
                   value={form.password}
                   onChange={(e) => handleInputChange('password', e.target.value)}
@@ -295,7 +296,7 @@ export default function IndexPage() {
                   disabled={loading}
                   className="mt-2"
                 >
-                  {loading ? (showCaptcha ? "验证中..." : "登录中...") : "登录"}
+                  {loading ? (showCaptcha ? t("m6c128e0ad353") : t("mc0b692e4f515")) : t("m1e2df9c3075a")}
                 </Button>
               </div>
             </CardBody>
@@ -329,9 +330,7 @@ export default function IndexPage() {
                   ref={captchaContainerRef}
                   className="w-full flex justify-center"
                   style={{
-                    filter: document.documentElement.classList.contains('dark') || 
-                           document.documentElement.getAttribute('data-theme') === 'dark' ||
-                           window.matchMedia('(prefers-color-scheme: dark)').matches 
+                    filter: document.documentElement.classList.contains('dark')
                            ? 'brightness(0.8) contrast(0.9)' : 'none'
                   }}
                 />
