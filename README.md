@@ -184,6 +184,12 @@ bash /tmp/tms.sh update --install-dir /PATH/TO/EXISTING/TMS
 
 若仍然失败，检查 `docker logs gost-mysql --tail 80` 和 `docker logs springboot-backend --tail 80`。不要公开数据库密码或 `.env` 内容。
 
+## 更新报错：后端健康状态 `unknown`
+
+旧源码版镜像没有 Docker `HEALTHCHECK`，旧更新脚本却一直等待 `healthy`，可能误报超时及“容器不存在”。新版镜像已加入健康检查；安装器也会直接调用登录使用的验证码状态 API，确认数据库查询成功后才继续。旧镜像即使没有健康字段，也只在实际 API 可用时通过。
+
+遇到该错误时，保留原目录和数据库，下载最新 `panel_install.sh` 后重新执行上方的更新命令即可。
+
 ## VLESS-Reality 自定义端口
 
 在「协议管理」中创建 VLESS-Reality，选择要运行协议的节点。监听端口默认为 **443**，也可以输入 **8443** 等端口。一键创建和中转创建同样提供该字段；点击已有 Reality 条目的端口可以修改。

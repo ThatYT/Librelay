@@ -70,4 +70,21 @@ sleep() { :; }
 if verify_database_schema >/dev/null 2>&1; then
   echo 'Accepted incomplete database schema'; exit 1
 fi
+# The login API must return application success, not just HTTP 200.
+curl() { printf '%s\n' '{"code":0,"data":0}'; }
+backend_api_ready
+curl() { printf '%s\n' '{"code":500,"msg":"database unavailable"}'; }
+if backend_api_ready; then echo 'Accepted failing login API'; exit 1; fi
+curl() { return 7; }
+if backend_api_ready; then echo 'Accepted unavailable backend'; exit 1; fi
+# Existing images without a Docker HEALTHCHECK can still be API-ready.
+curl() { printf '%s\n' '{"code":0,"data":1}'; }
+docker() {
+  if [[ "$*" = *Health* ]]; then echo not_configured; else echo running; fi
+}
+wait_backend_ready
+curl() { printf '%s\n' '{"code":500}'; }
+if wait_backend_ready >/dev/null 2>&1; then echo 'Accepted unready backend'; exit 1; fi
+docker() { echo exited; }
+if wait_backend_ready >/dev/null 2>&1; then echo 'Accepted exited backend'; exit 1; fi
 printf 'Installer regression checks passed\n'

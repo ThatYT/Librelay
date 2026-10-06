@@ -520,6 +520,39 @@ verify_database_schema() {
   return 1
 }
 
+backend_api_ready() {
+  local port
+  port=$(sed -n 's/^BACKEND_PORT=//p' .env | head -1)
+  port=${port:-6365}
+  valid_port "$port" || return 1
+  curl --noproxy '*' -fsS --max-time 4 -X POST "http://127.0.0.1:${port}/api/v1/captcha/check" 2>/dev/null \
+    | grep -Eq '"code"[[:space:]]*:[[:space:]]*0[[:space:]]*[,}]'
+}
+
+wait_backend_ready() {
+  local attempt state health
+  echo "🔍 检查后端登录 API 和数据库就绪状态..."
+  for attempt in {1..180}; do
+    state=$(docker inspect -f '{{.State.Status}}' springboot-backend 2>/dev/null) || state=not_found
+    health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}not_configured{{end}}' springboot-backend 2>/dev/null) || health=unknown
+    if [ "$state" = running ] && backend_api_ready; then
+      echo "✅ 后端登录 API 和数据库检查通过"
+      return 0
+    fi
+    case "$state" in
+      exited|dead|not_found)
+        echo "❌ 后端容器状态：$state。检查：docker logs springboot-backend --tail 80" >&2
+        return 1 ;;
+    esac
+    if [ $((attempt % 15)) = 1 ]; then
+      echo "⏳ 等待后端就绪... ($attempt/180) 容器=$state 健康检查=$health"
+    fi
+    sleep 1
+  done
+  echo "❌ 后端就绪超时。检查：docker logs springboot-backend --tail 80" >&2
+  return 1
+}
+
 # 安装功能
 install_panel() {
   echo "🚀 开始安装面板..."
@@ -561,6 +594,7 @@ EOF
   fi
   echo "      ✔ 三个容器已启动"
   verify_database_schema || return 1
+  wait_backend_ready || return 1
 
   # 自动写入「面板后端地址」(转发机对接要用),省得登录后再手动到网站配置里填
   echo "[4/4] 检测公网IP并配置面板后端地址..."
@@ -631,40 +665,10 @@ update_panel() {
   $DOCKER_CMD build
   $DOCKER_CMD up -d
   verify_database_schema || return 1
+  wait_backend_ready || return 1
 
   # 等待服务启动
   echo "⏳ 等待服务启动..."
-
-  # 检查后端容器健康状态
-  echo "🔍 检查后端服务状态..."
-  for i in {1..90}; do
-    if docker ps --format "{{.Names}}" | grep -q "^springboot-backend$"; then
-      BACKEND_HEALTH=$(docker inspect -f '{{.State.Health.Status}}' springboot-backend 2>/dev/null || echo "unknown")
-      if [[ "$BACKEND_HEALTH" == "healthy" ]]; then
-        echo "✅ 后端服务健康检查通过"
-        break
-      elif [[ "$BACKEND_HEALTH" == "starting" ]]; then
-        # 继续等待
-        :
-      elif [[ "$BACKEND_HEALTH" == "unhealthy" ]]; then
-        echo "⚠️ 后端健康状态：$BACKEND_HEALTH"
-      fi
-    else
-      echo "⚠️ 后端容器未找到或未运行"
-      BACKEND_HEALTH="not_running"
-    fi
-    if [ $i -eq 90 ]; then
-      echo "❌ 后端服务启动超时（90秒）"
-      echo "🔍 当前状态：$(docker inspect -f '{{.State.Health.Status}}' springboot-backend 2>/dev/null || echo '容器不存在')"
-      echo "🛑 更新终止"
-      return 1
-    fi
-    # 每15秒显示一次进度
-    if [ $((i % 15)) -eq 1 ]; then
-      echo "⏳ 等待后端服务启动... ($i/90) 状态：${BACKEND_HEALTH:-unknown}"
-    fi
-    sleep 1
-  done
 
   # 检查数据库容器健康状态
   echo "🔍 检查数据库服务状态..."

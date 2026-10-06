@@ -76,6 +76,14 @@ Do not delete the MySQL volume. Download the latest panel installer and run `upd
 
 MySQL's container entrypoint does not retry initial SQL against an already initialized volume; restarting the old backend alone will not fix the missing table. If update still fails, inspect both MySQL and backend logs. The bundled recovery schema is `springboot-backend/src/main/resources/db/bootstrap.sql` and is covered by an isolated MySQL 5.7 CI regression.
 
+## Update reports backend health `unknown`
+
+Older source-built backend images had no Docker `HEALTHCHECK`, while the old update script required `.State.Health.Status` to become `healthy`. This could report a timeout even when the backend was running; the later "container does not exist" message came from inspecting the absent health field, not necessarily an absent container.
+
+The backend image now defines a healthcheck against the database-backed login CAPTCHA status API. Fresh installs and updates additionally verify that this API returns application `code: 0` on the configured local backend port. Legacy images without health metadata are accepted only if that actual API works. A running container alone is not enough. Download the latest installer and rerun update against the original directory; volumes and `.env` remain preserved.
+
+The CI smoke test builds the production backend Docker image, runs it alongside the disposable MySQL service, and requires healthy status plus a successful login readiness API response.
+
 ## Configure Reality
 
 In protocol management, create VLESS-Reality and choose its node. The listening port field starts at **443**. Enter **8443** if desired. One-click and relay creation also expose the field. Submit the form; frontend and backend both enforce integer ports 1–65535. The backend checks database reservations and asks the selected remote node to probe TCP availability before applying the configuration.

@@ -41,6 +41,30 @@ jobs:
             go-gost/x/go.sum
       - name: Backend tests and build
         run: mvn -B -f springboot-backend/pom.xml test package
+      - name: Backend image and login readiness smoke test
+        env:
+          MYSQL_SERVICE_ID: ${{ job.services.schema-mysql.id }}
+        run: |
+          docker build -t tms-backend:ci springboot-backend
+          network=$(docker inspect -f '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}}{{end}}' "$MYSQL_SERVICE_ID")
+          export JWT_SECRET=$(openssl rand -hex 48)
+          docker run -d --name tms-backend-ci --network "$network" \
+            -e DB_HOST=schema-mysql -e DB_NAME=tms_schema_test -e DB_USER=root -e DB_PASSWORD= \
+            -e JWT_SECRET -e LOG_DIR=/app/logs tms-backend:ci
+          for attempt in $(seq 1 60); do
+            health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' tms-backend-ci)
+            if [ "$health" = healthy ]; then
+              docker exec tms-backend-ci curl -fsS -X POST http://127.0.0.1:6365/api/v1/captcha/check
+              exit 0
+            fi
+            sleep 3
+          done
+          docker logs tms-backend-ci --tail 100
+          docker inspect -f '{{json .State.Health}}' tms-backend-ci
+          exit 1
+      - name: Clean up backend smoke container
+        if: always()
+        run: docker rm -f tms-backend-ci 2>/dev/null || true
       - name: Frontend tests and production build
         working-directory: vite-frontend
         run: |

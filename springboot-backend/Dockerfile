@@ -23,11 +23,16 @@ ENV LANGUAGE=en_US:en
 ENV LC_ALL=en_US.UTF-8
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends fontconfig fonts-dejavu \
+    && apt-get install -y --no-install-recommends fontconfig fonts-dejavu curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 6365
+
+# Readiness includes the database query used by the login CAPTCHA check.
+HEALTHCHECK --interval=5s --timeout=6s --start-period=60s --retries=12 \
+  CMD curl --noproxy '*' -fsS --max-time 4 -X POST http://127.0.0.1:6365/api/v1/captcha/check \
+    | grep -Eq '"code"[[:space:]]*:[[:space:]]*0[[:space:]]*[,}]' || exit 1
 
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

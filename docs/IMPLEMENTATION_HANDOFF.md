@@ -202,3 +202,10 @@ This pre-publication snapshot covers modified tracked files only; the new files 
 - `tests/installer_test.sh`: regress schema-file permissions under umask 077 and reject incomplete database health.
 - `.github/workflows/validate.yml`: run schema regressions against a disposable localhost-only MySQL 5.7 service.
 - README/deployment guide: document recovery through nondestructive update.
+
+## Backend readiness follow-up
+
+- Backend Dockerfile adds curl and a database-backed login API HEALTHCHECK.
+- Installer checks the configured backend API for code 0 and handles absent legacy health metadata without incorrectly reporting a missing container.
+- Installer regressions cover absent health metadata, application-level failures, unreachable APIs and exited containers.
+- CI builds/runs the actual backend image beside MySQL and checks both Docker health and the login API.
