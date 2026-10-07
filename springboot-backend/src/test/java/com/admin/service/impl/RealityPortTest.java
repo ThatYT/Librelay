@@ -51,6 +51,16 @@ class RealityPortTest {
         createAndAssert(null,443); createAndAssert(8443,8443);
     }
     private void createAndAssert(Integer selected,int expected) {
+        createAndAssert(selected, expected, Set.of(), "vless");
+    }
+    @Test void busyPrivateGatewayDoesNotChangeSelectedRealityPort() {
+        createAndAssert(null, 443, Set.of(40000, 40001), "vless");
+        createAndAssert(8443, 8443, Set.of(40000), "vless");
+    }
+    @Test void otherAutomaticProtocolsSkipBusyOsPorts() {
+        createAndAssert(null, 40002, Set.of(40000, 40001), "vmess");
+    }
+    private void createAndAssert(Integer selected,int expected,Set<Integer> busyPorts,String protocol) {
         InboundServiceImpl service=new InboundServiceImpl();
         emptyTunnelReservations(service);
         InboundMapper mapper=mock(InboundMapper.class); NodeMapper nodes=mock(NodeMapper.class);
@@ -59,16 +69,51 @@ class RealityPortTest {
         ReflectionTestUtils.setField(service,"inboundUserMapper",users);
         Node node=new Node();node.setId(7L);when(nodes.selectById(7L)).thenReturn(node);
         when(mapper.selectList(any())).thenReturn(List.of()); when(mapper.insert(any())).thenAnswer(call->{((Inbound)call.getArgument(0)).setId(1L);return 1;});
-        InboundDto dto=new InboundDto();dto.setNodeId(7L);dto.setProtocol("vless");dto.setSni("www.apple.com");dto.setListenPort(selected);
+        InboundDto dto=new InboundDto();dto.setNodeId(7L);dto.setProtocol(protocol);dto.setSni("www.apple.com");dto.setListenPort(selected);
         GostDto ok=new GostDto();ok.setMsg("OK");ok.setData(Map.of("privateKey","private","publicKey","public"));
         NodeCommandClient commands=mock(NodeCommandClient.class);
         ReflectionTestUtils.setField(service,"nodeCommands",commands);
-        when(commands.send(anyLong(),any(),anyString())).thenReturn(ok);
+        when(commands.send(anyLong(),any(),anyString())).thenAnswer(call -> {
+            JSONObject request = call.getArgument(1);
+            if (!busyPorts.contains(request.getInteger("port"))) return ok;
+            GostDto busy = new GostDto();
+            busy.setMsg("TCP port " + request.getInteger("port") + " is unavailable on this node: bind: address already in use");
+            return busy;
+        });
         when(commands.realityKeypair(anyLong())).thenReturn(ok);
         when(commands.configure(anyLong(),any(),any(),any())).thenReturn(ok);
         {
             R result=service.createInbound(dto);assertEquals(0,result.getCode());
-            Inbound stored=(Inbound)result.getData();assertEquals(expected,stored.getListenPort());assertTrue(stored.getPublicListen());
+            Inbound stored=(Inbound)result.getData();assertEquals(expected,stored.getListenPort());
+            assertEquals("vless".equals(protocol),stored.getPublicListen());
+            if ("vless".equals(protocol)) {
+                int gateway = 40000;
+                while (busyPorts.contains(gateway) || gateway == expected) gateway++;
+                assertEquals(gateway,stored.getEgressPort());
+            }
+        }
+    }
+    @Test void internalAllocationStopsOnTimeoutAndBoundsBusyRetries() {
+        for (boolean timedOut : List.of(true, false)) {
+            InboundServiceImpl service = new InboundServiceImpl();
+            emptyTunnelReservations(service);
+            InboundMapper mapper = mock(InboundMapper.class); NodeMapper nodes = mock(NodeMapper.class);
+            ReflectionTestUtils.setField(service,"baseMapper",mapper);ReflectionTestUtils.setField(service,"nodeMapper",nodes);
+            Node node = new Node();node.setId(7L);when(nodes.selectById(7L)).thenReturn(node);
+            when(mapper.selectList(any())).thenReturn(List.of());
+            NodeCommandClient commands = mock(NodeCommandClient.class);
+            ReflectionTestUtils.setField(service,"nodeCommands",commands);
+            when(commands.send(anyLong(),any(),anyString())).thenAnswer(call -> {
+                JSONObject request = call.getArgument(1); GostDto response = new GostDto();
+                response.setMsg(request.getIntValue("port") == 443 ? "OK" : timedOut ? "node connection timed out" : "bind: address already in use");
+                return response;
+            });
+            InboundDto dto = new InboundDto();dto.setNodeId(7L);dto.setProtocol("vless");
+            R result = service.createInbound(dto); assertNotEquals(0,result.getCode());
+            verify(mapper,never()).insert(any());
+            verify(commands,times(timedOut ? 2 : 26)).send(eq(7L),any(),eq("CheckListenPort"));
+            if (timedOut) assertTrue(result.getMsg().contains("timed out"));
+            else assertTrue(result.getMsg().contains("25 candidates"));
         }
     }
     @Test void invalidAndOccupiedPortsFailClearly() {

@@ -124,22 +124,28 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
         Inbound in = new Inbound();
         in.setNodeId(node.getId());
         in.setProtocol(protocol);
-        Integer selectedPort = dto.getListenPort() != null ? dto.getListenPort()
-                : ("vless".equals(protocol) ? Integer.valueOf(443) : allocateListenPort(node.getId()));
-        if (selectedPort == null) return R.err("No free private ports available on this node");
+        Integer selectedPort = dto.getListenPort();
+        boolean automaticallySelected = selectedPort == null && !"vless".equals(protocol);
+        if (automaticallySelected) {
+            R allocated = allocateAvailableListener(node.getId(), protocol, null, null);
+            if (allocated.getCode() != 0) return allocated;
+            selectedPort = (Integer) allocated.getData();
+        } else if (selectedPort == null) {
+            selectedPort = 443;
+        }
         int port = selectedPort;
         if (port < 1 || port > 65535) return R.err("Port must be between 1 and 65535");
         in.setPublicListen("vless".equals(protocol));
-        R available = validateListener(node.getId(), protocol, port, null);
-        if (available.getCode() != 0) return available;
+        // A chosen public port is never silently changed when occupied.
+        if (!automaticallySelected) {
+            R available = validateListener(node.getId(), protocol, port, null);
+            if (available.getCode() != 0) return available;
+        }
         in.setListenPort(port);
         if (Boolean.TRUE.equals(in.getPublicListen())) {
-            Integer gateway = allocateListenPort(node.getId(), port);
-            if (gateway == null) return R.err("No private gateway ports available on this node");
-            if (gateway > 65535) return R.err("No private gateway ports available on this node");
-            R gatewayAvailable = validateListener(node.getId(), "vless", gateway, null);
-            if (gatewayAvailable.getCode() != 0) return gatewayAvailable;
-            in.setEgressPort(gateway);
+            R gateway = allocateAvailableListener(node.getId(), "vless", port, null);
+            if (gateway.getCode() != 0) return gateway;
+            in.setEgressPort((Integer) gateway.getData());
         }
         in.setTag("in-" + node.getId() + "-" + protocol + "-" + in.getListenPort());
         in.setRemark(dto.getRemark());
@@ -1557,12 +1563,9 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
         in.setPublicListen(true);
         in.setListenPort(port);
         if (in.getEgressPort() == null) {
-            Integer gateway = allocateListenPort(in.getNodeId(), port);
-            if (gateway == null) return R.err("No private gateway ports available on this node");
-            if (gateway > 65535) return R.err("No private gateway ports available");
-            R gatewayAvailable = validateListener(in.getNodeId(), "vless", gateway, id);
-            if (gatewayAvailable.getCode() != 0) return gatewayAvailable;
-            in.setEgressPort(gateway);
+            R gateway = allocateAvailableListener(in.getNodeId(), "vless", port, id);
+            if (gateway.getCode() != 0) return gateway;
+            in.setEgressPort((Integer) gateway.getData());
         }
         updateById(in);
         List<InboundUser> users = inboundUserMapper.selectList(new QueryWrapper<InboundUser>().eq("inbound_id", id));
@@ -1743,22 +1746,30 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
                 .eq("in_node_id", nodeId).eq("type", TUNNEL_TYPE_PORT_FORWARD).last("limit 1"));
     }
 
-    /** 分配 sing-box 本机监听口(40000+,避开 gost 公网口段) */
-    private Integer allocateListenPort(Long nodeId) {
-        return allocateListenPort(nodeId, null);
-    }
-
-    private Integer allocateListenPort(Long nodeId, Integer reserved) {
+    /** Allocate internal listeners using both DB reservations and the remote OS. */
+    private R allocateAvailableListener(Long nodeId, String protocol, Integer reserved, Long excludeId) {
         java.util.Set<Integer> used = new java.util.HashSet<>();
         for (Inbound in : this.list(new QueryWrapper<Inbound>().eq("node_id", nodeId))) {
+            // Keep a legacy entry's current running listener reserved during conversion.
             if (in.getListenPort() != null) used.add(in.getListenPort());
             if (in.getEgressPort() != null) used.add(in.getEgressPort());
         }
         if (reserved != null) used.add(reserved);
-        for (int port = SINGBOX_LISTEN_BASE; port <= 65535; port++) {
-            if (!used.contains(port)) return port;
+        int tried = 0;
+        String lastError = "No unreserved private listener ports";
+        for (int port = SINGBOX_LISTEN_BASE; port <= 65535 && tried < MAX_PORT_TRIES; port++) {
+            if (used.contains(port)) continue;
+            tried++;
+            R available = validateListener(nodeId, protocol, port, excludeId);
+            if (available.getCode() == 0) return R.ok(port);
+            lastError = available.getMsg() == null ? "Node unavailable" : available.getMsg();
+            String lower = lastError.toLowerCase(java.util.Locale.ROOT);
+            boolean occupied = lower.contains("address already in use") || lower.contains("already occupied")
+                    || lower.contains("already used") || lower.contains("reserved by a forwarding service");
+            if (!occupied) return available; // Do not scan on timeout, permission or unsupported-command errors.
         }
-        return null;
+        return R.err("No available automatic listener port on node " + nodeId + " after " + tried
+                + " candidates: " + lastError);
     }
 
     /** 随机 8 位十六进制 shortId */

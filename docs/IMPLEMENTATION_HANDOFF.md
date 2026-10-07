@@ -224,3 +224,9 @@ This pre-publication snapshot covers modified tracked files only; the new files 
 - `tests/domain_test.sh`: cover 2095 with occupied 443, legacy 443, saved ports, frontend/other-service conflicts and rollback.
 - Validation workflow: parse the real Caddy config and test HTTPS 2095 while a separate container occupies TCP 443.
 - README/deployment guide: explain moving the frontend HTTP backup to 8080 and leaving API 6365/Reality 443 independent.
+
+## Automatic internal port allocation follow-up
+
+- `InboundServiceImpl.java`: check remote socket availability while allocating internal 40000+ ports, skip occupied candidates with bounded retries, stop on operational errors, and retain explicitly selected public ports.
+- `RealityPortTest.java`: verify busy gateway recovery, unchanged 443/8443 exports, other automatic protocols, timeout handling and a 25-candidate limit.
+- README/deployment guide: explain internal vs public ports and nondestructive backend update.

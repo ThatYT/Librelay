@@ -102,6 +102,12 @@ Caddy publishes TCP 80 and the selected HTTPS port only. For nonstandard HTTPS p
 
 Existing Caddy bindings are distinguished from other occupied Docker/service ports. Conflicts fail before replacing configuration. The candidate is validated by Caddy before the old container is removed; startup failure attempts to restore the previous file/container binding. Certificate/data volumes remain retained. Regression checks cover legacy/default 443, custom 2095, conflicts, persistence and rollback. CI validates the actual Caddyfile and serves HTTPS 2095 with a separate TCP service occupying 443, using local test certificates instead of issuing public certificates.
 
+## Occupied automatic internal port (40000+)
+
+An error about TCP 40000 refers to an automatically chosen internal listener/gateway, not the Reality client's selected public port. Earlier code chose the first database-unreserved port and stopped when the remote OS probe found a conflict. Allocation now skips real TCP/UDP bind conflicts and forwarding reservations, trying at most 25 unreserved candidates. Timeout, permission and unsupported-command errors stop immediately instead of repeatedly contacting an unavailable node.
+
+This applies to new internal Reality gateways, explicit legacy Reality conversion and other automatically allocated protocol listeners. Existing ports/credentials stay intact, and explicitly selected public Reality ports are never silently changed. Update the panel backend and retry creation; no agent/schema migration is required for this fix. Regression tests cover multiple busy internal ports, unchanged public 443/8443, automatic VMess allocation, retry limits and timeout handling.
+
 ## Configure Reality
 
 In protocol management, create VLESS-Reality and choose its node. The listening port field starts at **443**. Enter **8443** if desired. One-click and relay creation also expose the field. Submit the form; frontend and backend both enforce integer ports 1–65535. The backend checks database reservations and asks the selected remote node to probe TCP availability before applying the configuration.
