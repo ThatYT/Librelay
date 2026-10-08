@@ -1,5 +1,7 @@
 # Librelay deployment and upgrade
 
+[中文 / English project overview and update commands](../README.md) · [中文详细指南](GUIDE.zh-CN.md)
+
 The examples below use this fork's `main` branch. Another fork can set `GITHUB_REPO=OWNER/REPO` in one place; `GITHUB_REF` defaults to `main`.
 
 ## Architecture and port ownership
