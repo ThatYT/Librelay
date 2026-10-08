@@ -27,6 +27,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.2.1
+      - uses: android-actions/setup-android@v3
       - name: Ensure the pinned Android SDK is available
         run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
       - name: Build and test Android packages

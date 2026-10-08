@@ -258,7 +258,7 @@ The panel menu now routes 8 to domain setup and 9 to restore, fixing duplicated 
 
 ## Librelay repository and deployment identity
 
-The project repository is `ThatYT/Librelay`; new installations use `/opt/librelay`, branded Docker resource names and `LIBRELAY_*` environment flags. See DEPLOYMENT.md for the compatibility upgrade. Existing data volumes, database names, Caddy certificates and installation paths remain attached to their original names. Legacy TMS identifiers appear only as compatibility paths, stored-address readers, test cases or historical implementation details. Third-party engine/framework names remain unchanged. The Android source display/theme name is Librelay; its existing application ID and historical bundled APK are retained, so this panel rename does not silently change Android application identity.
+The project repository is `ThatYT/Librelay`; new installations use `/opt/librelay`, branded Docker resource names and `LIBRELAY_*` environment flags. See DEPLOYMENT.md for the compatibility upgrade. Existing data volumes, database names, Caddy certificates and installation paths remain attached to their original names. Legacy TMS identifiers appear only as compatibility paths, stored-address readers, test cases or historical implementation details. Third-party engine/framework names remain unchanged. The Android source display/theme name is Librelay; its release application ID is retained for compatible signing. The historical APK remains in Git history; current build completion is described below.
 
 ## Android build completion
 
