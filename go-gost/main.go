@@ -38,6 +38,7 @@ var (
 	trace        bool
 	apiAddr      string
 	metricsAddr  string
+	prepareNode  bool
 )
 
 func init() {
@@ -91,6 +92,7 @@ func init() {
 	flag.Var(&nodes, "F", "chain node list")
 	flag.StringVar(&cfgFile, "C", "", "configuration file")
 	flag.BoolVar(&printVersion, "V", false, "print version")
+	flag.BoolVar(&prepareNode, "prepare-node", false, "install, validate and start the node proxy runtime")
 	flag.StringVar(&outputFormat, "O", "", "output format, one of yaml|json format")
 	flag.BoolVar(&debug, "D", false, "debug mode")
 	flag.BoolVar(&trace, "DD", false, "trace mode")
@@ -106,6 +108,15 @@ func init() {
 }
 
 func main() {
+	if prepareNode {
+		if err := socket.PrepareNodeRuntime(); err != nil {
+			fmt.Fprintf(os.Stderr, "Node runtime preparation failed: %v\nCheck: journalctl -u sing-box -n 40 --no-pager\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Node proxy runtime is ready: sing-box is active and enabled at boot.")
+		return
+	}
+
 	// 加载配置文件
 	config, err := LoadConfig("config.json")
 	if err != nil {

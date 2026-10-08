@@ -75,6 +75,8 @@ bash /tmp/librelay.sh update --install-dir /opt/tms
 
 更新节点时，在已更新的面板中重新复制该节点的安装命令，并在原节点上重新执行。默认下载对应提交的预构建文件并校验 SHA-256，保留已有节点配置和证书。升级面板不会自动升级远程节点；使用新公开监听功能前也要更新节点代理。
 
+节点安装/更新会同步准备 sing-box、验证配置、修复 systemd 服务，并确认 gost 与 sing-box 都已启动且开机自启后才报告成功。首次安装使用不开放任何代理监听端口的空配置；已有协议、端口、密钥和证书保持不变。若已有配置无效或端口被占用，安装器报错并保留配置，请按输出的日志命令排查，不会用空配置覆盖旧协议。
+
 面板地址支持 `https://panel.example.com:2095`，节点 WebSocket 使用 WSS，流量和配置上报使用 HTTPS。安装时未写协议的 `host:port` 会先检测 HTTPS，再检查兼容的 HTTP；显式 URL 保留原协议，TLS 证书正常校验。遇到连接失败，请在网站配置中填写完整公开面板 URL，重新生成节点安装命令后执行。
 
 ### 用户限速与流量
@@ -206,6 +208,8 @@ Add a node in the panel, enter its IP, then click its installation action. Copy 
 To update a node, copy its installation command again from the updated panel and rerun it on the original node. The installer downloads the matching prebuilt binary, verifies SHA-256 and preserves node configuration/certificates. Updating the panel does not automatically upgrade remote agents; update agents before using new public listening features.
 
 Panel addresses support `https://panel.example.com:2095`: the node uses WSS for its connection and HTTPS for traffic/config reports, with certificate verification enabled. For a scheme-less `host:port`, installation probes HTTPS first, then compatible HTTP; explicit URLs preserve their scheme. If connection fails, set the complete public panel URL in site settings, regenerate the node installation command, and rerun it.
+
+Node installation/update prepares sing-box synchronously, validates its configuration, repairs its systemd service, and reports success only when both gost and sing-box are running and enabled at boot. Fresh nodes start with an empty config that opens no proxy listening ports. Existing protocols, ports, credentials and certificates are retained. Invalid existing configs or occupied ports produce an error with log instructions; existing protocols are never replaced with an empty config.
 
 ### Per-user speed and traffic limits
 

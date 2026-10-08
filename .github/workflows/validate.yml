@@ -51,6 +51,7 @@ jobs:
             -Dtms.singbox.cert="$fixture_dir/self.crt" -Dtms.singbox.key="$fixture_dir/self.key" test
           curl -fLsS https://github.com/SagerNet/sing-box/releases/download/v1.13.12/sing-box-1.13.12-linux-amd64.tar.gz -o "$fixture_dir/sing-box.tar.gz"
           tar -xzf "$fixture_dir/sing-box.tar.gz" -C "$fixture_dir"
+          (cd go-gost/x && LIBRELAY_SINGBOX_TEST_BIN="$fixture_dir/sing-box-1.13.12-linux-amd64/sing-box" go test ./socket -run TestIdleConfigCompatibleWithSingbox -count=1)
           for config in "$fixture_dir"/config.json*; do
             "$fixture_dir/sing-box-1.13.12-linux-amd64/sing-box" check -c "$config"
           done

@@ -87,3 +87,28 @@ printf '{"addr":"secure.example:2095","secret":"fixture","http":7,"services":["p
 resolve_existing_panel
 jq -e '.addr=="https://secure.example:2095" and .secret=="fixture" and .http==7 and .services==["preserved"]' "$INSTALL_DIR/config.json" >/dev/null
 printf 'Node endpoint migration preserves existing settings\n'
+
+# Runtime failures stop setup before replacing the running agent.
+cat > "$INSTALL_DIR/gost.new" <<'AGENT'
+#!/bin/sh
+[ "$1" = -prepare-node ] || exit 4
+exit "${FIXTURE_RUNTIME_EXIT:-0}"
+AGENT
+chmod +x "$INSTALL_DIR/gost.new"
+prepare_node_runtime
+export FIXTURE_RUNTIME_EXIT=1
+if prepare_node_runtime; then echo 'Accepted failed runtime preparation'; exit 1; fi
+[ ! -f "$INSTALL_DIR/gost.new" ]
+[ "$(cat "$INSTALL_DIR/gost")" = 'existing node' ]
+unset FIXTURE_RUNTIME_EXIT
+# Success requires both services running and enabled at boot.
+systemctl() {
+  [ "${FIXTURE_FAILED_SERVICE:-}" != "${!#}" ] || return 1
+}
+verify_node_services
+FIXTURE_FAILED_SERVICE=sing-box
+if verify_node_services; then echo 'Accepted stopped sing-box'; exit 1; fi
+FIXTURE_FAILED_SERVICE=gost
+if verify_node_services; then echo 'Accepted stopped agent'; exit 1; fi
+unset FIXTURE_FAILED_SERVICE
+printf 'Node runtime readiness regression checks passed\n'

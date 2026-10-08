@@ -278,6 +278,28 @@ get_config_params() {
   fi
 }
 
+# Use the matching agent's runtime setup to keep sing-box version/config logic centralized.
+prepare_node_runtime() {
+  echo "Preparing sing-box: installing binary, validating configuration and checking service..."
+  if ! "$INSTALL_DIR/gost.new" -prepare-node; then
+    echo "Node runtime is not ready. Existing proxy configuration is preserved; installation/update stopped." >&2
+    echo "Check: journalctl -u sing-box -n 40 --no-pager" >&2
+    rm -f "$INSTALL_DIR/gost.new"
+    return 1
+  fi
+}
+
+verify_node_services() {
+  local service
+  for service in gost sing-box; do
+    if ! systemctl is-active --quiet "$service" || ! systemctl is-enabled --quiet "$service"; then
+      echo "$service is not active/enabled; installation/update did not complete." >&2
+      echo "Check: journalctl -u $service -n 40 --no-pager" >&2
+      return 1
+    fi
+  done
+}
+
 # Install the node agent.
 install_gost() {
   echo "🚀 Installing GOST..."
@@ -292,6 +314,7 @@ install_gost() {
 
   # Build/download first; a failed download never removes the existing executable or settings.
   download_agent "$INSTALL_DIR/gost.new" || { echo "Node build/download failed; existing installation preserved." >&2; return 1; }
+  prepare_node_runtime || return 1
   systemctl stop gost 2>/dev/null || true
   mv "$INSTALL_DIR/gost.new" "$INSTALL_DIR/gost"
   chmod +x "$INSTALL_DIR/gost"
@@ -344,14 +367,15 @@ WantedBy=multi-user.target
 EOF
 
   # Start the service.
-  systemctl daemon-reload
-  systemctl enable gost
-  systemctl start gost
+  systemctl daemon-reload || return 1
+  systemctl enable gost || return 1
+  systemctl start gost || return 1
+  verify_node_services || return 1
 
   # Check service status.
   echo "🔄 Checking service status..."
   if systemctl is-active --quiet gost; then
-    echo "✅ Installation complete. gost is running and enabled at boot."
+    echo "✅ Installation complete. gost and sing-box are active and enabled at boot."
     echo "📁 Configuration directory: $INSTALL_DIR"
     echo "🔧 Service status: $(systemctl is-active gost)"
   else
@@ -383,6 +407,7 @@ update_gost() {
     return 1
   fi
 
+  prepare_node_runtime || return 1
   resolve_existing_panel || { rm -f "$INSTALL_DIR/gost.new"; return 1; }
 
   # Stop the service.
@@ -400,9 +425,11 @@ update_gost() {
 
   # Restart the service.
   echo "🔄 Restarting service..."
-  systemctl start gost || return 1
-  
-  echo "✅ Update complete. Service restarted."
+  systemctl enable gost || return 1
+  systemctl restart gost || return 1
+  verify_node_services || return 1
+
+  echo "✅ Update complete. gost and sing-box are active and enabled at boot."
 }
 
 # Uninstall the node agent.

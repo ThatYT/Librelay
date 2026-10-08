@@ -144,11 +144,11 @@ func ensureSelfCert() error {
 	defer cancel()
 	out, err := exec.CommandContext(ctx, singboxBinPath(), "generate", "tls-keypair", "www.bing.com", "--months", "120").CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("生成自签证书失败: %v, %s", err, string(out))
+		return fmt.Errorf("cannot generate self-signed certificate: %v, %s", err, string(out))
 	}
 	key, cert := splitPem(string(out))
 	if key == "" || cert == "" {
-		return fmt.Errorf("解析自签证书失败: %s", string(out))
+		return fmt.Errorf("cannot parse self-signed certificate: %s", string(out))
 	}
 	if err := os.WriteFile(selfKeyPath(), []byte(key), 0o600); err != nil {
 		return err
@@ -242,7 +242,12 @@ func parseRealityKeypair(out string) (priv, pub string) {
 func ensureSingboxInstalled(mirror string) error {
 	bin := singboxBinPath()
 	if fi, err := os.Stat(bin); err == nil && fi.Size() > 0 {
-		return nil
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		err := exec.CommandContext(ctx, bin, "version").Run()
+		cancel()
+		if err == nil {
+			return nil
+		}
 	}
 
 	// 走到这说明二进制不在,真要下载了 —— 从这一刻起面板显示「安装中」
@@ -252,28 +257,40 @@ func ensureSingboxInstalled(mirror string) error {
 	// 下载和解压当成一件事:任一步失败就换下一个源,
 	// 免得国内机留下半个包却只报"解压失败",让人以为是归档坏了
 	tmp := filepath.Join(installDir, "sing-box.tar.gz")
+	candidate := bin + ".download"
+	defer os.Remove(candidate)
 	var lastErr error
 	for _, url := range singboxDownloadURLs(mirror) {
 		if err := downloadFile(url, tmp); err != nil {
 			os.Remove(tmp)
 			lastErr = fmt.Errorf("%s: %v", url, err)
-			fmt.Printf("⚠️ 下载 sing-box 失败,换下一个源: %v\n", lastErr)
+			fmt.Printf("sing-box download failed; trying the next source: %v\n", lastErr)
 			continue
 		}
-		if err := extractSingboxBinary(tmp, bin); err != nil {
+		if err := extractSingboxBinary(tmp, candidate); err != nil {
 			os.Remove(tmp)
-			lastErr = fmt.Errorf("%s 解压失败: %v", url, err)
-			fmt.Printf("⚠️ %v,换下一个源\n", lastErr)
+			lastErr = fmt.Errorf("%s extraction failed: %v", url, err)
+			fmt.Printf("%v; trying the next source\n", lastErr)
 			continue
 		}
 		os.Remove(tmp)
-		if err := os.Chmod(bin, 0o755); err != nil {
-			return fmt.Errorf("给 sing-box 加执行权限失败: %v", err)
+		if err := os.Chmod(candidate, 0o755); err != nil {
+			return fmt.Errorf("cannot mark sing-box executable: %v", err)
 		}
-		fmt.Printf("✅ sing-box %s 安装完成(源: %s)\n", singboxVersion, url)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		checkErr := exec.CommandContext(ctx, candidate, "version").Run()
+		cancel()
+		if checkErr != nil {
+			lastErr = fmt.Errorf("downloaded sing-box executable is invalid: %v", checkErr)
+			continue
+		}
+		if err := os.Rename(candidate, bin); err != nil {
+			return err
+		}
+		fmt.Printf("sing-box %s installed (source: %s)\n", singboxVersion, url)
 		return nil
 	}
-	msg := fmt.Sprintf("所有下载源都失败,最后一个 %v", lastErr)
+	msg := fmt.Sprintf("all sing-box download sources failed; last error: %v", lastErr)
 	// 记下来报给面板:否则那台机只会显示「没装上」,而为什么装不上
 	// 只能上机器翻 journalctl,这正是几个用户卡住的地方。
 	setSingboxInstallErr(msg)
@@ -340,8 +357,12 @@ func stopSingbox() error {
 
 // ensureSingboxService 写入/更新 systemd 单元(带 Restart=on-failure 自愈)
 func ensureSingboxService() error {
+	return ensureSingboxServiceAt(singboxBinPath(), singboxConfigPath(), singboxServiceUnit)
+}
+
+func ensureSingboxServiceAt(binary, configPath, unitPath string) error {
 	unit := fmt.Sprintf(`[Unit]
-Description=sing-box (flux hybrid)
+Description=Librelay sing-box proxy runtime
 After=network.target
 StartLimitIntervalSec=0
 
@@ -354,16 +375,16 @@ LimitNOFILE=1048576
 
 [Install]
 WantedBy=multi-user.target
-`, installDir, singboxBinPath(), singboxConfigPath())
+`, filepath.Dir(configPath), binary, configPath)
 
-	if existing, err := os.ReadFile(singboxServiceUnit); err == nil && string(existing) == unit {
+	if existing, err := os.ReadFile(unitPath); err == nil && string(existing) == unit {
 		return nil // 已是最新,无需 daemon-reload
 	}
-	if err := os.WriteFile(singboxServiceUnit, []byte(unit), 0o644); err != nil {
-		return fmt.Errorf("写 sing-box.service 失败: %v", err)
+	if err := os.WriteFile(unitPath, []byte(unit), 0o644); err != nil {
+		return fmt.Errorf("cannot write sing-box.service: %v", err)
 	}
 	if out, err := exec.Command("systemctl", "daemon-reload").CombinedOutput(); err != nil {
-		return fmt.Errorf("systemctl daemon-reload 失败: %v, %s", err, string(out))
+		return fmt.Errorf("systemctl daemon-reload failed: %v, %s", err, string(out))
 	}
 	return nil
 }
