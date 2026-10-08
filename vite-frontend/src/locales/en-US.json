@@ -439,8 +439,8 @@
   "m792d53a27314": "plain forwarding without extra encryption or camouflage",
   "mf7513db642d0": ". A direct connection across a filtered boundary may be identified or disrupted. A domestic entry can provide a better connection to the external node",
   "me04b7a218055": "Protocols and relay use Reality camouflage, so a domestic entry is generally unnecessary",
-  "m426639299bcf": "Why can traffic and expiry be set in two places?",
-  "m71d84d167180": "Why can traffic and expiry be set in two places?",
+  "m426639299bcf": "Where to configure user speed and traffic limits",
+  "m71d84d167180": "Where do I set user speed and traffic limits?",
   "m467f941cddd6": "There are two separate levels:",
   "mf375a157197b": "sets traffic limits for",
   "m18470a0cc9a1": "port and tunnel forwarding",
@@ -1103,5 +1103,6 @@
   "error.userExpired": "User has expired",
   "error.userLimitNode": "Cannot apply user limits on node {{node}}: {{detail}}. Update the node agent and ensure it is online; then retry.",
   "error.userLimitSaved": "User settings saved; node synchronization is pending: {{detail}}",
-  "error.userLimitLegacy": "Manage speed and traffic limits in User Management; line plans no longer apply to this user"
+  "error.userLimitLegacy": "Manage speed and traffic limits in User Management; line plans no longer apply to this user",
+  "limits.guide": "Add or edit the user in User Management to set the account speed, traffic quota and monthly reset day. Zero speed/quota means unlimited. Protocol, line and tunnel assignment only grants access. Update node agents and save each legacy user before its old plans stop applying."
 }

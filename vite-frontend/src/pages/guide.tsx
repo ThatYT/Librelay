@@ -336,7 +336,8 @@ export default function GuidePage() {
                 aria-label={t("m426639299bcf")}
                 title={<span className="text-sm font-medium">{t("m71d84d167180")}</span>}
               >
-                <p className="text-sm text-default-500 leading-relaxed pb-2"> {t("m467f941cddd6")}<b>{t("mfbf413d429bd")}</b>{t("mf375a157197b")}<b>{t("m18470a0cc9a1")}</b>{t("m7c9c8ef90aa7")} <b>{t("m646f00bb877e")}</b>{t("m9cc96956abfe")}<b>{t("m1de6323c2f75")}</b>{t("m4ab6d5e17558")} <b>{t("m81921cc9b1f7")}</b> {t("m89db9985ac5b")} </p>
+                <p className="text-sm text-default-500 leading-relaxed pb-2">{t("limits.guide")}</p>
+                <p className="text-sm text-default-500 leading-relaxed pb-2">{t("limits.explain")}</p>
               </AccordionItem>
 
               <AccordionItem
