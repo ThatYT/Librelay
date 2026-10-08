@@ -264,3 +264,8 @@ commit.sh
 .env.*
 .librelay-*
 .tms-*
+
+# Android packages are published by CI, not committed
+android-app/app/release/
+*.apk
+*.aab

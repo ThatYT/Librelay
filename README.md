@@ -468,3 +468,7 @@ ufw delete <编号>        # 逐条删
 
 ---
 
+
+## Android 应用
+
+Android 源码和内置前端已使用 Librelay 品牌。每次 main 更新由 Android 工作流构建，并在成功后发布测试版 APK 与 SHA-256 校验文件。Debug 版作为独立测试应用安装；Release 版未签名，需要原签名密钥才能作为原应用的兼容更新。构建和签名说明见 [Android README](android-app/README.md)。

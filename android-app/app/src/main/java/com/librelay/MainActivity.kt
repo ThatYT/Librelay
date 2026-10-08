@@ -1,7 +1,9 @@
-package com.flux
+package com.librelay
 
 import androidx.core.content.edit
 import android.graphics.Color
+import android.content.Intent
+import androidx.webkit.WebViewAssetLoader
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -22,7 +24,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         webView = findViewById(R.id.webView)
-        WebView.setWebContentsDebuggingEnabled(true)
+        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
         setupWebView()
         loadUrl()
 
@@ -31,8 +33,32 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupWebView() {
+        val assetLoader = WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
+        webView.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                return assetLoader.shouldInterceptRequest(request.url)
+            }
+
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                val url = request.url
+                if (url.scheme == "https" && url.host == "appassets.androidplatform.net") {
+                    if (url.path == "/") {
+                        view.loadUrl("https://appassets.androidplatform.net/assets/index.html#/")
+                        return true
+                    }
+                    return false
+                }
+                // Keep the native bridge attached only to bundled application content.
+                try { startActivity(Intent(Intent.ACTION_VIEW, url)) } catch (_: android.content.ActivityNotFoundException) { }
+                return true
+            }
+        }
         val settings = webView.settings
         settings.javaScriptEnabled = true
+        settings.allowFileAccess = false
+        settings.allowContentAccess = false
         settings.domStorageEnabled = true
         settings.databaseEnabled = true
         settings.loadWithOverviewMode = true
@@ -135,8 +161,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadUrl() {
-        //webView.loadUrl("http://192.168.100.9:3000")
-        webView.loadUrl("file:///android_asset/index.html")
+        webView.loadUrl("https://appassets.androidplatform.net/assets/index.html#/")
     }
 
     private fun setupSystemBars() {

@@ -1,3 +1,4 @@
+import { getSubscriptionUrl } from "@/api/network";
 import ProtocolPortButton from "@/components/protocol-port-button";
 import { useTranslation } from "react-i18next";
 import { t } from "@/i18n";
@@ -66,7 +67,7 @@ export default function RelayPage() {
     try {
       const res = await assignSelf({ nodeId, relay: true, landingId });
       if (res.code === 0 && res.data?.subToken) {
-        setSelfSubUrl(`${window.location.origin}/api/v1/open_api/sub?token=${res.data.subToken}`);
+        setSelfSubUrl(getSubscriptionUrl('sub', res.data.subToken));
         setSelfOpen(true);
         loadAll();
       } else {

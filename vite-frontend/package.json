@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:android": "tsc && vite build --mode android",
     "lint": "eslint --fix",
     "preview": "vite preview",
     "test": "node --test tests/*.test.mjs"

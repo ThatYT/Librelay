@@ -1,3 +1,4 @@
+import { getSubscriptionUrl } from "@/api/network";
 import { useTranslation } from "react-i18next";
 import { t } from "@/i18n";
 import { useState, useEffect } from "react";
@@ -25,10 +26,10 @@ export default function MySubPage() {
   const [account, setAccount] = useState<any>(null); // 只用来判断账号是否被停用/到期
   const [loading, setLoading] = useState(true);
 
-  const subUrl = (token: string) => `${window.location.origin}/api/v1/open_api/sub?token=${token}`;
+  const subUrl = (token: string) => getSubscriptionUrl('sub', token);
   // Clash / Mihomo 是另一套格式(YAML),和上面那条 base64 链接列表不通用。
   // 用 Clash Verge、ClashMeta 的人贴上面那条会得到一个空订阅。
-  const clashUrl = (token: string) => `${window.location.origin}/api/v1/open_api/clash?token=${token}`;
+  const clashUrl = (token: string) => getSubscriptionUrl('clash', token);
 
   const load = async () => {
     try {

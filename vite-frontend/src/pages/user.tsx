@@ -1,3 +1,4 @@
+import { getSubscriptionUrl } from "@/api/network";
 import { useTranslation } from "react-i18next";
 import { t } from "@/i18n";
 import { useState, useEffect } from 'react';
@@ -183,10 +184,10 @@ export default function UserPage() {
   const [subLines, setSubLines] = useState<any[]>([]);
   const [subAllToken, setSubAllToken] = useState<string>('');
   const [subUserName, setSubUserName] = useState<string>('');
-  const subUrl = (token: string) => `${window.location.origin}/api/v1/open_api/sub?token=${token}`;
+  const subUrl = (token: string) => getSubscriptionUrl('sub', token);
   // Clash / Mihomo 走独立路径:那边吃 YAML,和上面这条 base64 链接列表不通用,
   // 贴错了客户端里是空的。
-  const clashUrl = (token: string) => `${window.location.origin}/api/v1/open_api/clash?token=${token}`;
+  const clashUrl = (token: string) => getSubscriptionUrl('clash', token);
 
   const handleShowSub = async (user: User) => {
     try {

@@ -1,3 +1,4 @@
+import { subscriptionUrl } from "@/utils/subscription-url";
 import { t } from "@/i18n";
 import axios, { AxiosResponse } from 'axios';
 import { getPanelAddresses, isWebViewFunc} from '@/utils/panel';
@@ -36,6 +37,12 @@ export const reinitializeBaseURL = () => {
 
 reinitializeBaseURL();
 
+export function getSubscriptionUrl(kind: 'sub' | 'clash', token: string): string {
+  const native = isWebViewFunc();
+  if (native && !baseURL) return '';
+  return subscriptionUrl(kind, token, native ? baseURL : `${window.location.origin}/api/v1/`);
+}
+
 
 interface ApiResponse<T = any> {
   code: number;
@@ -52,7 +59,8 @@ function handleTokenExpired() {
   
   // 跳转到登录页面
   if (window.location.pathname !== '/') {
-    window.location.href = '/';
+    if (import.meta.env.MODE === 'android') window.location.hash = '/';
+    else window.location.href = '/';
   }
 }
 

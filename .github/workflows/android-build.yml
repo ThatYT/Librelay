@@ -1,0 +1,74 @@
+name: Build Librelay Android app
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Bundle the current Librelay frontend
+        working-directory: vite-frontend
+        run: |
+          npm install -g pnpm@11.19.0
+          pnpm install --frozen-lockfile
+          pnpm test
+          pnpm build:android
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.2.1
+      - name: Ensure the pinned Android SDK is available
+        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+      - name: Build and test Android packages
+        working-directory: android-app
+        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease :app:lintDebug
+      - name: Verify APK branding and bundled frontend
+        run: |
+          aapt="$ANDROID_HOME/build-tools/34.0.0/aapt"
+          "$aapt" dump badging android-app/app/build/outputs/apk/debug/app-debug.apk | tee /tmp/librelay-apk-info.txt
+          grep -q "application-label:'Librelay'" /tmp/librelay-apk-info.txt
+          unzip -l android-app/app/build/outputs/apk/debug/app-debug.apk | grep 'assets/index.html'
+          mkdir artifacts
+          cp android-app/app/build/outputs/apk/debug/app-debug.apk artifacts/librelay-debug.apk
+          cp android-app/app/build/outputs/apk/release/app-release-unsigned.apk artifacts/librelay-release-unsigned.apk
+          (cd artifacts && sha256sum *.apk > checksums.sha256)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: librelay-android-${{ github.sha }}
+          path: artifacts/
+      - name: Publish the Android test build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="android-$GITHUB_SHA"
+          cat > /tmp/android-release-notes.md <<'NOTES'
+          Librelay Android test build. The debug APK is installable as a separate test app; the release APK is unsigned and must be signed before installation.
+
+          Both packages contain the current Librelay frontend. The debug app uses a separate application ID so it does not overwrite the existing Android app or its data. Debug signing keys are not suitable for production updates. A release update to an existing app requires its original signing key.
+
+          These packages passed unit tests, lint and packaging checks. Android device/emulator testing is not part of this build.
+          NOTES
+          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$tag" artifacts/*.apk artifacts/checksums.sha256 \
+              --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+              --title "Librelay Android test build ${GITHUB_SHA:0:7}" --notes-file /tmp/android-release-notes.md
+          fi
+      - name: Upload Android diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: librelay-android-reports
+          path: |
+            android-app/app/build/reports/
+            android-app/app/build/test-results/
+          if-no-files-found: ignore
