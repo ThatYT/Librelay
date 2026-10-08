@@ -14,7 +14,7 @@ import { updateConfigs } from '@/api';
 import { SettingsIcon } from '@/components/icons';
 
 import { isAdmin } from '@/utils/auth';
-import { getCachedConfigs, clearConfigCache, updateSiteConfig } from '@/config/site';
+import { configCache, getCachedConfigs, clearConfigCache, updateSiteConfig } from '@/config/site';
 
 // 简单的保存图标组件
 const SaveIcon = ({ className }: { className?: string }) => (
@@ -112,7 +112,7 @@ const getInitialConfigs = (): Record<string, string> => {
   
   try {
     configKeys.forEach(key => {
-      const cachedValue = localStorage.getItem('vite_config_' + key);
+      const cachedValue = configCache.get(key);
       if (cachedValue) {
         initialConfigs[key] = cachedValue;
       }

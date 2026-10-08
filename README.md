@@ -1,5 +1,7 @@
-# TMS EN · 多节点代理面板
+# Librelay · 多节点代理面板
 
+> Librelay 将 liberty（自由）与 relay（转发）结合，面向多节点代理管理。
+>
 > 基于 [Teminuosi/Tms](https://github.com/Teminuosi/Tms) 的 fork，支持多节点管理、所有协议自定义端口、中文/English 界面及浅色/深色主题。
 
 ---
@@ -118,7 +120,7 @@ curl -fLsS https://raw.githubusercontent.com/ThatYT/Tms_EN/main/panel_install.sh
 bash /tmp/tms.sh update --install-dir /opt/tms
 ```
 
-如果旧更新仍在编译，先在旧窗口按 `Ctrl+C` 停止构建，再执行新命令。新版会显示阶段和下载进度，日志位于 `/opt/tms/.tms-last-deploy.log`；`tms info` 显示部署提交及模式。更新保留 `.env`、MySQL 数据卷、已有协议端口和 Caddy 配置；启动检查失败会尝试恢复上一个 Compose 配置和容器，数据库不回滚、不删除。
+如果旧更新仍在编译，先在旧窗口按 `Ctrl+C` 停止构建，再执行新命令。新版会显示阶段和下载进度，日志位于 `/opt/tms/.tms-last-deploy.log`；`librelay info` 显示部署提交及模式。更新保留 `.env`、MySQL 数据卷、已有协议端口和 Caddy 配置；启动检查失败会尝试恢复上一个 Compose 配置和容器，数据库不回滚、不删除。
 
 确需本机编译时显式指定 `--source`（安装、更新均支持）：
 
@@ -153,27 +155,29 @@ GITHUB_REPO=ThatYT/Tms_EN bash /tmp/tms-node.sh
 
 <br>
 
-### 装完之后 · tms 命令
+### 装完之后 · librelay 命令
 
-面板机上会生成一个 `tms` 命令(类似 x-ui),直接输入打开管理菜单:
+新版以 `librelay` 为管理命令，保留 `tms` 兼容别名。升级后会安装两个命令；现有 `/opt/tms` 安装目录、`.env`、数据库和 Docker/Caddy 数据卷不改名。GitHub 仓库仍为 `ThatYT/Tms_EN`，原安装地址继续有效。管理员自定义的面板名称保留；旧默认名 TMS 在界面中显示为 Librelay。
+
+面板机上会生成一个 `librelay` 命令(类似 x-ui),直接输入打开管理菜单:
 
 ```bash
-tms
+librelay
 ```
 
 也可以带参数直接用:
 
 | 命令 | 作用 |
 |---|---|
-| `tms` | 打开管理菜单 |
-| `tms update` | 更新面板到最新版 |
-| `tms status` | 查看运行状态 |
-| `tms info` | 查看访问地址 / 账号 |
-| `tms domain 域名` | 给面板配域名 + HTTPS |
-| `tms domain` | 查看当前域名状态 |
-| `tms domain off` | 关闭域名,回到 IP:端口 |
-| `tms export` | 导出数据库备份 |
-| `tms purge` | 彻底清理(卸载并清空容器 / 镜像 / 卷 / 命令) |
+| `librelay` | 打开管理菜单 |
+| `librelay update` | 更新面板到最新版 |
+| `librelay status` | 查看运行状态 |
+| `librelay info` | 查看访问地址 / 账号 |
+| `librelay domain 域名` | 给面板配域名 + HTTPS |
+| `librelay domain` | 查看当前域名状态 |
+| `librelay domain off` | 关闭域名,回到 IP:端口 |
+| `librelay export` | 导出数据库备份 |
+| `librelay purge` | 彻底清理(卸载并清空容器 / 镜像 / 卷 / 命令) |
 
 ---
 
@@ -192,9 +196,9 @@ bash /tmp/tms.sh update --install-dir /PATH/TO/EXISTING/TMS
 - 更新不会删除用户、节点、协议、订阅或限额设置，也不会将旧面板端口 6366 自动改成 2095。
 - 数据库启动迁移只添加缺失的 `inbound.public_listen` 和 `inbound.egress_port` 列，旧记录保留原来的监听和订阅端口。
 - 更新面板后，在面板中重新复制各节点的安装命令，更新远程节点代理，再使用新 Reality 监听功能。
-- 后续更新可以直接运行 `tms update`。重复执行安装不会覆盖已有 `.env`，而会提示使用更新命令。
+- 后续更新可以直接运行 `librelay update`。重复执行安装不会覆盖已有 `.env`，而会提示使用更新命令。
 
-要修改已有面板的公开端口，先确认新端口在面板 VPS 上空闲，再修改原 `.env` 的 `FRONTEND_PORT` 并执行 `tms update`。`--port` / `-p` 仅用于新安装。
+要修改已有面板的公开端口，先确认新端口在面板 VPS 上空闲，再修改原 `.env` 的 `FRONTEND_PORT` 并执行 `librelay update`。`--port` / `-p` 仅用于新安装。
 
 创建或转换为新公开监听模式的 Reality 条目依赖新版后端和节点代理；之后直接降级到旧版不受支持。完整备份与兼容性说明见 [部署与升级说明](docs/DEPLOYMENT.md)。
 
@@ -225,7 +229,7 @@ Reality 的 40000+ 自动端口用于内部 sing-box 网关，与公开的 443/8
 
 新版自动分配会同时检查数据库预约和节点实际监听状态，遇到占用就尝试下一个空闲内部端口；最多检查 25 个候选，节点超时或权限错误立即返回。用户指定的公开 Reality 端口仍会严格校验，冲突时不会偷偷更换。已有协议端口和凭证保留。
 
-遇到该错误，执行 `tms update` 或下载最新面板脚本在原目录执行 `update`，再重试创建。节点代理无需因这次修复重新安装；内部端口不需要作为公开客户端端口放行。
+遇到该错误，执行 `librelay update` 或下载最新面板脚本在原目录执行 `update`，再重试创建。节点代理无需因这次修复重新安装；内部端口不需要作为公开客户端端口放行。
 
 ## 所有协议自定义端口
 
@@ -269,7 +273,7 @@ Reality 的 40000+ 自动端口用于内部 sing-box 网关，与公开的 443/8
 新安装默认通过 `http://IP:2095` 访问（自定义端口或旧安装使用 `.env` 中的实际端口）,浏览器会标"不安全"。配了域名之后走 HTTPS,**订阅链接也会跟着变成域名**。
 
 ```bash
-tms domain panel.example.com
+librelay domain panel.example.com
 ```
 
 背后用 Caddy 自动申请和续期 Let's Encrypt 证书,会依次检查:域名解析是否指向本机 → 80/443 有没有被占 → 写配置 → 起 Caddy → 等证书签发(最多 60 秒)。
@@ -306,7 +310,7 @@ bash /tmp/tms.sh domain panel.example.com --https-port 2095 --install-dir /opt/t
 | 后端 API | 6365 | 保持原节点对接地址 |
 | 同机 Reality | 443 | VLESS 客户端连接 |
 
-安装好最新版脚本后，也可以用 `tms domain panel.example.com --https-port 2095`。已有域名时，`tms domain --https-port 2095` 会直接使用原域名。不指定新端口重新配置同一个域名时，会保留已选端口；普通新域名仍默认 HTTPS 443。新安装可以同时指定 `--port 8080 --domain panel.example.com --https-port 2095`。
+安装好最新版脚本后，也可以用 `librelay domain panel.example.com --https-port 2095`。已有域名时，`librelay domain --https-port 2095` 会直接使用原域名。不指定新端口重新配置同一个域名时，会保留已选端口；普通新域名仍默认 HTTPS 443。新安装可以同时指定 `--port 8080 --domain panel.example.com --https-port 2095`。
 
 通过新 HTTPS 地址登录后，面板生成的订阅链接会包含 `:2095`。已分发的旧订阅地址需要更新；订阅下载端口与 Reality 的实际连接端口是两个独立设置。配置通过验证后才重启 Caddy，启动失败时尝试恢复旧配置；已有证书卷和数据库保留。
 
@@ -336,44 +340,44 @@ bash /tmp/tms.sh domain panel.example.com --https-port 2095 --install-dir /opt/t
 
 **先分清两种机器,卸载方式完全不同:**
 
-| 角色 | 装了什么 | 有 `tms` 命令吗 |
+| 角色 | 装了什么 | 有 `librelay` 命令吗 |
 |---|---|---|
 | **面板机**(只有一台) | Docker:MySQL + 后端 + 前端 | ✅ 有 |
 | **节点机 / 转发机**(每台) | gost + sing-box(systemd 服务) | ❌ 没有 |
 
-> ⚠️ `tms purge` 和 `panel_install.sh purge` **只清面板**,对节点机上的 gost 一点作用都没有。反过来,清节点也不会影响面板。两边要分别执行。
+> ⚠️ `librelay purge` 和 `panel_install.sh purge` **只清面板**,对节点机上的 gost 一点作用都没有。反过来,清节点也不会影响面板。两边要分别执行。
 
 ### 一、卸载面板机
 
 在面板安装目录下执行:
 
 ```bash
-tms purge
+librelay purge
 ```
 
-删除所有容器、镜像、数据卷、网络、配置文件和 `tms` 管理命令。也可以直接输入 `tms` 打开菜单选「彻底清理」。
+删除所有容器、镜像、数据卷、网络、配置文件和 `librelay` 管理命令。也可以直接输入 `librelay` 打开菜单选「彻底清理」。
 
-如果 `tms` 命令不在了(比如当初就没装成功)，下载本 fork 的脚本，并将 `/PATH/TO/EXISTING/TMS` 替换为原安装目录：
+如果 `librelay` 命令不在了(比如当初就没装成功)，下载本 fork 的脚本，并将 `/PATH/TO/EXISTING/TMS` 替换为原安装目录：
 
 ```bash
 curl -fLsS https://raw.githubusercontent.com/ThatYT/Tms_EN/main/panel_install.sh -o /tmp/tms.sh
 bash /tmp/tms.sh purge --install-dir /PATH/TO/EXISTING/TMS
 ```
 
-> 💡 最好 **cd 到当初安装面板的目录**再执行。不在那个目录时,脚本会从 `/usr/local/bin/tms` 里读回安装目录并自动切过去;
+> 💡 最好 **cd 到当初安装面板的目录**再执行。不在那个目录时,脚本会从兼容命令 `/usr/local/bin/tms` 里读回安装目录并自动切过去;
 > 那个文件也没了的话,容器和镜像照样按名字清掉,只是安装目录里的 `docker-compose.yml` / `.env` 要你自己删。
-> 脚本会检查当前目录的 `docker-compose.yml` 是不是 TMS 的,不是就跳过 compose 清理,避免误删你其它项目的容器和 `.env`。
+> 脚本会检查当前目录的 `docker-compose.yml` 是不是 Librelay 的,不是就跳过 compose 清理,避免误删你其它项目的容器和 `.env`。
 
 #### 源码编译版(合体部署)怎么卸
 
-用 `git clone` + `docker-compose-hybrid.yml` 本地构建起来的面板,管理命令同样是 `tms`:
+用 `git clone` + `docker-compose-hybrid.yml` 本地构建起来的面板,管理命令同样是 `librelay`:
 
 ```bash
-tms purge
+librelay purge
 ```
 
-或者输入 `tms` 打开菜单选择对应的「彻底清理」操作。它会删掉容器、**本地构建的镜像**、数据卷(含数据库数据)、
-网络和 `tms` 命令;**源码目录会保留**,确认不要了自己 `rm -rf` 即可。
+或者输入 `librelay` 打开菜单选择对应的「彻底清理」操作。它会删掉容器、**本地构建的镜像**、数据卷(含数据库数据)、
+网络和 `librelay` 命令;**源码目录会保留**,确认不要了自己 `rm -rf` 即可。
 
 ### 二、卸载节点机(转发机)
 
@@ -415,7 +419,7 @@ GITHUB_REPO=ThatYT/Tms_EN bash /tmp/n.sh
 **面板机:**
 ```bash
 docker ps -a | grep -E 'gost-mysql|springboot-backend|vite-frontend'
-command -v tms
+command -v librelay
 ```
 
 **节点机:**

@@ -362,7 +362,7 @@ configure_docker_ipv6() {
 # Display the management menu.
 show_menu() {
   echo "==============================================="
-  echo "          TMS Panel Management"
+  echo "          Librelay Panel Management"
   echo "==============================================="
   echo "  1. Install panel"
   echo "  2. Update panel"
@@ -384,7 +384,7 @@ generate_random() {
 # Remove only temporary installers; retain persistent management scripts.
 delete_self() {
   SCRIPT_PATH="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
-  # Keep both management scripts under /usr/local/bin so tms remains usable.
+  # Keep both management scripts under /usr/local/bin so librelay remains usable.
   case "$SCRIPT_PATH" in
     /usr/local/bin/tms-panel.sh|/usr/local/bin/tms) return 0 ;;
   esac
@@ -399,7 +399,7 @@ print_access_box() {
   local ip="$1" fport="$2"
   echo ""
   echo "╔══════════════════════════════════════════════════════╗"
-  echo "║              TMS Panel                                ║"
+  echo "║              Librelay Panel                           ║"
   echo "╚══════════════════════════════════════════════════════╝"
   echo ""
   echo "    Panel URL :  http://${ip}:${fport}"
@@ -409,46 +409,49 @@ print_access_box() {
   echo "    ⚠️  Change the default password immediately after signing in"
   echo ""
   echo "  ──────────────────────────────────────────────────────"
-  echo "    Management : run tms (update/uninstall/purge/status)"
+  echo "    Management : run librelay (update/uninstall/purge/status)"
   echo "    Repository :  https://github.com/${GITHUB_REPO}"
   echo "  ──────────────────────────────────────────────────────"
   echo ""
 }
 
-# Install the persistent tms management command.
+# Install the persistent librelay management command.
 install_tms_command() {
-  echo "🔗 Installing the tms management command..."
+  echo "🔗 Installing the librelay management command..."
   local self panel_dir
+  local command_dir="${TMS_COMMAND_DIR:-/usr/local/bin}"
   panel_dir="$(pwd)"
   self="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
   # Copy this installer when possible; otherwise download it.
   if [ -f "$self" ] && [ -s "$self" ]; then
-    cp -f "$self" /usr/local/bin/tms-panel.sh 2>/dev/null || true
+    cp -f "$self" "$command_dir/tms-panel.sh" 2>/dev/null || true
   fi
-  if [ ! -f /usr/local/bin/tms-panel.sh ]; then
-    curl -fLsS "$PANEL_INSTALL_RAW_URL" -o /usr/local/bin/tms-panel.sh 2>/dev/null || true
+  if [ ! -f "$command_dir/tms-panel.sh" ]; then
+    curl -fLsS "$PANEL_INSTALL_RAW_URL" -o "$command_dir/tms-panel.sh" 2>/dev/null || true
   fi
-  chmod +x /usr/local/bin/tms-panel.sh 2>/dev/null || true
+  chmod +x "$command_dir/tms-panel.sh" 2>/dev/null || true
   # The launcher enters the saved installation directory for Compose commands.
-  cat > /usr/local/bin/tms <<EOF
+  cat > "$command_dir/tms" <<EOF
 #!/bin/bash
-# TMS panel management. Run tms without arguments to open the menu.
+# Librelay panel management. Run librelay without arguments to open the menu.
 export GITHUB_REPO="$GITHUB_REPO"
 export GITHUB_REF="$GITHUB_REF"
 TMS_DIR="$panel_dir"
 [ -d "\$TMS_DIR" ] && cd "\$TMS_DIR"
-# Forward all arguments: tms domain needs both the command and hostname.
+# Forward all arguments: librelay domain needs both the command and hostname.
 # Passing only the first argument would discard the domain.
-if [ \$# -eq 0 ]; then exec bash /usr/local/bin/tms-panel.sh menu; fi
-exec bash /usr/local/bin/tms-panel.sh "\$@"
+if [ \$# -eq 0 ]; then exec bash "$command_dir/tms-panel.sh" menu; fi
+exec bash "$command_dir/tms-panel.sh" "\$@"
 EOF
-  chmod +x /usr/local/bin/tms 2>/dev/null || true
-  echo "✅ Management command ready: run tms for update/uninstall/purge/status"
+  chmod +x "$command_dir/tms" 2>/dev/null || true
+  cp -f "$command_dir/tms" "$command_dir/librelay"
+  chmod +x "$command_dir/librelay"
+  echo "✅ Management command ready: run librelay for update/uninstall/purge/status"
 }
 
 # Display container status.
 show_status() {
-  echo "📊 TMS panel container status:"
+  echo "📊 Librelay panel container status:"
   docker ps -a --filter "name=gost-mysql" --filter "name=springboot-backend" --filter "name=vite-frontend" \
     --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || docker ps -a
 }
@@ -503,7 +506,7 @@ show_access_info() {
 }
 
 # Purge all panel containers, images, volumes, networks, configuration and commands.
-# Check whether the current Compose file belongs to TMS.
+# Check whether the current Compose file belongs to Librelay.
 # down -v and removing .env are destructive in an unrelated directory.
 # Verify ownership before removing files or volumes.
 is_tms_compose() {
@@ -511,7 +514,7 @@ is_tms_compose() {
 }
 
 purge_panel() {
-  echo "🧨 Purging TMS (removing containers/images/data volumes/networks/configuration and management commands)..."
+  echo "🧨 Purging Librelay (removing containers/images/data volumes/networks/configuration and management commands)..."
 
   # A downloaded purge command may run outside the install directory.
   # Find the saved directory so configuration is removed there as well.
@@ -524,16 +527,16 @@ purge_panel() {
   fi
 
   if [ -f docker-compose.yml ] && ! is_tms_compose; then
-    echo "⚠️  The current docker-compose.yml does not belong to TMS. Skipping Compose cleanup and configuration removal."
-    echo "    Only named TMS containers/images will be removed. Enter the panel install directory to purge its files."
+    echo "⚠️  The current docker-compose.yml does not belong to Librelay. Skipping Compose cleanup and configuration removal."
+    echo "    Only named Librelay containers/images will be removed. Enter the panel install directory to purge its files."
   fi
   if command -v docker &> /dev/null; then
-    # Use Compose cleanup only for a verified TMS deployment.
+    # Use Compose cleanup only for a verified Librelay deployment.
     if is_tms_compose; then
       docker compose down -v --rmi all --remove-orphans 2>/dev/null \
         || docker-compose down -v --rmi all --remove-orphans 2>/dev/null || true
     fi
-    # Fallback: remove known TMS containers by name.
+    # Fallback: remove known Librelay containers by name.
     # Remove Caddy too, since it is attached to gost-network.
     docker rm -f gost-mysql springboot-backend vite-frontend tms-caddy 2>/dev/null || true
     # Compose may prefix volume names with its project name.
@@ -552,9 +555,9 @@ purge_panel() {
     rm -f docker-compose.yml docker-compose-v4.yml docker-compose-v6.yml gost.sql .env temp_migration.sql 2>/dev/null || true
   fi
   # Remove persistent management commands.
-  rm -f /usr/local/bin/tms /usr/local/bin/tms-panel.sh 2>/dev/null || true
+  rm -f /usr/local/bin/librelay /usr/local/bin/tms /usr/local/bin/tms-panel.sh 2>/dev/null || true
   rm -rf /etc/tms 2>/dev/null || true
-  echo "✅ Purge complete. TMS is no longer installed."
+  echo "✅ Purge complete. Librelay is no longer installed."
   echo "ℹ️  Only the panel was removed. Node agents (gost / sing-box) were retained."
   echo "    To uninstall a node, run the node uninstaller on that machine (see README)."
 }
@@ -687,7 +690,7 @@ install_panel() {
   echo "🚀 Starting panel installation..."
   acquire_install_lock || return 1
   if [ -f .env ]; then
-    echo "Existing installation found. .env and database preserved. Use: tms update"
+    echo "Existing installation found. .env and database preserved. Use: librelay update"
     [ -z "${FRONTEND_PORT:-}" ] || { echo "Port changes require editing the existing FRONTEND_PORT in .env." >&2; return 1; }
     show_access_info
     return 0
@@ -732,13 +735,13 @@ EOF
     echo "      ⚠ Could not detect the public IP. Set the backend address in Website Settings after login (IP:${BACKEND_PORT})"
   fi
 
-  # Install the persistent tms command.
+  # Install the persistent librelay command.
   install_tms_command >/dev/null 2>&1
 
   # Print access information after all installation output.
-  echo "TMS installed successfully"
+  echo "Librelay installed successfully"
   print_access_box "${PUBLIC_IP:-SERVER_IP}" "$FRONTEND_PORT"
-  echo "Commands: tms | tms status | tms info | tms update | tms domain example.com"
+  echo "Commands: librelay | librelay status | librelay info | librelay update | librelay domain example.com"
   [ -z "$INSTALL_DOMAIN" ] || setup_domain "$INSTALL_DOMAIN" "${INSTALL_HTTPS_PORT:-}"
 
 
@@ -891,7 +894,7 @@ export_migration_sql() {
     echo "📁 File: $(pwd)/$SQL_FILE"
     echo "📊 Size: $FILE_SIZE"
     echo "🔒 Backup verified (mysqldump completion marker found)"
-    echo "➡️  Migration: install the panel on the new server, then run  tms restore $SQL_FILE"
+    echo "➡️  Migration: install the panel on the new server, then run  librelay restore $SQL_FILE"
   else
     echo "❌ Exported file is empty or missing"
     rm -f "$SQL_FILE"
@@ -944,7 +947,7 @@ current_https_url() {
 write_caddy_config() {
   local domain="$1" port="$2" target="$3"
   cat > "$target" <<EOF
-# TMS panel: generated by tms domain
+# Librelay panel: generated by librelay domain
 {
     https_port $port
 }
@@ -981,7 +984,7 @@ show_domain_status() {
   d="$(current_domain)"
   if [ -z "$d" ]; then
     echo "ℹ️  No domain configured. Panel URL: http://IP:$(get_frontend_port)"
-    echo "   Configure a domain: tms domain panel.example.com"
+    echo "   Configure a domain: librelay domain panel.example.com"
     return 0
   fi
   echo "🌐 Current domain: $d"
@@ -989,7 +992,7 @@ show_domain_status() {
     echo "   Caddy status: ✅ running"
     echo "   Panel URL:   $(current_https_url)"
   else
-    echo "   Caddy status: ❌ not running (try tms domain $d to configure it again)"
+    echo "   Caddy status: ❌ not running (try librelay domain $d to configure it again)"
   fi
 }
 
@@ -1027,7 +1030,7 @@ setup_domain() {
   # Validate a hostname without a URL scheme or port.
   if ! echo "$domain" | grep -qE '^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$'; then
     echo "❌ Invalid domain: $domain"
-    echo "   Enter only the hostname, without a scheme or port. Example: tms domain panel.example.com"
+    echo "   Enter only the hostname, without a scheme or port. Example: librelay domain panel.example.com"
     return 1
   fi
   if echo "$domain" | grep -qE '^[0-9.]+$'; then
@@ -1046,7 +1049,7 @@ setup_domain() {
   backend_port=${backend_port:-6365}
   if [ "$https_port" = "$frontend_port" ] || [ "$https_port" = "$backend_port" ]; then
     echo "HTTPS port $https_port conflicts with the panel HTTP/API port." >&2
-    echo "For HTTPS 2095: set FRONTEND_PORT=8080 in the original .env, run tms update, then configure the domain with --https-port 2095." >&2
+    echo "For HTTPS 2095: set FRONTEND_PORT=8080 in the original .env, run librelay update, then configure the domain with --https-port 2095." >&2
     return 1
   fi
   url=$(https_url "$domain" "$https_port")
@@ -1165,7 +1168,7 @@ setup_domain() {
 # Confirm removal, then use the panel purge routine.
 uninstall_panel() {
   echo "🗑️ Starting panel removal..."
-  read -p "Uninstall? All TMS containers, images, data volumes and configuration will be removed (y/N): " confirm
+  read -p "Uninstall? All Librelay containers, images, data volumes and configuration will be removed (y/N): " confirm
   if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
     echo "❌ Uninstall cancelled"
     return 0
@@ -1243,8 +1246,8 @@ restore_migration_sql() {
   local file="$1" force="$2"
 
   if [[ -z "$file" ]]; then
-    echo "Usage: tms restore <backup.sql> [--force]"
-    echo "  Create the backup with tms export. --force is required to overwrite an existing database."
+    echo "Usage: librelay restore <backup.sql> [--force]"
+    echo "  Create the backup with librelay export. --force is required to overwrite an existing database."
     return 1
   fi
   [[ -f "$file" ]] || { echo "❌ File not found: $file"; return 1; }
@@ -1254,7 +1257,7 @@ restore_migration_sql() {
   echo "✅ Backup integrity verified"
 
   if ! docker ps --format "{{.Names}}" | grep -q "^gost-mysql$"; then
-    echo "❌ Database container is not running. Install the panel on this server (tms install) before restoring."
+    echo "❌ Database container is not running. Install the panel on this server (librelay install) before restoring."
     return 1
   fi
   _load_db_cfg || { echo "❌ Database configuration could not be read from either the container or .env"; return 1; }
@@ -1272,7 +1275,7 @@ restore_migration_sql() {
     echo "   A fresh installation normally contains initial tables. Confirm that this server"
     echo "   has no data you need to keep, then rerun with --force:"
     echo ""
-    echo "     tms restore $file --force"
+    echo "     librelay restore $file --force"
     echo ""
     return 1
   fi
@@ -1324,7 +1327,7 @@ restore_migration_sql() {
   if [[ $rc -ne 0 ]]; then
     echo "❌ Restore failed (mysql exit code $rc)"
     echo "   The database may be partially restored. Recover using the before_restore_*.sql backup above:"
-    echo "     tms restore before_restore_xxx.sql --force"
+    echo "     librelay restore before_restore_xxx.sql --force"
     return 1
   fi
 
@@ -1354,7 +1357,7 @@ restore_migration_sql() {
   echo "      otherwise update the panel address on each node. Also check this server's firewall/security group"
   echo "      allows the panel API port. New VPS firewall rules may prevent node connections."
   echo "   2. Users' subscription URLs contain the old panel address and may stop working."
-  echo "      Keep the same domain (tms domain panel.example.com), or distribute new subscription URLs."
+  echo "      Keep the same domain (librelay domain panel.example.com), or distribute new subscription URLs."
   return 0
 }
 
@@ -1409,7 +1412,7 @@ main() {
     PANEL_INSTALL_RAW_URL="https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_REF}/panel_install.sh"
   fi
   if [ "$PORT_REQUESTED" = 1 ] && [ "$command" != install ]; then
-    echo "--port applies to new installations. Change FRONTEND_PORT in the existing .env, then run tms update." >&2
+    echo "--port applies to new installations. Change FRONTEND_PORT in the existing .env, then run librelay update." >&2
     exit 1
   fi
   set -- "$command" ${args[@]+"${args[@]}"}
@@ -1436,7 +1439,7 @@ main() {
   esac
 }
 
-# Interactive menu used by the persistent tms launcher.
+# Interactive menu used by the persistent librelay launcher.
 menu_loop() {
   while true; do
     show_menu

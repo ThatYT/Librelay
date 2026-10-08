@@ -15,7 +15,7 @@ class DatabaseBootstrapMysqlTest {
             try (Statement statement = connection.createStatement()) {
                 DatabaseBootstrap.initialize(connection);
                 assertEquals("admin_user", scalar(statement, "SELECT user FROM user WHERE id=1"));
-                assertEquals("TMS", scalar(statement, "SELECT value FROM vite_config WHERE name='app_name'"));
+                assertEquals("Librelay", scalar(statement, "SELECT value FROM vite_config WHERE name='app_name'"));
                 assertEquals("12", scalar(statement, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE()"));
                 statement.executeUpdate("UPDATE user SET pwd='existing-password-hash', flow=123 WHERE id=1");
                 statement.executeUpdate("INSERT INTO inbound (node_id,tag,protocol,listen_port,created_time) VALUES (7,'legacy','vless',20000,1)");
@@ -29,7 +29,7 @@ class DatabaseBootstrapMysqlTest {
                 assertEquals("123", scalar(statement, "SELECT flow FROM user WHERE id=1"));
                 assertEquals("20000", scalar(statement, "SELECT listen_port FROM inbound WHERE tag='legacy'"));
                 assertEquals("0", scalar(statement, "SELECT public_listen FROM inbound WHERE tag='legacy'"));
-                assertEquals("TMS", scalar(statement, "SELECT value FROM vite_config WHERE name='app_name'"));
+                assertEquals("Librelay", scalar(statement, "SELECT value FROM vite_config WHERE name='app_name'"));
                 // Old installer columns must survive updates, while missing fields are added.
                 statement.executeUpdate("ALTER TABLE user ADD COLUMN name VARCHAR(100) DEFAULT 'legacy-name'");
                 statement.executeUpdate("ALTER TABLE node ADD COLUMN port INT DEFAULT 1234");

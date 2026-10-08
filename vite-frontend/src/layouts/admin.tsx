@@ -428,7 +428,7 @@ export default function AdminLayout({
         <div className="px-4 py-2 pb-4 mt-auto flex-shrink-0">
           <div className="text-center">
             <p className="text-xs text-gray-400 dark:text-gray-500">
-              Powered by <span className="text-gray-500 dark:text-gray-400">TMS</span>
+              Powered by <span className="text-gray-500 dark:text-gray-400">Librelay</span>
             </p>
           </div>
         </div>
@@ -564,7 +564,7 @@ export default function AdminLayout({
       </Modal>
 
       {/* 更新说明弹窗。
-          这里刻意不做「点一下自动更新」:面板跑在容器里,而 tms update 是宿主机
+          这里刻意不做「点一下自动更新」:面板跑在容器里,而 librelay update 是宿主机
           命令(docker compose pull + up),容器内执行不了。要能执行只能把
           /var/run/docker.sock 挂进来 —— 那等于把宿主机 root 交给一个公网可访问
           的 Web 应用,面板一旦有 RCE 整台机器就没了。何况更新会重启 backend
@@ -592,12 +592,12 @@ export default function AdminLayout({
                   <div>
                     <p className="text-sm text-default-500 mb-2">{t("mc054376e4550")}</p>
                     <div className="flex items-center gap-2 bg-default-100 rounded-lg px-3 py-2">
-                      <code className="flex-1 font-mono text-sm select-all">tms update</code>
+                      <code className="flex-1 font-mono text-sm select-all">librelay update</code>
                       <Button
                         size="sm"
                         variant="flat"
                         onPress={async () => {
-                          (await copyTextToClipboard('tms update'))
+                          (await copyTextToClipboard('librelay update'))
                             ? toast.success(t("m8f6f8d979c98"))
                             : toast.error(t("m5673832463ee"));
                         }}

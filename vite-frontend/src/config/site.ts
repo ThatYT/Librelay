@@ -1,3 +1,4 @@
+import { APP_NAME, panelName } from "./brand";
 import { getConfigByName, getConfigs } from '@/api';
 
 export type SiteConfig = typeof siteConfig;
@@ -10,7 +11,7 @@ const APP_VERSION = "1.0.1";
 const getInitialConfig = () => {
   if (typeof window === 'undefined') {
     return {
-      name: "TMS",
+      name: APP_NAME,
       version: VERSION,
       app_version: APP_VERSION,
     };
@@ -19,13 +20,13 @@ const getInitialConfig = () => {
   const cachedAppName = localStorage.getItem(CACHE_PREFIX + 'app_name');
     if (cachedAppName) {
       return {
-        name: cachedAppName,
+        name: panelName(cachedAppName),
         version: VERSION,
         app_version: APP_VERSION,
       };
     }
   return {
-    name: "TMS",
+    name: APP_NAME,
     version: VERSION,
     app_version: APP_VERSION,
   };
@@ -38,13 +39,14 @@ export const configCache = {
   // 获取缓存的配置
   get: (key: string): string | null => {
     const cacheKey = CACHE_PREFIX + key;
-      return localStorage.getItem(cacheKey);
+      const value = localStorage.getItem(cacheKey);
+      return key === "app_name" && value !== null ? panelName(value) : value;
   },
 
   // 设置缓存的配置
   set: (key: string, value: string): void => {
     const cacheKey = CACHE_PREFIX + key;
-      localStorage.setItem(cacheKey, value);
+      localStorage.setItem(cacheKey, key === "app_name" ? panelName(value) : value);
   },
 
   // 删除指定配置的缓存
@@ -74,7 +76,7 @@ export const getCachedConfig = async (key: string): Promise<string | null> => {
 
   const response = await getConfigByName(key);
   if (response.code === 0 && response.data?.value) {
-    const value = response.data.value;
+    const value = key === "app_name" ? panelName(response.data.value) : response.data.value;
     configCache.set(key, value);
     return value;
   }
@@ -103,7 +105,8 @@ export const getCachedConfigs = async (): Promise<Record<string, string>> => {
   try {
     const response = await getConfigs();
     if (response.code === 0 && response.data) {
-      const configs = response.data;
+      const configs = { ...response.data };
+      if (configs.app_name) configs.app_name = panelName(configs.app_name);
       // 将所有配置存入缓存
       Object.entries(configs).forEach(([key, value]) => {
         configCache.set(key, value as string);
@@ -132,7 +135,7 @@ export const SITE_CONFIG_UPDATED = 'site-config-updated';
 export const updateSiteConfig = async () => {
   try {
     const response = await getConfigByName('app_name');
-    const fresh = response.code === 0 ? response.data?.value : null;
+    const fresh = response.code === 0 && response.data?.value ? panelName(response.data.value) : null;
     if (fresh) {
       configCache.set('app_name', fresh);
       if (fresh !== siteConfig.name) {

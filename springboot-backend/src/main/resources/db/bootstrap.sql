@@ -207,5 +207,5 @@ SELECT 1, 'admin_user', '3c85cdebade1c51cf64ca9f3c09d182d', 0, 2727251700000, 99
 WHERE NOT EXISTS (SELECT 1 FROM `user`);
 
 INSERT IGNORE INTO `vite_config` (`name`, `value`, `time`)
-SELECT 'app_name', 'TMS', 1755147963000
+SELECT 'app_name', 'Librelay', 1755147963000
 WHERE NOT EXISTS (SELECT 1 FROM `vite_config` WHERE `name` = 'app_name');

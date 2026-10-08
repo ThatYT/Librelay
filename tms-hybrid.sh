@@ -1,13 +1,13 @@
 #!/bin/bash
 # ============================================================
-# TMS management command for manual source/hybrid deployments.
+# Librelay management command for manual source/hybrid deployments.
 #
 # Use with a git checkout and docker-compose-hybrid.yml local build.
 # panel_install.sh uses prebuilt images by default; --source opts into compilation.
 #
 # Install: bash tms-hybrid.sh install from the panel directory.
-# Then run tms to open the menu.
-#        tms update / status / logs / restart / stop / start
+# Then run librelay to open the menu.
+#        librelay update / status / logs / restart / stop / start
 # ============================================================
 export LC_ALL=C
 set -o pipefail
@@ -49,8 +49,8 @@ cmd_update() {
 # Do not require a complete panel directory for removal.
 # An incomplete installation must still be removable.
 cmd_purge() {
-  echo "🧨 Purging TMS (source/hybrid deployment)"
-  echo "   This removes containers, locally built images, data volumes (INCLUDING DATABASE DATA), networks and the tms command"
+  echo "🧨 Purging Librelay (source/hybrid deployment)"
+  echo "   This removes containers, locally built images, data volumes (INCLUDING DATABASE DATA), networks and the librelay command"
   read -rp "Continue? (y/N): " c
   if [ "$c" != "y" ] && [ "$c" != "Y" ]; then
     echo "❌ Cancelled"
@@ -71,7 +71,7 @@ cmd_purge() {
   docker network ls -q --filter name=gost-network 2>/dev/null | xargs -r docker network rm 2>/dev/null || true
   docker image prune -f 2>/dev/null || true
 
-  rm -f /usr/local/bin/tms 2>/dev/null || true
+  rm -f /usr/local/bin/librelay /usr/local/bin/tms 2>/dev/null || true
 
   echo "✅ Panel purge complete."
   echo "ℹ️  Source directory retained:$PANEL_DIR(remove it manually only if no longer needed)"
@@ -102,7 +102,7 @@ cmd_restart() { need_panel; dc restart; echo "✅ Restarted"; cmd_status; }
 cmd_stop()    { need_panel; dc stop;    echo "⏹️  Stopped"; }
 cmd_start()   { need_panel; dc up -d;   echo "▶️  Started"; cmd_status; }
 
-# Install this script as the persistent tms command.
+# Install this script as the persistent librelay command.
 cmd_install() {
   need_panel
   local self
@@ -111,14 +111,16 @@ cmd_install() {
   chmod +x /usr/local/bin/tms-hybrid.sh
   cat > /usr/local/bin/tms <<EOF
 #!/bin/bash
-# TMS source deployment management. Run tms to open the menu.
+# Librelay source deployment management. Run librelay to open the menu.
 export TMS_DIR="$PANEL_DIR"
 exec bash /usr/local/bin/tms-hybrid.sh "\${1:-menu}"
 EOF
   chmod +x /usr/local/bin/tms
+  cp -f /usr/local/bin/tms /usr/local/bin/librelay
+  chmod +x /usr/local/bin/librelay
   # Remove the obsolete flux launcher that points to the previous directory.
   rm -f /usr/local/bin/flux /usr/local/bin/flux-panel.sh 2>/dev/null
-  echo "✅ Management command installed. Run tms from any directory."
+  echo "✅ Management command installed. Run librelay from any directory."
   echo "   Saved panel directory: $PANEL_DIR"
 }
 
@@ -126,7 +128,7 @@ cmd_menu() {
   while true; do
     echo ""
     echo "=============================="
-    echo "     TMS Panel Management"
+    echo "     Librelay Panel Management"
     echo "  Directory: $PANEL_DIR"
     echo "=============================="
     echo " 1) Update panel (fetch source + rebuild)"
@@ -163,5 +165,5 @@ case "${1:-menu}" in
   start)   cmd_start ;;
   purge|uninstall) cmd_purge ;;
   menu|"") cmd_menu ;;
-  *) echo "Usage: tms [menu|update|status|logs|restart|stop|start|purge]" ;;
+  *) echo "Usage: librelay [menu|update|status|logs|restart|stop|start|purge]" ;;
 esac

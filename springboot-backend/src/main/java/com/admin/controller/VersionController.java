@@ -99,7 +99,7 @@ public class VersionController extends BaseController {
             conn.setConnectTimeout(5000);
             conn.setReadTimeout(5000);
             conn.setRequestProperty("Accept", "application/vnd.github+json");
-            conn.setRequestProperty("User-Agent", "TMS-Panel");
+            conn.setRequestProperty("User-Agent", "Librelay-Panel");
 
             if (conn.getResponseCode() != 200) {
                 throw new RuntimeException("HTTP " + conn.getResponseCode());
