@@ -161,7 +161,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
 
         // 2. 分配端口(留空则自动排下一个可用)
         PortAllocation portAllocation;
-        if (forwardDto.getRemoteAddr() != null && forwardDto.getRemoteAddr().startsWith("tms-socks://127.0.0.1:")) {
+        if (forwardDto.getRemoteAddr() != null && (forwardDto.getRemoteAddr().startsWith("librelay-socks://127.0.0.1:") || forwardDto.getRemoteAddr().startsWith("tms-socks://127.0.0.1:"))) {
             // Node-internal metering listeners are independent of public transfer-machine ranges.
             Integer port = forwardDto.getInPort();
             if (port == null || port < 1 || port > 65535 || getAllUsedPortsOnNode(tunnel.getInNodeId(), null).contains(port))

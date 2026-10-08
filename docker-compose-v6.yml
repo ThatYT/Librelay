@@ -1,7 +1,7 @@
 services:
   mysql:
     image: mysql:5.7
-    container_name: gost-mysql
+    container_name: ${LIBRELAY_MYSQL_CONTAINER:-librelay-mysql}
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
@@ -26,11 +26,11 @@ services:
       retries: 10
 
   backend:
-    image: ghcr.io/teminuosi/springboot-backend:latest
-    container_name: springboot-backend
+    image: ghcr.io/thatyt/springboot-backend:latest
+    container_name: ${LIBRELAY_BACKEND_CONTAINER:-librelay-backend}
     restart: unless-stopped
     environment:
-      GITHUB_REPO: ${GITHUB_REPO:-Teminuosi/Tms}
+      GITHUB_REPO: ${GITHUB_REPO:-ThatYT/Librelay}
       GITHUB_REF: ${GITHUB_REF:-main}
       DB_HOST: mysql
       DB_NAME: ${DB_NAME}
@@ -56,8 +56,8 @@ services:
       start_period: 90s
 
   frontend:
-    image: ghcr.io/teminuosi/vite-frontend:latest
-    container_name: vite-frontend
+    image: ghcr.io/thatyt/vite-frontend:latest
+    container_name: ${LIBRELAY_FRONTEND_CONTAINER:-librelay-frontend}
     restart: unless-stopped
     ports:
       - "${FRONTEND_PORT:-2095}:80"
@@ -70,16 +70,16 @@ services:
 
 volumes:
   mysql_data:
-    name: mysql_data
+    name: ${LIBRELAY_MYSQL_VOLUME:-librelay_mysql_data}
     driver: local
   backend_logs:
-    name: backend_logs
+    name: ${LIBRELAY_LOG_VOLUME:-librelay_backend_logs}
     driver: local
 
 
 networks:
   gost-network:
-    name: gost-network
+    name: ${LIBRELAY_NETWORK:-librelay-network}
     driver: bridge
     enable_ipv6: true
     ipam:

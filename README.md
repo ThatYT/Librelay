@@ -49,10 +49,10 @@
 在面板 VPS 上以 **root** 执行。支持 Debian / Ubuntu / Raspbian、Fedora、CentOS / RHEL / Rocky / AlmaLinux；需要能够访问 GitHub 和构建依赖源。
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/ThatYT/Tms_EN/main/panel_install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/ThatYT/Librelay/main/panel_install.sh)
 ```
 
-如果系统尚未安装 curl，先用系统包管理器安装 curl。脚本会检查并安装其他必要工具、Docker 和 Docker Compose 插件，然后拉取 GitHub CI 为同一提交预先构建的前后端镜像。默认安装目录为 `/opt/tms`；VPS 不再默认运行 Maven、TypeScript 或 Vite 编译，适合小内存机器。前后端镜像提供 amd64 / arm64；当前默认数据库 MySQL 5.7 只有原生 amd64 镜像，标准完整部署请使用 amd64 VPS。
+如果系统尚未安装 curl，先用系统包管理器安装 curl。脚本会检查并安装其他必要工具、Docker 和 Docker Compose 插件，然后拉取 GitHub CI 为同一提交预先构建的前后端镜像。默认安装目录为 `/opt/librelay`；VPS 不再默认运行 Maven、TypeScript 或 Vite 编译，适合小内存机器。前后端镜像提供 amd64 / arm64；当前默认数据库 MySQL 5.7 只有原生 amd64 镜像，标准完整部署请使用 amd64 VPS。
 
 交互安装时会提示：
 
@@ -65,15 +65,15 @@ Panel port [2095]:
 #### 指定端口、域名与目录
 
 ```bash
-curl -fLsS https://raw.githubusercontent.com/ThatYT/Tms_EN/main/panel_install.sh -o /tmp/tms.sh
-bash /tmp/tms.sh --port 8080 --install-dir /opt/tms --domain panel.example.com
+curl -fLsS https://raw.githubusercontent.com/ThatYT/Librelay/main/panel_install.sh -o /tmp/librelay.sh
+bash /tmp/librelay.sh --port 8080 --install-dir /opt/librelay --domain panel.example.com
 ```
 
 | 参数 | 作用 | 默认值 |
 |---|---|---|
 | `--port PORT` / `-p PORT` | 新安装的面板公开端口，范围 1–65535 | `2095` |
 | `--domain DOMAIN` | 安装后配置面板 HTTPS 域名 | 不设置 |
-| `--install-dir PATH` | 面板安装目录 | `/opt/tms` |
+| `--install-dir PATH` | 面板安装目录 | `/opt/librelay` |
 
 指定域名前，需要将域名解析到面板 VPS，并确保该机器的 TCP 80/443 空闲。面板公开端口和后端 API 端口必须不同；配置 Caddy 时，也不能占用它需要的 80/443。
 
@@ -116,16 +116,16 @@ bash <(curl -Ls "https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_REF}/
 面板默认从 GHCR 拉取 `sha-完整提交SHA` 镜像，前后端使用同一提交并校验镜像版本，不使用可能不同步的 `latest`。请等待 GitHub 的 **Build and publish panel images** 成功后运行安装/更新。下载失败时保留当前运行的服务，不会自动改为本机源码编译；私有 fork 的镜像需要先 `docker login ghcr.io`。
 
 ```bash
-curl -fLsS https://raw.githubusercontent.com/ThatYT/Tms_EN/main/panel_install.sh -o /tmp/tms.sh
-bash /tmp/tms.sh update --install-dir /opt/tms
+curl -fLsS https://raw.githubusercontent.com/ThatYT/Librelay/main/panel_install.sh -o /tmp/librelay.sh
+bash /tmp/librelay.sh update --install-dir /opt/tms
 ```
 
-如果旧更新仍在编译，先在旧窗口按 `Ctrl+C` 停止构建，再执行新命令。新版会显示阶段和下载进度，日志位于 `/opt/tms/.tms-last-deploy.log`；`librelay info` 显示部署提交及模式。更新保留 `.env`、MySQL 数据卷、已有协议端口和 Caddy 配置；启动检查失败会尝试恢复上一个 Compose 配置和容器，数据库不回滚、不删除。
+如果旧更新仍在编译，先在旧窗口按 `Ctrl+C` 停止构建，再执行新命令。新版会显示阶段和下载进度，日志位于 `/opt/tms/.librelay-last-deploy.log`；`librelay info` 显示部署提交及模式。更新保留 `.env`、MySQL 数据卷、已有协议端口和 Caddy 配置；启动检查失败会尝试恢复上一个 Compose 配置和容器，数据库不回滚、不删除。
 
 确需本机编译时显式指定 `--source`（安装、更新均支持）：
 
 ```bash
-bash /tmp/tms.sh update --source --install-dir /opt/tms
+bash /tmp/librelay.sh update --source --install-dir /opt/tms
 ```
 
 源码模式先后构建后端和前端，限制 Maven / Node 堆内存并复用 Maven 缓存；要求可用内存加空闲 Swap 至少 2.5GiB。该检查不能保证所有机器都能完成构建；默认镜像模式没有此编译资源要求。脚本不自动创建 Swap，也不会修改系统磁盘或内存设置。
@@ -136,7 +136,7 @@ bash /tmp/tms.sh update --source --install-dir /opt/tms
 
 先用 `df -h / /tmp /var/tmp` 和 `free -h` 检查资源，再重新执行面板生成的节点安装命令（它会下载最新脚本）。不要删除面板 MySQL 数据卷或节点 `/etc/gost` 来腾空间。
 
-如确需源码编译，在安装命令前设置 `TMS_NODE_SOURCE=1`。默认构建目录为 `/var/tmp`，可用 `TMS_NODE_BUILD_DIR` 指向已有目录；脚本检查至少 3 GiB 空闲，限制编译并发为 1，并把构建缓存和工作文件放在该目录。`TMS_NODE_RELEASE` 可固定到包含校验清单的 Release 标签。
+如确需源码编译，在安装命令前设置 `LIBRELAY_NODE_SOURCE=1`。默认构建目录为 `/var/tmp`，可用 `LIBRELAY_NODE_BUILD_DIR` 指向已有目录；脚本检查至少 3 GiB 空闲，限制编译并发为 1，并把构建缓存和工作文件放在该目录。`LIBRELAY_NODE_RELEASE` 可固定到包含校验清单的 Release 标签。
 
 <details>
 <summary>手动装节点端(不推荐)</summary>
@@ -147,8 +147,8 @@ bash /tmp/tms.sh update --source --install-dir /opt/tms
 (密钥同样得先在面板「转发机监控」新增该转发机才有):
 
 ```bash
-curl -fLsS https://raw.githubusercontent.com/ThatYT/Tms_EN/main/install.sh -o /tmp/tms-node.sh
-GITHUB_REPO=ThatYT/Tms_EN bash /tmp/tms-node.sh
+curl -fLsS https://raw.githubusercontent.com/ThatYT/Librelay/main/install.sh -o /tmp/librelay-node.sh
+GITHUB_REPO=ThatYT/Librelay bash /tmp/librelay-node.sh
 ```
 
 </details>
@@ -157,7 +157,7 @@ GITHUB_REPO=ThatYT/Tms_EN bash /tmp/tms-node.sh
 
 ### 装完之后 · librelay 命令
 
-新版以 `librelay` 为管理命令，保留 `tms` 兼容别名。升级后会安装两个命令；现有 `/opt/tms` 安装目录、`.env`、数据库和 Docker/Caddy 数据卷不改名。GitHub 仓库仍为 `ThatYT/Tms_EN`，原安装地址继续有效。管理员自定义的面板名称保留；旧默认名 TMS 在界面中显示为 Librelay。
+新版以 `librelay` 为管理命令，保留 `tms` 兼容别名。升级后会安装两个命令；现有 `/opt/tms` 安装目录、`.env`、数据库和 Docker/Caddy 数据卷不改名。GitHub 仓库已更名为 `ThatYT/Librelay`。新安装使用 `/opt/librelay` 和 Librelay 容器、数据卷、网络及 `LIBRELAY_*` 变量；旧安装保持原有存储与目录，更新时仅将已知旧仓库地址迁移为新地址，并保存 `.env.before-librelay` 备份。管理员自定义的面板名称保留；旧默认名 TMS 在界面中显示为 Librelay。旧的 `TMS_*` 安装环境变量仍接受；浏览器语言选项读取旧键并保存到 `librelay.language`。
 
 面板机上会生成一个 `librelay` 命令(类似 x-ui),直接输入打开管理菜单:
 
@@ -183,16 +183,16 @@ librelay
 
 ## 旧安装升级
 
-先备份数据库，再下载本 fork 的新脚本。将下方 `/PATH/TO/EXISTING/TMS` 替换为原安装目录。第一次切换到本版本时，请不要依赖旧版 `tms update` 脚本。
+先备份数据库，再下载本 fork 的新脚本。将下方 `/PATH/TO/EXISTING/PANEL` 替换为原安装目录。第一次切换到本版本时，请不要依赖旧版 `tms update` 脚本。
 
 ```bash
 tms export
-curl -fLsS https://raw.githubusercontent.com/ThatYT/Tms_EN/main/panel_install.sh -o /tmp/tms.sh
-bash /tmp/tms.sh update --install-dir /PATH/TO/EXISTING/TMS
+curl -fLsS https://raw.githubusercontent.com/ThatYT/Librelay/main/panel_install.sh -o /tmp/librelay.sh
+bash /tmp/librelay.sh update --install-dir /PATH/TO/EXISTING/PANEL
 ```
 
 - 使用原来的安装目录，保留 `.env` 和 MySQL 数据卷。不要用 `.env.example` 覆盖现有数据库凭据或 JWT 密钥。
-- 如果 `.env` 已有 `GITHUB_REPO`，请确认其指向 `ThatYT/Tms_EN` 或你实际使用的 fork。
+- 如果 `.env` 已有 `GITHUB_REPO`，请确认其指向 `ThatYT/Librelay` 或你实际使用的 fork。
 - 更新不会删除用户、节点、协议、订阅或限额设置，也不会将旧面板端口 6366 自动改成 2095。
 - 数据库启动迁移只添加缺失的 `inbound.public_listen` 和 `inbound.egress_port` 列，旧记录保留原来的监听和订阅端口。
 - 更新面板后，在面板中重新复制各节点的安装命令，更新远程节点代理，再使用新 Reality 监听功能。
@@ -211,8 +211,8 @@ bash /tmp/tms.sh update --install-dir /PATH/TO/EXISTING/TMS
 如果你已遇到此错误，请保留原 `.env` 和 MySQL 卷，下载新脚本并升级（替换下方原安装目录）：
 
 ```bash
-curl -fLsS https://raw.githubusercontent.com/ThatYT/Tms_EN/main/panel_install.sh -o /tmp/tms.sh
-bash /tmp/tms.sh update --install-dir /PATH/TO/EXISTING/TMS
+curl -fLsS https://raw.githubusercontent.com/ThatYT/Librelay/main/panel_install.sh -o /tmp/librelay.sh
+bash /tmp/librelay.sh update --install-dir /PATH/TO/EXISTING/PANEL
 ```
 
 若仍然失败，检查 `docker logs gost-mysql --tail 80` 和 `docker logs springboot-backend --tail 80`。不要公开数据库密码或 `.env` 内容。
@@ -260,7 +260,7 @@ Reality 的 40000+ 自动端口用于内部 sing-box 网关，与公开的 443/8
 
 ## 构建与验证
 
-已通过后端 8 项测试、前端 5 项测试、Go socket 4 项测试、后端/前端生产构建、Linux 节点构建、浏览器语言与主题切换、sing-box 配置检查、安装脚本回归及三种 Compose 配置验证。[GitHub Actions](https://github.com/ThatYT/Tms_EN/actions) 会继续执行自动检查。
+已通过后端 8 项测试、前端 5 项测试、Go socket 4 项测试、后端/前端生产构建、Linux 节点构建、浏览器语言与主题切换、sing-box 配置检查、安装脚本回归及三种 Compose 配置验证。[GitHub Actions](https://github.com/ThatYT/Librelay/actions) 会继续执行自动检查。
 
 本地环境没有 Docker daemon，尚未验证真实 VPS 安装、生产 MySQL 升级和 Docker 重启后的数据持久性；ShellCheck 也未在本地运行。建议先在测试 VPS 完成安装和重启验证，再升级生产环境。完整的 12 项场景验证范围见 [部署与升级说明](docs/DEPLOYMENT.md)。
 
@@ -291,14 +291,14 @@ librelay domain panel.example.com
 
 可以把 Caddy 的 HTTPS 改到 **2095**。当前前端 HTTP 入口默认也占用 2095，所以应先将 HTTP 备用入口移到另一个空闲端口（以下示例为 8080）。保持后端 API 为原来的 6365。
 
-在面板 VPS 上执行（示例使用默认目录 `/opt/tms`，自定义目录请替换）：
+在面板 VPS 上执行（示例使用旧安装目录 `/opt/tms`；新安装默认 `/opt/librelay`，自定义目录请替换）：
 
 ```bash
 cp -p /opt/tms/.env /opt/tms/.env.before-https-port
 sed -i 's/^FRONTEND_PORT=.*/FRONTEND_PORT=8080/' /opt/tms/.env
-curl -fLsS https://raw.githubusercontent.com/ThatYT/Tms_EN/main/panel_install.sh -o /tmp/tms.sh
-bash /tmp/tms.sh update --install-dir /opt/tms
-bash /tmp/tms.sh domain panel.example.com --https-port 2095 --install-dir /opt/tms
+curl -fLsS https://raw.githubusercontent.com/ThatYT/Librelay/main/panel_install.sh -o /tmp/librelay.sh
+bash /tmp/librelay.sh update --install-dir /opt/tms
+bash /tmp/librelay.sh domain panel.example.com --https-port 2095 --install-dir /opt/tms
 ```
 
 请将 `panel.example.com` 替换为你的域名，并先确认 TCP 8080/2095 在面板机器上可用。云安全组和防火墙需要放行 **TCP 80、2095**：80 用于证书申请与续期，2095 用于面板 HTTPS。此时 Caddy 不占用 443，你可以在同机创建/编辑 Reality 使用 TCP 443。
@@ -357,11 +357,11 @@ librelay purge
 
 删除所有容器、镜像、数据卷、网络、配置文件和 `librelay` 管理命令。也可以直接输入 `librelay` 打开菜单选「彻底清理」。
 
-如果 `librelay` 命令不在了(比如当初就没装成功)，下载本 fork 的脚本，并将 `/PATH/TO/EXISTING/TMS` 替换为原安装目录：
+如果 `librelay` 命令不在了(比如当初就没装成功)，下载本 fork 的脚本，并将 `/PATH/TO/EXISTING/PANEL` 替换为原安装目录：
 
 ```bash
-curl -fLsS https://raw.githubusercontent.com/ThatYT/Tms_EN/main/panel_install.sh -o /tmp/tms.sh
-bash /tmp/tms.sh purge --install-dir /PATH/TO/EXISTING/TMS
+curl -fLsS https://raw.githubusercontent.com/ThatYT/Librelay/main/panel_install.sh -o /tmp/librelay.sh
+bash /tmp/librelay.sh purge --install-dir /PATH/TO/EXISTING/PANEL
 ```
 
 > 💡 最好 **cd 到当初安装面板的目录**再执行。不在那个目录时,脚本会从兼容命令 `/usr/local/bin/tms` 里读回安装目录并自动切过去;
@@ -408,8 +408,8 @@ echo "✅ 节点已卸载(gost + sing-box + 配置 + 证书)"
 也可以重新下节点脚本走菜单(选 `3` 卸载):
 
 ```bash
-curl -fLsS https://raw.githubusercontent.com/ThatYT/Tms_EN/main/install.sh -o /tmp/n.sh
-GITHUB_REPO=ThatYT/Tms_EN bash /tmp/n.sh
+curl -fLsS https://raw.githubusercontent.com/ThatYT/Librelay/main/install.sh -o /tmp/n.sh
+GITHUB_REPO=ThatYT/Librelay bash /tmp/n.sh
 ```
 
 > 💡 **国内机器**(阿里云等)大概率下不动 GitHub,直接用上面那段命令。

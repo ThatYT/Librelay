@@ -2,7 +2,7 @@
 # 【本地 build 源码镜像,不拉 :latest,不碰生产】,MySQL 初始化时连 hybrid schema 一起建。
 #
 # 用法(在一台【干净的测试机】上,别和生产面板同机跑,否则容器名/端口冲突):
-#   1) 下源码:curl -L https://github.com/Teminuosi/Tms/archive/refs/heads/main.tar.gz | tar xz && cd Tms-main
+#   1) 下源码:curl -L https://github.com/ThatYT/Librelay/archive/refs/heads/main.tar.gz | tar xz && cd Librelay-main
 #   2) 建 .env(见文件末尾示例)
 #   3) docker compose -f docker-compose-hybrid.yml --env-file .env up -d --build
 #      (第一次会本地编译前后端,几分钟)
@@ -10,7 +10,7 @@
 services:
   mysql:
     image: mysql:5.7
-    container_name: gost-mysql
+    container_name: ${LIBRELAY_MYSQL_CONTAINER:-librelay-mysql}
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
@@ -41,11 +41,11 @@ services:
     build:
       context: ./springboot-backend
       dockerfile: Dockerfile
-    image: tms-backend:hybrid
-    container_name: springboot-backend
+    image: librelay-backend:hybrid
+    container_name: ${LIBRELAY_BACKEND_CONTAINER:-librelay-backend}
     restart: unless-stopped
     environment:
-      GITHUB_REPO: ${GITHUB_REPO:-Teminuosi/Tms}
+      GITHUB_REPO: ${GITHUB_REPO:-ThatYT/Librelay}
       GITHUB_REF: ${GITHUB_REF:-main}
       DB_HOST: mysql
       DB_NAME: ${DB_NAME}
@@ -68,8 +68,8 @@ services:
     build:
       context: ./vite-frontend
       dockerfile: Dockerfile
-    image: tms-frontend:hybrid
-    container_name: vite-frontend
+    image: librelay-frontend:hybrid
+    container_name: ${LIBRELAY_FRONTEND_CONTAINER:-librelay-frontend}
     restart: unless-stopped
     ports:
       - "${FRONTEND_PORT:-2095}:80"
@@ -80,20 +80,21 @@ services:
 
 volumes:
   mysql_data:
-    name: mysql_data
+    name: ${LIBRELAY_MYSQL_VOLUME:-librelay_mysql_data}
     driver: local
   backend_logs:
-    name: backend_logs
+    name: ${LIBRELAY_LOG_VOLUME:-librelay_backend_logs}
     driver: local
 
 networks:
   gost-network:
-    name: gost-network
+    name: ${LIBRELAY_NETWORK:-librelay-network}
     driver: bridge
 
 # --- .env 示例(存成同目录 .env)---
-# DB_NAME=gost
-# DB_USER=gost
+# LIBRELAY_LAYOUT=1
+# DB_NAME=librelay
+# DB_USER=librelay
 # DB_PASSWORD=换个强密码
 # JWT_SECRET=换一串随机长字符串
 # BACKEND_PORT=6365

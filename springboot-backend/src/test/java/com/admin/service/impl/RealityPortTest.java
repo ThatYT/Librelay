@@ -14,6 +14,14 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class RealityPortTest {
+    @Test
+    void privateSocksBrandingRetainsLegacyForwards() {
+        assertTrue(com.admin.common.utils.GostUtil.isPrivateSocksRemote("librelay-socks://127.0.0.1:40000"));
+        assertTrue(com.admin.common.utils.GostUtil.isPrivateSocksRemote("tms-socks://127.0.0.1:40000"));
+        assertFalse(com.admin.common.utils.GostUtil.isPrivateSocksRemote("socks://127.0.0.1:40000"));
+        assertFalse(com.admin.common.utils.GostUtil.isPrivateSocksRemote(null));
+    }
+
     private void emptyTunnelReservations(InboundServiceImpl service) {
         TunnelMapper tunnels = mock(TunnelMapper.class);
         when(tunnels.selectList(any())).thenReturn(List.of());
@@ -242,7 +250,7 @@ class RealityPortTest {
         R result = service.updateListenPort(1L, 8443);
         assertEquals(0, result.getCode()); assertEquals(8443, in.getListenPort());
         assertEquals(20000, forward.getInPort()); assertEquals("unchanged-credential", user.getUuid());
-        assertTrue(forward.getRemoteAddr().startsWith("tms-socks://127.0.0.1:"));
+        assertTrue(forward.getRemoteAddr().startsWith("librelay-socks://127.0.0.1:"));
         assertEquals(8443, InboundServiceImpl.clientPort(in, forward));
         verify(forwardService, never()).createForwardForUser(any(), any(), any());
     }

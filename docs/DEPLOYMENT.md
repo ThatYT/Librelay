@@ -22,7 +22,7 @@ Previously, sing-box used an internal loopback port starting at 40000 and each u
 Run as root on a supported Linux distribution (Debian/Ubuntu/Raspbian, Fedora, CentOS/RHEL/Rocky/AlmaLinux):
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/ThatYT/Tms_EN/main/panel_install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/ThatYT/Librelay/main/panel_install.sh)
 ```
 
 The installer prompts `Panel port [2095]:` in an interactive terminal. Press Enter for 2095. Noninteractive installation uses 2095. If curl is not yet installed, install it through your distribution's package manager to fetch the bootstrap script; the script checks the remaining prerequisites itself.
@@ -30,13 +30,13 @@ The installer prompts `Panel port [2095]:` in an interactive terminal. Press Ent
 Custom port, directory and optional HTTPS domain:
 
 ```bash
-curl -fLsS https://raw.githubusercontent.com/ThatYT/Tms_EN/main/panel_install.sh -o /tmp/tms.sh
-bash /tmp/tms.sh --port 8080 --install-dir /opt/tms --domain panel.example.com
+curl -fLsS https://raw.githubusercontent.com/ThatYT/Librelay/main/panel_install.sh -o /tmp/librelay.sh
+bash /tmp/librelay.sh --port 8080 --install-dir /opt/librelay --domain panel.example.com
 ```
 
-`-p 8080` is equivalent to `--port 8080`. A domain must point to the panel VPS and Caddy needs that machine's TCP 80/443. Choose a distinct frontend/API port when using Caddy. The default directory is `/opt/tms`.
+`-p 8080` is equivalent to `--port 8080`. A domain must point to the panel VPS and Caddy needs that machine's TCP 80/443. Choose a distinct frontend/API port when using Caddy. The default directory is `/opt/librelay`.
 
-For another fork, export `GITHUB_REPO=OWNER/REPO` before running its downloaded installer. The repository and ref are saved in `.env` and propagated to the backend and generated node installation commands. Node agents default to CI-built Linux binaries for the selected branch's exact commit, published under `node-<full commit SHA>`. The installer checks SHA-256 before replacement. Wait for the Node binaries workflow after a new push; it never silently falls back to compiling on the VPS. `TMS_NODE_RELEASE` can pin an explicit release with a checksum manifest, and `TMS_NODE_SOURCE=1` explicitly opts into source compilation.
+For another fork, export `GITHUB_REPO=OWNER/REPO` before running its downloaded installer. The repository and ref are saved in `.env` and propagated to the backend and generated node installation commands. Node agents default to CI-built Linux binaries for the selected branch's exact commit, published under `node-<full commit SHA>`. The installer checks SHA-256 before replacement. Wait for the Node binaries workflow after a new push; it never silently falls back to compiling on the VPS. `LIBRELAY_NODE_RELEASE` can pin an explicit release with a checksum manifest, and `LIBRELAY_NODE_SOURCE=1` explicitly opts into source compilation.
 
 The installer checks root, distribution, prerequisites, Docker, the Compose plugin and available ports. It generates database/JWT secrets with OpenSSL and creates a private `.env`. It resolves the repository/ref to one commit and downloads the matching CI-built frontend/backend images, checking their revision labels before replacing any running container. Default installation downloads only the Compose template and initialization SQL; Java/frontend compilation occurs in GitHub Actions. It prints the access URL, initial account and management commands. Change the displayed initial account password after first login.
 
@@ -56,8 +56,8 @@ Keep the original installation directory, `.env` and MySQL volume. Do not copy a
 
 ```bash
 tms export
-curl -fLsS https://raw.githubusercontent.com/ThatYT/Tms_EN/main/panel_install.sh -o /tmp/tms.sh
-bash /tmp/tms.sh update --install-dir /YOUR/EXISTING/INSTALL/DIRECTORY
+curl -fLsS https://raw.githubusercontent.com/ThatYT/Librelay/main/panel_install.sh -o /tmp/librelay.sh
+bash /tmp/librelay.sh update --install-dir /YOUR/EXISTING/INSTALL/DIRECTORY
 ```
 
 If `.env` already contains a different `GITHUB_REPO`, change that repository setting to the intended fork before updating. The update preserves database credentials, JWT secret, frontend/API ports, SQL initialization file and named data volumes. It adds repository settings when absent and pulls both commit-pinned images before replacing running services. Failed downloads or mismatched revisions leave the running Compose configuration untouched. Startup/readiness failures attempt to restore the previous configuration/containers; additive database changes are not rolled back. A repeated `install` with an existing `.env` leaves it intact and directs you to update. A preexisting MySQL volume without its original `.env` causes installation to stop, preventing a new password from being applied to an old database.
@@ -74,9 +74,9 @@ The panel installer, node installer and source-deployment manager use English pr
 
 Wait for **Build and publish panel images** to finish for the selected commit. Images are published for amd64/arm64 under `ghcr.io/<lowercase repository owner>/springboot-backend:sha-<full SHA>` and `vite-frontend:sha-<full SHA>`. Existing public packages support anonymous pulls; private packages require registry login. The bundled MySQL 5.7 image is native amd64 only, so standard full-panel installation uses an amd64 host; dual-architecture frontend/backend images alone do not make the database ARM-native. No automatic database-version upgrade is attempted. Pending CI or network failures never trigger implicit local compilation.
 
-`--source` (or `TMS_PANEL_SOURCE=1`) opts into local builds. The installer checks at least 2.5 GiB available RAM plus free swap, builds backend then frontend with concurrency one, uses a 512 MiB Maven heap target and 1536 MiB Node heap limit, and reuses Maven's BuildKit cache. This reduces resource pressure without guaranteeing a build on every small host. It never creates swap automatically.
+`--source` (or `LIBRELAY_PANEL_SOURCE=1`) opts into local builds. The installer checks at least 2.5 GiB available RAM plus free swap, builds backend then frontend with concurrency one, uses a 512 MiB Maven heap target and 1536 MiB Node heap limit, and reuses Maven's BuildKit cache. This reduces resource pressure without guaranteeing a build on every small host. It never creates swap automatically.
 
-Progress appears in the terminal and `.tms-last-deploy.log`. `librelay info` displays `.tms-deployment` metadata. An exclusive directory lock blocks simultaneous installation/update. If an old installer is already compiling, interrupt that build before starting the new script. Existing `.env`, SQL init file, named volumes and Caddy configuration are preserved. No `down -v`, pruning or destructive legacy SQL runs during update; backward-compatible additions are performed by backend startup migrations.
+Progress appears in the terminal and `.librelay-last-deploy.log`. `librelay info` displays `.librelay-deployment` metadata. An exclusive directory lock blocks simultaneous installation/update. If an old installer is already compiling, interrupt that build before starting the new script. Existing `.env`, SQL init file, named volumes and Caddy configuration are preserved. No `down -v`, pruning or destructive legacy SQL runs during update; backward-compatible additions are performed by backend startup migrations.
 
 ## Node installation resource exhaustion
 
@@ -84,7 +84,7 @@ Old node scripts compiled the entire Go agent on the VPS. `no space left on devi
 
 Use `df -h / /tmp /var/tmp` and `free -h` to inspect resources. Do not delete MySQL volumes or node settings to make room. Rerun the generated installation command after the latest Node binaries workflow succeeds. Default downloads require at least 128 MiB free on the target filesystem.
 
-Source compilation is optional with `TMS_NODE_SOURCE=1`, requiring at least 3 GiB free in an existing `TMS_NODE_BUILD_DIR` (default `/var/tmp`). It uses one compiler worker, a 256 MiB Go memory target, and confines Go build/cache files to its temporary directory for cleanup. These limits reduce resource pressure but cannot guarantee success on every small VPS. Each published commit release includes `gost-amd64`, `gost-arm64`, and `checksums.sha256`.
+Source compilation is optional with `LIBRELAY_NODE_SOURCE=1`, requiring at least 3 GiB free in an existing `LIBRELAY_NODE_BUILD_DIR` (default `/var/tmp`). It uses one compiler worker, a 256 MiB Go memory target, and confines Go build/cache files to its temporary directory for cleanup. These limits reduce resource pressure but cannot guarantee success on every small VPS. Each published commit release includes `gost-amd64`, `gost-arm64`, and `checksums.sha256`.
 
 ## Recover a missing login configuration table
 
@@ -172,6 +172,20 @@ The remote availability probe cannot reserve a port indefinitely against unrelat
 
 See [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md) for the complete changed-file inventory and diff summary.
 
-## Branding compatibility
+## Branding compatibility and upgrade
 
-Librelay is the project name and `librelay` is the primary management command. Installation and update also retain `tms` as a compatibility alias. Repository URLs, `/opt/tms`, legacy `TMS_*` environment variables, language storage, database names, container names and volumes remain unchanged. No database migration is required. New databases seed the panel name as Librelay; the frontend displays the previous default TMS as Librelay while preserving other administrator-defined names.
+The repository is now `ThatYT/Librelay`. New installations use `/opt/librelay`, `LIBRELAY_*` settings, `librelay-*` containers/network, the `librelay` database/user, `librelay_mysql_data`/`librelay_backend_logs` volumes, and `/etc/librelay/Caddyfile` with branded certificate volumes. `librelay-hybrid.sh` is the source-management entry point.
+
+Existing installations retain their original directory, database name, credentials, ports, container/network names, database/log volumes and Caddy files/certificate volumes. The updater detects pre-Librelay `.env` files and supplies those resource identities explicitly to Compose. It never moves MySQL files, copies a live database or starts an empty replacement volume. An existing default `ThatYT/Tms_EN` repository setting is changed to `ThatYT/Librelay` with a private `.env.before-librelay` backup and an explicit message; other forks and refs are preserved.
+
+```bash
+# Existing installation: use its actual original directory.
+tms export
+curl -fLsS https://raw.githubusercontent.com/ThatYT/Librelay/main/panel_install.sh -o /tmp/librelay.sh
+bash /tmp/librelay.sh update --install-dir /opt/tms
+librelay info
+```
+
+The `tms` command, `tms-hybrid.sh`, old `TMS_*` installer environment flags, older build metadata and stored private-forward addresses remain compatibility aliases. New forwards use `librelay-socks://`; old addresses remain readable. Node metadata includes the old key for agents not yet upgraded, while new agents accept both keys. Browser language is saved as `librelay.language`, with the old preference read as a fallback. No database migration or credential reset is needed for the rename.
+
+Keep the upstream attribution and third-party names (Spring Boot, Vite, MySQL, gost and sing-box). Component source directories and existing owner-scoped image package names describe those technologies and are retained. The images' repository label and all active installer URLs use Librelay. Do not reuse the old GitHub repository name, which would remove GitHub's redirect.

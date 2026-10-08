@@ -6,12 +6,12 @@ import java.sql.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Runs only against the disposable MySQL service in GitHub Actions. */
-@EnabledIfEnvironmentVariable(named = "TMS_SCHEMA_TEST_URL", matches = ".+")
+@EnabledIfEnvironmentVariable(named = "LIBRELAY_SCHEMA_TEST_URL", matches = ".+")
 class DatabaseBootstrapMysqlTest {
     @Test void freshAndInterruptedInitializationPreserveExistingData() throws Exception {
-        try (Connection connection = DriverManager.getConnection(System.getenv("TMS_SCHEMA_TEST_URL"), "root", "")) {
+        try (Connection connection = DriverManager.getConnection(System.getenv("LIBRELAY_SCHEMA_TEST_URL"), "root", "")) {
             // Never run destructive test fixtures against a user's database.
-            assertEquals("tms_schema_test", connection.getCatalog());
+            assertEquals("librelay_schema_test", connection.getCatalog());
             try (Statement statement = connection.createStatement()) {
                 DatabaseBootstrap.initialize(connection);
                 assertEquals("admin_user", scalar(statement, "SELECT user FROM user WHERE id=1"));
@@ -40,7 +40,7 @@ class DatabaseBootstrapMysqlTest {
                 statement.executeUpdate("ALTER TABLE node DROP COLUMN port_sta");
                 SchemaMigration migration = new SchemaMigration();
                 org.springframework.test.util.ReflectionTestUtils.setField(migration, "dataSource",
-                        new org.springframework.jdbc.datasource.DriverManagerDataSource(System.getenv("TMS_SCHEMA_TEST_URL"), "root", ""));
+                        new org.springframework.jdbc.datasource.DriverManagerDataSource(System.getenv("LIBRELAY_SCHEMA_TEST_URL"), "root", ""));
                 migration.run(null); migration.run(null);
                 assertEquals("legacy-name", scalar(statement, "SELECT name FROM user WHERE id=1"));
                 assertEquals("1234", scalar(statement, "SELECT port FROM node WHERE id=7"));

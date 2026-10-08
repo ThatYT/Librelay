@@ -56,7 +56,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for installation commands, existing installat
 | [springboot-backend/src/test/java/com/admin/AdminApplicationTests.java](../springboot-backend/src/test/java/com/admin/AdminApplicationTests.java) | Replace production-context-only test with focused port bounds/JSON validation. |
 | [springboot-backend/src/test/java/com/admin/service/impl/RealityPortTest.java](../springboot-backend/src/test/java/com/admin/service/impl/RealityPortTest.java) | Test defaults, custom config/exports, legacy preservation, occupied ports and editing without credential reallocation. |
 | [tests/installer_test.sh](../tests/installer_test.sh) | Check port range, busy rejection, default/custom CLI and existing .env preservation. |
-| [tms-hybrid.sh](../tms-hybrid.sh) | Update status/default port reporting to 2095. |
+| [librelay-hybrid.sh](../librelay-hybrid.sh) | Update status/default port reporting to 2095. |
 | [vite-frontend/.gitignore](../vite-frontend/.gitignore) | Allow the reproducible pnpm lockfile to be versioned. |
 | [vite-frontend/Dockerfile](../vite-frontend/Dockerfile) | Use Node compatible with pinned pnpm and frozen-lockfile installation. |
 | [vite-frontend/index.html](../vite-frontend/index.html) | Apply persisted Light/Dark immediately and migrate old skin IDs. |
@@ -152,7 +152,7 @@ This pre-publication snapshot covers modified tracked files only; the new files 
  .../com/admin/service/impl/InboundServiceImpl.java | 185 +++++++-
  .../com/admin/service/impl/NodeServiceImpl.java    |  23 +-
  .../test/java/com/admin/AdminApplicationTests.java |  50 +--
- tms-hybrid.sh                                      |   5 +-
+ librelay-hybrid.sh                                      |   5 +-
  vite-frontend/.gitignore                           |   1 -
  vite-frontend/Dockerfile                           |  10 +-
  vite-frontend/index.html                           |  31 +-
@@ -252,6 +252,10 @@ Default update downloads images and does not run local compilers. Pending CI, re
 
 ## English installer follow-up
 
-`panel_install.sh`, `install.sh` and `tms-hybrid.sh` now use English terminal text and comments throughout installation, update, status, domain/HTTPS, backup, restore and removal flows. Generated management launcher comments are English too. Shell diagnostics use the C locale; commands, repository variables, ports and database handling are retained. The previous non-English domain-off alias is retained through a portable escaped literal.
+`panel_install.sh`, `install.sh` and `librelay-hybrid.sh` now use English terminal text and comments throughout installation, update, status, domain/HTTPS, backup, restore and removal flows. Generated management launcher comments are English too. Shell diagnostics use the C locale; commands, repository variables, ports and database handling are retained. The previous non-English domain-off alias is retained through a portable escaped literal.
 
 The panel menu now routes 8 to domain setup and 9 to restore, fixing duplicated option 8. The node installer routes its advertised exit option 4 to exit and keeps 5 as a compatibility alias, removing the undefined block_protocol call. Installer regression fixtures exercise both routes and both exit options; deployment fixtures use the translated backup section marker.
+
+## Librelay repository and deployment identity
+
+The project repository is `ThatYT/Librelay`; new installations use `/opt/librelay`, branded Docker resource names and `LIBRELAY_*` environment flags. See DEPLOYMENT.md for the compatibility upgrade. Existing data volumes, database names, Caddy certificates and installation paths remain attached to their original names. Legacy TMS identifiers appear only as compatibility paths, stored-address readers, test cases or historical implementation details. Third-party engine/framework names remain unchanged. The Android source display/theme name is Librelay; its existing application ID and historical bundled APK are retained, so this panel rename does not silently change Android application identity.

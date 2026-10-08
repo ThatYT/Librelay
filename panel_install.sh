@@ -9,19 +9,76 @@ export LC_ALL=C
 
 # Docker IPv6 is disabled by default; changing daemon settings can break MySQL startup.
 # Container communication uses IPv4; public IPv6 access does not require an IPv6 Docker network.
-# Set TMS_IPV6=1 only when Docker network IPv6 is needed.
-TMS_IPV6="${TMS_IPV6:-0}"
+# Set LIBRELAY_IPV6=1 only when Docker network IPv6 is needed.
+LIBRELAY_IPV6="${LIBRELAY_IPV6:-${TMS_IPV6:-0}}"
 
 # The only repository default. Override for another fork without editing download URLs.
-GITHUB_REPO="${GITHUB_REPO:-ThatYT/Tms_EN}"
+GITHUB_REPO="${GITHUB_REPO:-ThatYT/Librelay}"
 GITHUB_REF="${GITHUB_REF:-main}"
-INSTALL_DIR="${INSTALL_DIR:-/opt/tms}"
+INSTALL_DIR="${INSTALL_DIR:-/opt/librelay}"
 INSTALL_DOMAIN=""
 INSTALL_HTTPS_PORT=""
 INSTALL_DIR_EXPLICIT=0
 PORT_REQUESTED=0
 SOURCE_REQUESTED=0
-TMS_PANEL_SOURCE="${TMS_PANEL_SOURCE:-0}"
+LIBRELAY_PANEL_SOURCE="${LIBRELAY_PANEL_SOURCE:-${TMS_PANEL_SOURCE:-0}}"
+
+# Read settings as data; never source or evaluate installation credentials.
+layout_setting() {
+  local value=""
+  [ ! -f .env ] || value=$(sed -n "s/^$1=//p" .env | head -1)
+  [ -n "$value" ] || value="$2"
+  [[ "$value" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || { echo "Invalid deployment setting: $1" >&2; return 1; }
+  printf '%s\n' "$value"
+}
+
+# Old installations keep their exact containers, volumes and network. New ones
+# use Librelay names. Do not move a live MySQL directory or change volume identity.
+load_deployment_layout() {
+  local legacy=0
+  if [ -f .env ] && ! grep -q '^LIBRELAY_LAYOUT=1$' .env; then legacy=1; fi
+  if [ "$legacy" = 1 ]; then
+    MYSQL_CONTAINER=gost-mysql; BACKEND_CONTAINER=springboot-backend; FRONTEND_CONTAINER=vite-frontend
+    MYSQL_VOLUME=mysql_data; LOG_VOLUME=backend_logs; PANEL_NETWORK=gost-network
+    CADDY_CONTAINER=tms-caddy; CADDY_DATA=tms_caddy_data; CADDY_CONFIG=tms_caddy_config
+  else
+    MYSQL_CONTAINER=librelay-mysql; BACKEND_CONTAINER=librelay-backend; FRONTEND_CONTAINER=librelay-frontend
+    MYSQL_VOLUME=librelay_mysql_data; LOG_VOLUME=librelay_backend_logs; PANEL_NETWORK=librelay-network
+    CADDY_CONTAINER=librelay-caddy; CADDY_DATA=librelay_caddy_data; CADDY_CONFIG=librelay_caddy_config
+  fi
+  LIBRELAY_MYSQL_CONTAINER=$(layout_setting LIBRELAY_MYSQL_CONTAINER "$MYSQL_CONTAINER") || return 1
+  LIBRELAY_BACKEND_CONTAINER=$(layout_setting LIBRELAY_BACKEND_CONTAINER "$BACKEND_CONTAINER") || return 1
+  LIBRELAY_FRONTEND_CONTAINER=$(layout_setting LIBRELAY_FRONTEND_CONTAINER "$FRONTEND_CONTAINER") || return 1
+  LIBRELAY_MYSQL_VOLUME=$(layout_setting LIBRELAY_MYSQL_VOLUME "$MYSQL_VOLUME") || return 1
+  LIBRELAY_LOG_VOLUME=$(layout_setting LIBRELAY_LOG_VOLUME "$LOG_VOLUME") || return 1
+  LIBRELAY_NETWORK=$(layout_setting LIBRELAY_NETWORK "$PANEL_NETWORK") || return 1
+  MYSQL_CONTAINER=$LIBRELAY_MYSQL_CONTAINER; BACKEND_CONTAINER=$LIBRELAY_BACKEND_CONTAINER
+  FRONTEND_CONTAINER=$LIBRELAY_FRONTEND_CONTAINER; MYSQL_VOLUME=$LIBRELAY_MYSQL_VOLUME
+  LOG_VOLUME=$LIBRELAY_LOG_VOLUME; PANEL_NETWORK=$LIBRELAY_NETWORK
+  export LIBRELAY_MYSQL_CONTAINER LIBRELAY_BACKEND_CONTAINER LIBRELAY_FRONTEND_CONTAINER
+  export LIBRELAY_MYSQL_VOLUME LIBRELAY_LOG_VOLUME LIBRELAY_NETWORK
+  case "${CADDY_FILE:-}" in
+    ""|/etc/librelay/Caddyfile|/etc/tms/Caddyfile)
+      if [ "$legacy" = 1 ]; then CADDY_FILE=/etc/tms/Caddyfile; else CADDY_FILE=/etc/librelay/Caddyfile; fi ;;
+  esac
+}
+
+# Repository rename is the only automatic .env edit. Keep an exact private backup,
+# preserve forks and refs, and report the change before touching saved settings.
+migrate_repository_identity() {
+  [ -f .env ] || return 0
+  if grep -qi '^GITHUB_REPO=ThatYT/Tms_EN$' .env; then
+    acquire_install_lock || return 1
+    [ -f .env.before-librelay ] || cp -p .env .env.before-librelay
+    chmod 600 .env.before-librelay
+    echo "Migrating repository to ThatYT/Librelay; backup: $PWD/.env.before-librelay"
+    (umask 077; sed 's~^[Gg][Ii][Tt][Hh][Uu][Bb]_[Rr][Ee][Pp][Oo]=[Tt][Hh][Aa][Tt][Yy][Tt]/[Tt][Mm][Ss]_[Ee][Nn]$~GITHUB_REPO=ThatYT/Librelay~' .env > .env.librelay-new)
+    chmod 600 .env.librelay-new
+    mv .env.librelay-new .env
+  fi
+}
+
+load_deployment_layout
 
 prepare_host() {
   [ "$(id -u)" -eq 0 ] || { echo "Root privileges are required." >&2; exit 1; }
@@ -47,11 +104,13 @@ valid_port() { [[ "$1" =~ ^[0-9]{1,5}$ ]] && (( 10#$1 >= 1 && 10#$1 <= 65535 ));
 
 # Serialise install/update; a second process must not replace .env or race Docker.
 acquire_install_lock() {
-  [ "${TMS_LOCK_HELD:-0}" = 1 ] && return 0
-  exec 9> .tms-install.lock
-  chmod 600 .tms-install.lock
-  flock -n 9 || { echo "Another TMS installation/update is running in $PWD." >&2; return 1; }
-  TMS_LOCK_HELD=1
+  [ "${LIBRELAY_LOCK_HELD:-${TMS_LOCK_HELD:-0}}" = 1 ] && return 0
+  local lock_file=.librelay-install.lock
+  [ ! -f .tms-install.lock ] || lock_file=.tms-install.lock
+  exec 9> "$lock_file"
+  chmod 600 "$lock_file"
+  flock -n 9 || { echo "Another Librelay installation/update is running in $PWD." >&2; return 1; }
+  export LIBRELAY_LOCK_HELD=1
 }
 
 resolve_panel_commit() {
@@ -80,7 +139,7 @@ check_source_resources() {
 # pipelines, whose intentional early exit must not turn into a false failure.
 run_deploy_logged() (
   set -o pipefail
-  "$@" 2>&1 | tee -a .tms-last-deploy.log
+  "$@" 2>&1 | tee -a .librelay-last-deploy.log
 )
 
 # Prepare everything before replacing the running deployment. Both image tags
@@ -88,22 +147,23 @@ run_deploy_logged() (
 deploy_panel() {
   local staging candidate owner mode=images had_compose=0 had_source=0
   acquire_install_lock || return 1
+  load_deployment_layout || return 1
   resolve_panel_commit || return 1
-  [ "$TMS_PANEL_SOURCE" = 0 ] || { mode=source; check_source_resources || return 1; }
+  [ "$LIBRELAY_PANEL_SOURCE" = 0 ] || { mode=source; check_source_resources || return 1; }
   staging=$(mktemp -d "$PWD/.deployment.XXXXXX")
   candidate="$staging/docker-compose.yml"
   owner=$(printf '%s' "${GITHUB_REPO%%/*}" | tr '[:upper:]' '[:lower:]')
   umask 077
-  : > .tms-last-deploy.log
-  chmod 600 .tms-last-deploy.log
+  : > .librelay-last-deploy.log
+  chmod 600 .librelay-last-deploy.log
   echo "Deployment: $GITHUB_REPO @ ${PANEL_COMMIT:0:12} ($mode)"
-  echo "Progress log: $PWD/.tms-last-deploy.log"
+  echo "Progress log: $PWD/.librelay-last-deploy.log"
   if [ "$mode" = images ]; then
     if ! curl -fLsS --connect-timeout 10 --max-time 60 --retry 2 \
       "https://raw.githubusercontent.com/${GITHUB_REPO}/${PANEL_COMMIT}/docker-compose-images.yml" -o "$candidate"; then
       rm -rf "$staging"; return 1
     fi
-    sed "s@TMS_BACKEND_IMAGE@ghcr.io/$owner/springboot-backend:sha-$PANEL_COMMIT@;s@TMS_FRONTEND_IMAGE@ghcr.io/$owner/vite-frontend:sha-$PANEL_COMMIT@" "$candidate" > "$candidate.new"
+    sed "s@LIBRELAY_BACKEND_IMAGE@ghcr.io/$owner/springboot-backend:sha-$PANEL_COMMIT@;s@LIBRELAY_FRONTEND_IMAGE@ghcr.io/$owner/vite-frontend:sha-$PANEL_COMMIT@" "$candidate" > "$candidate.new"
     mv "$candidate.new" "$candidate"
   else
     echo "Source mode requested: frontend/backend will build one at a time."
@@ -114,7 +174,7 @@ deploy_panel() {
       rm -rf "$staging"; return 1
     fi
     [ -f "$staging/source/docker-compose-hybrid.yml" ] || { rm -rf "$staging"; return 1; }
-    sed "s@context: ./springboot-backend@context: $staging/source/springboot-backend@;s@context: ./vite-frontend@context: $staging/source/vite-frontend@;s@tms-backend:hybrid@tms-backend:sha-$PANEL_COMMIT@;s@tms-frontend:hybrid@tms-frontend:sha-$PANEL_COMMIT@" \
+    sed "s@context: ./springboot-backend@context: $staging/source/springboot-backend@;s@context: ./vite-frontend@context: $staging/source/vite-frontend@;s@librelay-backend:hybrid@librelay-backend:sha-$PANEL_COMMIT@;s@librelay-frontend:hybrid@librelay-frontend:sha-$PANEL_COMMIT@" \
       "$staging/source/docker-compose-hybrid.yml" > "$candidate"
   fi
   if ! $DOCKER_CMD --project-directory "$PWD" --env-file .env -f "$candidate" config --quiet; then
@@ -180,8 +240,8 @@ deploy_panel() {
     fi
     rm -rf "$staging"; return 1
   fi
-  printf 'COMMIT=%s\nMODE=%s\n' "$PANEL_COMMIT" "$mode" > .tms-deployment.new
-  mv .tms-deployment.new .tms-deployment
+  printf 'COMMIT=%s\nMODE=%s\n' "$PANEL_COMMIT" "$mode" > .librelay-deployment.new
+  mv .librelay-deployment.new .librelay-deployment
   rm -rf "$staging"
   echo "[3/3] Login API and database schema are ready. Deployment complete."
 }
@@ -200,8 +260,8 @@ PANEL_INSTALL_RAW_URL="https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB
 
 # Choose the legacy Compose URL based on the IPv6 setting.
 get_docker_compose_url() {
-  # Default to IPv4; use IPv6 Compose only with TMS_IPV6=1.
-  if [ "$TMS_IPV6" = "1" ]; then
+  # Default to IPv4; use IPv6 Compose only with LIBRELAY_IPV6=1.
+  if [ "$LIBRELAY_IPV6" = "1" ]; then
     echo "$DOCKER_COMPOSEV6_URL"
   else
     echo "$DOCKER_COMPOSEV4_URL"
@@ -261,7 +321,7 @@ check_docker() {
     systemctl enable --now docker
     docker info >/dev/null || { echo "Docker daemon is unavailable." >&2; exit 1; }
   fi
-  if [ "$TMS_PANEL_SOURCE" = 1 ] && ! docker buildx version >/dev/null 2>&1; then
+  if [ "$LIBRELAY_PANEL_SOURCE" = 1 ] && ! docker buildx version >/dev/null 2>&1; then
     echo "--source requires the Docker Buildx plugin. Use default images or install docker-buildx-plugin." >&2
     exit 1
   fi
@@ -386,7 +446,7 @@ delete_self() {
   SCRIPT_PATH="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
   # Keep both management scripts under /usr/local/bin so librelay remains usable.
   case "$SCRIPT_PATH" in
-    /usr/local/bin/tms-panel.sh|/usr/local/bin/tms) return 0 ;;
+    /usr/local/bin/librelay-panel.sh|/usr/local/bin/librelay|/usr/local/bin/tms-panel.sh|/usr/local/bin/tms) return 0 ;;
   esac
   echo ""
   echo "🗑️ Operation complete. Removing the temporary installer..."
@@ -416,43 +476,47 @@ print_access_box() {
 }
 
 # Install the persistent librelay management command.
-install_tms_command() {
+install_librelay_command() {
   echo "🔗 Installing the librelay management command..."
   local self panel_dir
-  local command_dir="${TMS_COMMAND_DIR:-/usr/local/bin}"
+  local command_dir="${LIBRELAY_COMMAND_DIR:-${TMS_COMMAND_DIR:-/usr/local/bin}}"
   panel_dir="$(pwd)"
   self="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
   # Copy this installer when possible; otherwise download it.
   if [ -f "$self" ] && [ -s "$self" ]; then
-    cp -f "$self" "$command_dir/tms-panel.sh" 2>/dev/null || true
+    cp -f "$self" "$command_dir/librelay-panel.sh" 2>/dev/null || true
   fi
-  if [ ! -f "$command_dir/tms-panel.sh" ]; then
-    curl -fLsS "$PANEL_INSTALL_RAW_URL" -o "$command_dir/tms-panel.sh" 2>/dev/null || true
+  if [ ! -f "$command_dir/librelay-panel.sh" ]; then
+    curl -fLsS "$PANEL_INSTALL_RAW_URL" -o "$command_dir/librelay-panel.sh" 2>/dev/null || true
   fi
-  chmod +x "$command_dir/tms-panel.sh" 2>/dev/null || true
+  chmod +x "$command_dir/librelay-panel.sh" 2>/dev/null || true
   # The launcher enters the saved installation directory for Compose commands.
-  cat > "$command_dir/tms" <<EOF
+  cat > "$command_dir/librelay" <<EOF
 #!/bin/bash
 # Librelay panel management. Run librelay without arguments to open the menu.
 export GITHUB_REPO="$GITHUB_REPO"
 export GITHUB_REF="$GITHUB_REF"
-TMS_DIR="$panel_dir"
-[ -d "\$TMS_DIR" ] && cd "\$TMS_DIR"
+LIBRELAY_DIR="$panel_dir"
+export TMS_DIR="\$LIBRELAY_DIR"
+[ -d "\$LIBRELAY_DIR" ] && cd "\$LIBRELAY_DIR"
 # Forward all arguments: librelay domain needs both the command and hostname.
 # Passing only the first argument would discard the domain.
-if [ \$# -eq 0 ]; then exec bash "$command_dir/tms-panel.sh" menu; fi
-exec bash "$command_dir/tms-panel.sh" "\$@"
+if [ \$# -eq 0 ]; then exec bash "$command_dir/librelay-panel.sh" menu; fi
+exec bash "$command_dir/librelay-panel.sh" "\$@"
 EOF
-  chmod +x "$command_dir/tms" 2>/dev/null || true
-  cp -f "$command_dir/tms" "$command_dir/librelay"
-  chmod +x "$command_dir/librelay"
+  chmod +x "$command_dir/librelay" 2>/dev/null || true
+  cp -f "$command_dir/librelay" "$command_dir/tms"
+  chmod +x "$command_dir/tms"
   echo "✅ Management command ready: run librelay for update/uninstall/purge/status"
 }
+
+# Compatibility signature used by older self-updating managers.
+install_tms_command() { install_librelay_command "$@"; }
 
 # Display container status.
 show_status() {
   echo "📊 Librelay panel container status:"
-  docker ps -a --filter "name=gost-mysql" --filter "name=springboot-backend" --filter "name=vite-frontend" \
+  docker ps -a --filter "name=$MYSQL_CONTAINER" --filter "name=$BACKEND_CONTAINER" --filter "name=$FRONTEND_CONTAINER" \
     --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || docker ps -a
 }
 
@@ -495,9 +559,11 @@ get_frontend_port() {
 # Show panel access details and the default account.
 show_access_info() {
   print_access_box "$(get_server_ip)" "$(get_frontend_port)"
-  if [ -f .tms-deployment ]; then
-    echo "Deployment commit: $(sed -n 's/^COMMIT=//p' .tms-deployment)"
-    echo "Deployment mode: $(sed -n 's/^MODE=//p' .tms-deployment)"
+  local deployment_file=.librelay-deployment
+  [ -f "$deployment_file" ] || deployment_file=.tms-deployment
+  if [ -f "$deployment_file" ]; then
+    echo "Deployment commit: $(sed -n 's/^COMMIT=//p' "$deployment_file")"
+    echo "Deployment mode: $(sed -n 's/^MODE=//p' "$deployment_file")"
   fi
   local d
   d="$(current_domain)"
@@ -509,8 +575,8 @@ show_access_info() {
 # Check whether the current Compose file belongs to Librelay.
 # down -v and removing .env are destructive in an unrelated directory.
 # Verify ownership before removing files or volumes.
-is_tms_compose() {
-  [ -f docker-compose.yml ] && grep -q "teminuosi\|gost-mysql" docker-compose.yml
+is_librelay_compose() {
+  [ -f docker-compose.yml ] && grep -Eq "teminuosi|gost-mysql|librelay-mysql|LIBRELAY_MYSQL_CONTAINER" docker-compose.yml
 }
 
 purge_panel() {
@@ -518,45 +584,45 @@ purge_panel() {
 
   # A downloaded purge command may run outside the install directory.
   # Find the saved directory so configuration is removed there as well.
-  # Read TMS_DIR from the installed launcher.
-  if ! is_tms_compose && [ -f /usr/local/bin/tms ]; then
-    recorded_dir="$(grep -m1 '^TMS_DIR=' /usr/local/bin/tms 2>/dev/null | cut -d'"' -f2)"
+  # Read LIBRELAY_DIR from the installed launcher.
+  if ! is_librelay_compose && [ -f /usr/local/bin/tms ]; then
+    recorded_dir="$(grep -m1 -E '^(LIBRELAY_DIR|TMS_DIR)=' /usr/local/bin/tms 2>/dev/null | cut -d'"' -f2)"
     if [ -n "$recorded_dir" ] && [ -d "$recorded_dir" ]; then
       cd "$recorded_dir" 2>/dev/null && echo "📁 Using the saved panel directory: $recorded_dir"
     fi
   fi
 
-  if [ -f docker-compose.yml ] && ! is_tms_compose; then
+  if [ -f docker-compose.yml ] && ! is_librelay_compose; then
     echo "⚠️  The current docker-compose.yml does not belong to Librelay. Skipping Compose cleanup and configuration removal."
     echo "    Only named Librelay containers/images will be removed. Enter the panel install directory to purge its files."
   fi
   if command -v docker &> /dev/null; then
     # Use Compose cleanup only for a verified Librelay deployment.
-    if is_tms_compose; then
+    if is_librelay_compose; then
       docker compose down -v --rmi all --remove-orphans 2>/dev/null \
         || docker-compose down -v --rmi all --remove-orphans 2>/dev/null || true
     fi
     # Fallback: remove known Librelay containers by name.
     # Remove Caddy too, since it is attached to gost-network.
-    docker rm -f gost-mysql springboot-backend vite-frontend tms-caddy 2>/dev/null || true
+    docker rm -f "$MYSQL_CONTAINER" "$BACKEND_CONTAINER" "$FRONTEND_CONTAINER" "$CADDY_CONTAINER" gost-mysql springboot-backend vite-frontend tms-caddy librelay-mysql librelay-backend librelay-frontend librelay-caddy 2>/dev/null || true
     # Compose may prefix volume names with its project name.
     # Also match suffixes when the Compose file has been lost.
     # Leaving a MySQL volume would cause a fresh install to reuse the old database.
-    docker volume rm mysql_data backend_logs tms_caddy_data tms_caddy_config 2>/dev/null || true
-    docker volume ls -q 2>/dev/null       | grep -E '(^|_)(mysql_data|backend_logs|tms_caddy_data|tms_caddy_config)$'       | xargs -r docker volume rm 2>/dev/null || true
-    docker network rm gost-network 2>/dev/null || true
+    docker volume rm "$MYSQL_VOLUME" "$LOG_VOLUME" "$CADDY_DATA" "$CADDY_CONFIG" mysql_data backend_logs tms_caddy_data tms_caddy_config 2>/dev/null || true
+    docker volume ls -q 2>/dev/null       | grep -E '(^|_)(mysql_data|backend_logs|tms_caddy_data|tms_caddy_config|librelay_mysql_data|librelay_backend_logs|librelay_caddy_data|librelay_caddy_config)$'       | xargs -r docker volume rm 2>/dev/null || true
+    docker network rm "$PANEL_NETWORK" gost-network librelay-network 2>/dev/null || true
     docker rmi -f ghcr.io/teminuosi/springboot-backend:latest ghcr.io/teminuosi/vite-frontend:latest mysql:5.7 2>/dev/null || true
     # Reclaim only dangling images; leave other applications alone.
     docker image prune -f 2>/dev/null || true
   fi
   # Remove configuration only in a verified panel directory.
   # An unrelated project may also have a file named .env.
-  if is_tms_compose || [ ! -f docker-compose.yml ]; then
+  if is_librelay_compose || [ ! -f docker-compose.yml ]; then
     rm -f docker-compose.yml docker-compose-v4.yml docker-compose-v6.yml gost.sql .env temp_migration.sql 2>/dev/null || true
   fi
   # Remove persistent management commands.
-  rm -f /usr/local/bin/librelay /usr/local/bin/tms /usr/local/bin/tms-panel.sh 2>/dev/null || true
-  rm -rf /etc/tms 2>/dev/null || true
+  rm -f /usr/local/bin/librelay /usr/local/bin/tms /usr/local/bin/librelay-panel.sh /usr/local/bin/tms-panel.sh 2>/dev/null || true
+  rm -rf /etc/librelay /etc/tms 2>/dev/null || true
   echo "✅ Purge complete. Librelay is no longer installed."
   echo "ℹ️  Only the panel was removed. Node agents (gost / sing-box) were retained."
   echo "    To uninstall a node, run the node uninstaller on that machine (see README)."
@@ -630,8 +696,8 @@ get_config_params() {
   [ "$FRONTEND_PORT" != "$BACKEND_PORT" ] || { echo "Panel and backend ports must differ." >&2; exit 1; }
   ! port_in_use "$FRONTEND_PORT" || { echo "Panel TCP port $FRONTEND_PORT is already occupied." >&2; exit 1; }
   ! port_in_use "$BACKEND_PORT" || { echo "Backend TCP port $BACKEND_PORT is already occupied." >&2; exit 1; }
-  DB_NAME=gost
-  DB_USER=gost
+  DB_NAME=librelay
+  DB_USER=librelay
   DB_PASSWORD=$(openssl rand -hex 32)
   JWT_SECRET=$(openssl rand -hex 48)
 }
@@ -640,14 +706,14 @@ get_config_params() {
 verify_database_schema() {
   local count attempt
   for attempt in {1..30}; do
-    count=$(docker exec gost-mysql sh -c '
+    count=$(docker exec "$MYSQL_CONTAINER" sh -c '
       export MYSQL_PWD="$MYSQL_PASSWORD"
       exec mysql --user="$MYSQL_USER" --database="$MYSQL_DATABASE" --batch --skip-column-names -e "$1"
     ' sh "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('forward','node','speed_limit','statistics_flow','tunnel','user','user_tunnel','vite_config','inbound','inbound_user','landing','inbound_line')" 2>/dev/null) || count=""
     if [ "$count" = 12 ]; then return 0; fi
     sleep 2
   done
-  echo "Database schema initialization failed. Check: docker logs gost-mysql --tail 80" >&2
+  echo "Database schema initialization failed. Check: docker logs $MYSQL_CONTAINER --tail 80" >&2
   echo "Keep the existing .env and MySQL volume; update the backend to recover missing tables." >&2
   return 1
 }
@@ -665,15 +731,15 @@ wait_backend_ready() {
   local attempt state health
   echo "🔍 Checking backend login API and database readiness..."
   for attempt in {1..180}; do
-    state=$(docker inspect -f '{{.State.Status}}' springboot-backend 2>/dev/null) || state=not_found
-    health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}not_configured{{end}}' springboot-backend 2>/dev/null) || health=unknown
+    state=$(docker inspect -f '{{.State.Status}}' "$BACKEND_CONTAINER" 2>/dev/null) || state=not_found
+    health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}not_configured{{end}}' "$BACKEND_CONTAINER" 2>/dev/null) || health=unknown
     if [ "$state" = running ] && backend_api_ready; then
       echo "✅ Backend login API and database are ready"
       return 0
     fi
     case "$state" in
       exited|dead|not_found)
-        echo "❌ Backend container state: $state. Check: docker logs springboot-backend --tail 80" >&2
+        echo "❌ Backend container state: $state. Check: docker logs $BACKEND_CONTAINER --tail 80" >&2
         return 1 ;;
     esac
     if [ $((attempt % 15)) = 1 ]; then
@@ -681,7 +747,7 @@ wait_backend_ready() {
     fi
     sleep 1
   done
-  echo "❌ Backend readiness timed out. Check: docker logs springboot-backend --tail 80" >&2
+  echo "❌ Backend readiness timed out. Check: docker logs $BACKEND_CONTAINER --tail 80" >&2
   return 1
 }
 
@@ -689,6 +755,7 @@ wait_backend_ready() {
 install_panel() {
   echo "🚀 Starting panel installation..."
   acquire_install_lock || return 1
+  load_deployment_layout || return 1
   if [ -f .env ]; then
     echo "Existing installation found. .env and database preserved. Use: librelay update"
     [ -z "${FRONTEND_PORT:-}" ] || { echo "Port changes require editing the existing FRONTEND_PORT in .env." >&2; return 1; }
@@ -696,11 +763,12 @@ install_panel() {
     return 0
   fi
   check_docker
-  if docker volume inspect mysql_data >/dev/null 2>&1; then
-    echo "Existing mysql_data volume found without .env. Restore the original credentials before installing." >&2
+  if docker volume inspect "$MYSQL_VOLUME" >/dev/null 2>&1 || docker volume inspect mysql_data >/dev/null 2>&1; then
+    echo "Existing $MYSQL_VOLUME volume found without .env. Restore the original credentials before installing." >&2
     return 1
   fi
   get_config_params
+  load_deployment_layout || return 1
   umask 077
 
   cat > .env <<EOF
@@ -710,11 +778,18 @@ DB_PASSWORD=$DB_PASSWORD
 JWT_SECRET=$JWT_SECRET
 GITHUB_REPO=$GITHUB_REPO
 GITHUB_REF=$GITHUB_REF
+LIBRELAY_LAYOUT=1
+LIBRELAY_MYSQL_CONTAINER=$MYSQL_CONTAINER
+LIBRELAY_BACKEND_CONTAINER=$BACKEND_CONTAINER
+LIBRELAY_FRONTEND_CONTAINER=$FRONTEND_CONTAINER
+LIBRELAY_MYSQL_VOLUME=$MYSQL_VOLUME
+LIBRELAY_LOG_VOLUME=$LOG_VOLUME
+LIBRELAY_NETWORK=$PANEL_NETWORK
 FRONTEND_PORT=$FRONTEND_PORT
 BACKEND_PORT=$BACKEND_PORT
 EOF
 
-  install_tms_command
+  install_librelay_command
   deploy_panel || return 1
 
   # Save the detected backend address for generated node commands.
@@ -722,8 +797,8 @@ EOF
   PUBLIC_IP=$(curl -s --max-time 8 https://api.ipify.org || curl -s --max-time 8 https://ipinfo.io/ip || echo "")
   if [[ "$PUBLIC_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
     for i in $(seq 1 30); do
-      if docker exec gost-mysql mysqladmin ping -h localhost --silent >/dev/null 2>&1; then
-        if docker exec gost-mysql mysql -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" \
+      if docker exec "$MYSQL_CONTAINER" mysqladmin ping -h localhost --silent >/dev/null 2>&1; then
+        if docker exec "$MYSQL_CONTAINER" mysql -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" \
              -e "INSERT IGNORE INTO vite_config (name, value, time) VALUES ('ip', '${PUBLIC_IP}:${BACKEND_PORT}', $(date +%s)000);" >/dev/null 2>&1; then
           echo "      ✔ Backend address set to ${PUBLIC_IP}:${BACKEND_PORT}"
         fi
@@ -736,7 +811,7 @@ EOF
   fi
 
   # Install the persistent librelay command.
-  install_tms_command >/dev/null 2>&1
+  install_librelay_command >/dev/null 2>&1
 
   # Print access information after all installation output.
   echo "Librelay installed successfully"
@@ -749,18 +824,18 @@ EOF
 
 # Update the manager before taking the deployment lock, retaining all CLI options.
 update_panel() {
-  if [ -z "${TMS_SELF_UPDATED:-}" ] && [ -w /usr/local/bin ]; then
+  if [ -z "${LIBRELAY_SELF_UPDATED:-${TMS_SELF_UPDATED:-}}" ] && [ -w /usr/local/bin ]; then
     local manager_candidate
     manager_candidate=$(mktemp "$PWD/.manager.XXXXXX")
     if curl -fLsS --connect-timeout 10 --max-time 30 --retry 2 -o "$manager_candidate" "$PANEL_INSTALL_RAW_URL" \
-      && bash -n "$manager_candidate" && grep -q 'install_tms_command' "$manager_candidate"; then
+      && bash -n "$manager_candidate" && grep -q 'install_librelay_command' "$manager_candidate"; then
       if ! cmp -s "$manager_candidate" "$0"; then
-        install -m 755 "$manager_candidate" /usr/local/bin/tms-panel.sh
+        install -m 755 "$manager_candidate" /usr/local/bin/librelay-panel.sh
         rm -f "$manager_candidate"
-        export TMS_SELF_UPDATED=1
+        export LIBRELAY_SELF_UPDATED=1
         local manager_args=(update --install-dir "$PWD")
-        [ "$TMS_PANEL_SOURCE" = 0 ] || manager_args+=(--source)
-        exec bash /usr/local/bin/tms-panel.sh "${manager_args[@]}"
+        [ "$LIBRELAY_PANEL_SOURCE" = 0 ] || manager_args+=(--source)
+        exec bash /usr/local/bin/librelay-panel.sh "${manager_args[@]}"
       fi
     fi
     rm -f "$manager_candidate"
@@ -778,7 +853,7 @@ update_panel() {
   unset FRONTEND_PORT BACKEND_PORT
   # Additive database migrations run in the backend before the readiness checks.
   deploy_panel || return 1
-  install_tms_command
+  install_librelay_command
   echo "✅ Update complete"
   show_access_info
 }
@@ -791,7 +866,7 @@ export_migration_sql() {
   echo "🔍 Reading database configuration..."
 
   # Check whether the backend container is running.
-  if ! docker ps --format "{{.Names}}" | grep -q "^springboot-backend$"; then
+  if ! docker ps --format "{{.Names}}" | grep -qx "$BACKEND_CONTAINER"; then
     echo "❌ Backend container is not running. Reading configuration from .env..."
 
     # Read configuration from .env.
@@ -812,7 +887,7 @@ export_migration_sql() {
     fi
   else
     # Read database settings from the container environment.
-    DB_INFO=$(docker exec springboot-backend env | grep "^DB_" 2>/dev/null || echo "")
+    DB_INFO=$(docker exec "$BACKEND_CONTAINER" env | grep "^DB_" 2>/dev/null || echo "")
 
     if [[ -n "$DB_INFO" ]]; then
       DB_NAME=$(echo "$DB_INFO" | grep "^DB_NAME=" | cut -d'=' -f2)
@@ -852,7 +927,7 @@ export_migration_sql() {
   echo "   Username: $DB_USER"
 
   # Check whether MySQL is running.
-  if ! docker ps --format "{{.Names}}" | grep -q "^gost-mysql$"; then
+  if ! docker ps --format "{{.Names}}" | grep -qx "$MYSQL_CONTAINER"; then
     echo "❌ Database container is not running; export cannot proceed"
     echo "🔍 Running containers:"
     docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
@@ -871,11 +946,11 @@ export_migration_sql() {
   # Use the full character set to preserve all node names.
   # Export using mysqldump.
   echo "⏳ Exporting database..."
-  if docker exec gost-mysql mysqldump --default-character-set=utf8mb4 -u "$DB_USER" -p"$DB_PASSWORD" --single-transaction --routines --triggers "$DB_NAME" > "$SQL_FILE" 2>/dev/null; then
+  if docker exec "$MYSQL_CONTAINER" mysqldump --default-character-set=utf8mb4 -u "$DB_USER" -p"$DB_PASSWORD" --single-transaction --routines --triggers "$DB_NAME" > "$SQL_FILE" 2>/dev/null; then
     echo "✅ Database export complete"
   else
     echo "⚠️ Database user authentication failed. Trying the root account..."
-    if docker exec gost-mysql mysqldump --default-character-set=utf8mb4 -u root -p"$DB_PASSWORD" --single-transaction --routines --triggers "$DB_NAME" > "$SQL_FILE" 2>/dev/null; then
+    if docker exec "$MYSQL_CONTAINER" mysqldump --default-character-set=utf8mb4 -u root -p"$DB_PASSWORD" --single-transaction --routines --triggers "$DB_NAME" > "$SQL_FILE" 2>/dev/null; then
       echo "✅ Database export complete"
     else
       echo "❌ Database export failed"
@@ -912,8 +987,7 @@ export_migration_sql() {
 # It joins gost-network and proxies to frontend:80.
 # ============================================================
 
-CADDY_CONTAINER="tms-caddy"
-CADDY_FILE="/etc/tms/Caddyfile"
+
 
 # Read the configured domain, or return an empty string.
 # Skip comments/global settings and locate the first site block.
@@ -973,10 +1047,10 @@ EOF
 }
 
 start_caddy() {
-  docker run -d --name "$CADDY_CONTAINER" --restart unless-stopped --network gost-network \
+  docker run -d --name "$CADDY_CONTAINER" --restart unless-stopped --network "$PANEL_NETWORK" \
     -p 80:80 -p "$1:$1" \
     -v "$CADDY_FILE":/etc/caddy/Caddyfile:ro \
-    -v tms_caddy_data:/data -v tms_caddy_config:/config caddy:2-alpine >/dev/null
+    -v "$CADDY_DATA":/data -v "$CADDY_CONFIG":/config caddy:2-alpine >/dev/null
 }
 
 show_domain_status() {
@@ -1002,7 +1076,7 @@ domain_off() {
   docker rm -f "$CADDY_CONTAINER" 2>/dev/null || true
   rm -f "$CADDY_FILE" 2>/dev/null || true
   echo "✅ Domain access disabled. Panel URL: http://$(get_server_ip):$(get_frontend_port)"
-  echo "ℹ️  Certificates remain in the tms_caddy_data volume for reuse with the same domain."
+  echo "ℹ️  Certificates remain in the $CADDY_DATA volume for reuse with the same domain."
 }
 
 setup_domain() {
@@ -1058,8 +1132,8 @@ setup_domain() {
     echo "❌ Docker is not installed. Install the panel first."
     return 1
   fi
-  if ! docker ps --format '{{.Names}}' | grep -qx "vite-frontend"; then
-    echo "❌ Panel is not running (vite-frontend container not found). Start the panel before configuring a domain."
+  if ! docker ps --format '{{.Names}}' | grep -qx "$FRONTEND_CONTAINER"; then
+    echo "❌ Panel is not running ($FRONTEND_CONTAINER container not found). Start the panel before configuring a domain."
     return 1
   fi
 
@@ -1200,9 +1274,9 @@ _verify_sql_dump() {
 
 # Prefer container database settings, falling back to .env.
 _load_db_cfg() {
-  if docker ps --format "{{.Names}}" | grep -q "^springboot-backend$"; then
+  if docker ps --format "{{.Names}}" | grep -qx "$BACKEND_CONTAINER"; then
     local info
-    info=$(docker exec springboot-backend env 2>/dev/null | grep "^DB_" || echo "")
+    info=$(docker exec "$BACKEND_CONTAINER" env 2>/dev/null | grep "^DB_" || echo "")
     DB_NAME=$(echo "$info" | grep "^DB_NAME=" | cut -d'=' -f2)
     DB_USER=$(echo "$info" | grep "^DB_USER=" | cut -d'=' -f2)
     DB_PASSWORD=$(echo "$info" | grep "^DB_PASSWORD=" | cut -d'=' -f2)
@@ -1219,9 +1293,9 @@ _load_db_cfg() {
 # A failed restore may already have consumed part of stdin.
 # Retrying another account on the same stream could silently restore only the tail.
 _pick_mysql_user() {
-  if docker exec gost-mysql mysql -u "$DB_USER" -p"$DB_PASSWORD" -e "SELECT 1" >/dev/null 2>&1; then
+  if docker exec "$MYSQL_CONTAINER" mysql -u "$DB_USER" -p"$DB_PASSWORD" -e "SELECT 1" >/dev/null 2>&1; then
     MYSQL_AS="$DB_USER"
-  elif docker exec gost-mysql mysql -u root -p"$DB_PASSWORD" -e "SELECT 1" >/dev/null 2>&1; then
+  elif docker exec "$MYSQL_CONTAINER" mysql -u root -p"$DB_PASSWORD" -e "SELECT 1" >/dev/null 2>&1; then
     MYSQL_AS="root"
   else
     echo "❌ Cannot connect to the database with either the application or root account. Check the credentials."
@@ -1232,12 +1306,12 @@ _pick_mysql_user() {
 
 # Execute SQL without printing it; load configuration and select the account first.
 _sql_exec() {
-  docker exec gost-mysql mysql --default-character-set=utf8mb4 \
+  docker exec "$MYSQL_CONTAINER" mysql --default-character-set=utf8mb4 \
     -u "$MYSQL_AS" -p"$DB_PASSWORD" "$DB_NAME" -e "$1" 2>/dev/null
 }
 # Read one scalar value and remove carriage returns for reliable comparison.
 _sql_scalar() {
-  docker exec gost-mysql mysql --default-character-set=utf8mb4 \
+  docker exec "$MYSQL_CONTAINER" mysql --default-character-set=utf8mb4 \
     -u "$MYSQL_AS" -p"$DB_PASSWORD" "$DB_NAME" -N -B -e "$1" 2>/dev/null | tr -d '\r' | head -1
 }
 
@@ -1256,7 +1330,7 @@ restore_migration_sql() {
   _verify_sql_dump "$file" || return 1
   echo "✅ Backup integrity verified"
 
-  if ! docker ps --format "{{.Names}}" | grep -q "^gost-mysql$"; then
+  if ! docker ps --format "{{.Names}}" | grep -qx "$MYSQL_CONTAINER"; then
     echo "❌ Database container is not running. Install the panel on this server (librelay install) before restoring."
     return 1
   fi
@@ -1267,7 +1341,7 @@ restore_migration_sql() {
   # Guard: refuse to overwrite a nonempty database without --force.
   # A fresh installation has initial tables too; explicit confirmation is required.
   local cnt
-  cnt=$(docker exec gost-mysql mysql -u "$MYSQL_AS" -p"$DB_PASSWORD" -N -B \
+  cnt=$(docker exec "$MYSQL_CONTAINER" mysql -u "$MYSQL_AS" -p"$DB_PASSWORD" -N -B \
         -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME'" 2>/dev/null | tr -d '\r')
   if [[ "${cnt:-0}" -gt 0 && "$force" != "--force" ]]; then
     echo ""
@@ -1285,7 +1359,7 @@ restore_migration_sql() {
   if [[ "${cnt:-0}" -gt 0 ]]; then
     local safety="before_restore_$(date +%Y%m%d_%H%M%S).sql"
     echo "💾 Saving current data to $safety(for recovery if needed)..."
-    if docker exec gost-mysql mysqldump --default-character-set=utf8mb4 -u "$MYSQL_AS" -p"$DB_PASSWORD" \
+    if docker exec "$MYSQL_CONTAINER" mysqldump --default-character-set=utf8mb4 -u "$MYSQL_AS" -p"$DB_PASSWORD" \
          --single-transaction --routines --triggers "$DB_NAME" > "$safety" 2>/dev/null \
        && _verify_sql_dump "$safety" >/dev/null 2>&1; then
       echo "✅ Saved:$(pwd)/$safety"
@@ -1303,11 +1377,11 @@ restore_migration_sql() {
 
   # Stop the backend before importing to avoid reads of partially restored data.
   echo "⏸  Stopping backend..."
-  docker stop springboot-backend >/dev/null 2>&1 || true
+  docker stop "$BACKEND_CONTAINER" >/dev/null 2>&1 || true
 
   echo "⏳ Restoring..."
   local rc=0
-  docker exec -i gost-mysql mysql --default-character-set=utf8mb4 -u "$MYSQL_AS" -p"$DB_PASSWORD" "$DB_NAME" < "$file" 2>/dev/null || rc=$?
+  docker exec -i "$MYSQL_CONTAINER" mysql --default-character-set=utf8mb4 -u "$MYSQL_AS" -p"$DB_PASSWORD" "$DB_NAME" < "$file" 2>/dev/null || rc=$?
 
   # Nodes must reconnect before being marked online.
   # WebSocket connection callbacks normally set node.status to 1 or 0.
@@ -1322,7 +1396,7 @@ restore_migration_sql() {
   fi
 
   echo "▶️  Restarting backend..."
-  docker start springboot-backend >/dev/null 2>&1 || true
+  docker start "$BACKEND_CONTAINER" >/dev/null 2>&1 || true
 
   if [[ $rc -ne 0 ]]; then
     echo "❌ Restore failed (mysql exit code $rc)"
@@ -1372,12 +1446,12 @@ main() {
   if [[ "${1:-}" != -* && $# -gt 0 ]]; then command="$1"; shift; fi
   while [ $# -gt 0 ]; do
     case "$1" in
-      --source) TMS_PANEL_SOURCE=1; SOURCE_REQUESTED=1; shift ;;
+      --source) LIBRELAY_PANEL_SOURCE=1; SOURCE_REQUESTED=1; shift ;;
       --port|-p) [ $# -ge 2 ] || { echo "Missing port." >&2; exit 1; }; FRONTEND_PORT="$2"; PORT_REQUESTED=1; valid_port "$FRONTEND_PORT" || { echo "Invalid panel port: $FRONTEND_PORT" >&2; exit 1; }; shift 2 ;;
       --https-port) [ $# -ge 2 ] || { echo "Missing HTTPS port." >&2; exit 1; }; INSTALL_HTTPS_PORT="$2"; valid_port "$INSTALL_HTTPS_PORT" || { echo "Invalid HTTPS port" >&2; exit 1; }; INSTALL_HTTPS_PORT=$((10#$INSTALL_HTTPS_PORT)); [ "$INSTALL_HTTPS_PORT" != 80 ] && [ "$INSTALL_HTTPS_PORT" != 2019 ] || { echo "HTTPS port conflicts with Caddy HTTP/admin listener" >&2; exit 1; }; shift 2 ;;
       --domain) [ $# -ge 2 ] || { echo "Missing domain." >&2; exit 1; }; INSTALL_DOMAIN="$2"; shift 2 ;;
       --install-dir) [ $# -ge 2 ] || { echo "Missing install directory." >&2; exit 1; }; INSTALL_DIR="$2"; INSTALL_DIR_EXPLICIT=1; shift 2 ;;
-      --help|-h) echo "Usage: panel_install.sh [install|update|status|info|domain DOMAIN] [--source] [--port PORT|-p PORT] [--domain DOMAIN] [--https-port PORT] [--install-dir /opt/tms]"; return ;;
+      --help|-h) echo "Usage: panel_install.sh [install|update|status|info|domain DOMAIN] [--source] [--port PORT|-p PORT] [--domain DOMAIN] [--https-port PORT] [--install-dir /opt/librelay]"; return ;;
       -*) echo "Unknown option: $1" >&2; exit 1 ;;
       *) args+=("$1"); shift ;;
     esac
@@ -1391,13 +1465,24 @@ main() {
   if [ -n "$INSTALL_HTTPS_PORT" ] && [ "$command" != domain ] && { [ "$command" != install ] || [ -z "$INSTALL_DOMAIN" ]; }; then
     echo "--https-port requires domain DOMAIN, or --domain during install." >&2; exit 1
   fi
-  [[ "$TMS_PANEL_SOURCE" = 0 || "$TMS_PANEL_SOURCE" = 1 ]] || { echo "TMS_PANEL_SOURCE must be 0 or 1" >&2; exit 1; }
+  [[ "$LIBRELAY_PANEL_SOURCE" = 0 || "$LIBRELAY_PANEL_SOURCE" = 1 ]] || { echo "LIBRELAY_PANEL_SOURCE must be 0 or 1" >&2; exit 1; }
   if [ "$SOURCE_REQUESTED" = 1 ] && [ "$command" != install ] && [ "$command" != update ]; then
     echo "--source applies only to install/update." >&2; exit 1
   fi
   prepare_host
+  if [ "$INSTALL_DIR_EXPLICIT" = 0 ] && [ ! -f .env ] && [ "$command" != install ]; then
+    local saved_dir="${LIBRELAY_DIR:-${TMS_DIR:-}}" launcher
+    for launcher in /usr/local/bin/librelay /usr/local/bin/tms; do
+      [ -n "$saved_dir" ] || [ ! -f "$launcher" ] || saved_dir=$(sed -n 's/^\(LIBRELAY_DIR\|TMS_DIR\)="\([^" ]*\)"$/\2/p' "$launcher" | head -1)
+    done
+    if [ -n "$saved_dir" ] && [ -f "$saved_dir/.env" ]; then INSTALL_DIR="$saved_dir"
+    elif [ -f /opt/librelay/.env ]; then INSTALL_DIR=/opt/librelay
+    elif [ -f /opt/tms/.env ]; then INSTALL_DIR=/opt/tms; fi
+  fi
   # Management launcher already enters the saved directory. Standalone commands may reuse cwd.
   if [ "$INSTALL_DIR_EXPLICIT" = 1 ] || [ ! -f .env ]; then mkdir -p "$INSTALL_DIR"; cd "$INSTALL_DIR"; fi
+  if [ "$command" = update ]; then migrate_repository_identity || return 1; fi
+  load_deployment_layout || return 1
   if [ -f .env ]; then
     saved_repo=$(sed -n 's/^GITHUB_REPO=//p' .env | head -1)
     saved_ref=$(sed -n 's/^GITHUB_REF=//p' .env | head -1)

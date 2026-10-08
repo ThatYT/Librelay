@@ -41,7 +41,7 @@ jobs:
       - name: Verify installer downloads the published binary
         run: |
           export GITHUB_REPO="$GITHUB_REPOSITORY" GITHUB_REF=main
-          export TMS_NODE_RELEASE="node-${GITHUB_SHA}"
+          export LIBRELAY_NODE_RELEASE="node-${GITHUB_SHA}"
           source install.sh
           COUNTRY=US
           candidate_dir=$(mktemp -d)

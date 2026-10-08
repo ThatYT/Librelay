@@ -86,21 +86,21 @@ for option in 4 5; do
 done
 # Install both CLI names into an isolated directory and verify argument forwarding.
 source "$repo_dir/panel_install.sh"
-TMS_COMMAND_DIR="$workspace/bin with spaces"
-mkdir -p "$TMS_COMMAND_DIR"
+LIBRELAY_COMMAND_DIR="$workspace/bin with spaces"
+mkdir -p "$LIBRELAY_COMMAND_DIR"
 # Resolve the real installer instead of the test driver when creating launchers.
 readlink() { printf '%s\n' "$repo_dir/panel_install.sh"; }
-install_tms_command
+install_librelay_command
 unset -f readlink
-cmp "$repo_dir/panel_install.sh" "$TMS_COMMAND_DIR/tms-panel.sh"
-cat > "$TMS_COMMAND_DIR/tms-panel.sh" <<'MANAGER'
+cmp "$repo_dir/panel_install.sh" "$LIBRELAY_COMMAND_DIR/librelay-panel.sh"
+cat > "$LIBRELAY_COMMAND_DIR/librelay-panel.sh" <<'MANAGER'
 #!/usr/bin/env bash
 printf '%s\n' "$PWD" "$@"
 MANAGER
 for command in librelay tms; do
-  output=$("$TMS_COMMAND_DIR/$command" domain panel.example.com --https-port 2095)
+  output=$("$LIBRELAY_COMMAND_DIR/$command" domain panel.example.com --https-port 2095)
   [ "$output" = "$workspace"$'\n''domain'$'\n''panel.example.com'$'\n''--https-port'$'\n''2095' ]
-  output=$("$TMS_COMMAND_DIR/$command")
+  output=$("$LIBRELAY_COMMAND_DIR/$command")
   [ "$output" = "$workspace"$'\n''menu' ]
 done
 printf 'Installer regression checks passed\n'

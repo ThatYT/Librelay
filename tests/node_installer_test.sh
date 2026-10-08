@@ -32,13 +32,13 @@ curl() {
     *) echo "Unexpected network request: $url" >&2; return 1 ;;
   esac
 }
-unset TMS_NODE_RELEASE TMS_NODE_SOURCE
+unset LIBRELAY_NODE_RELEASE LIBRELAY_NODE_SOURCE
 download_agent "$INSTALL_DIR/gost.new"
 cmp "$INSTALL_DIR/gost.new" "$workspace/fixture-agent"
 grep -q "/releases/download/node-${fixture_revision}/gost-amd64" "$workspace/urls"
 if grep -qE 'codeload|go.dev' "$workspace/urls"; then echo 'Default mode compiled source'; exit 1; fi
 # Specific tags use GitHub's correct /releases/download/TAG/asset route.
-export TMS_NODE_RELEASE=gost-v-test
+export LIBRELAY_NODE_RELEASE=gost-v-test
 download_agent "$INSTALL_DIR/gost.new"
 grep -q '/releases/download/gost-v-test/gost-amd64' "$workspace/urls"
 # A corrupt download must not replace an existing executable.

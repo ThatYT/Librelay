@@ -14,7 +14,7 @@ sleep() { :; }
 curl() { printf '%s\n' "$*" >> "$workspace/curls"; }
 docker() {
   case "$1" in
-    ps) printf 'vite-frontend\ntms-caddy\n' ;;
+    ps) printf '%s\n' "$FRONTEND_CONTAINER" "$CADDY_CONTAINER" ;;
     port) printf '80/tcp -> 0.0.0.0:80\n443/tcp -> 0.0.0.0:443\n' ;;
     run)
       printf '%s\n' "$*" >> "$workspace/docker-runs"
@@ -62,9 +62,9 @@ fixture_fail_start=0
 printf 'panel.example.com {\n}\n' > "$CADDY_FILE"
 [ "$(current_https_url)" = https://panel.example.com ]
 # Capture configs for real Caddy validation/runtime checks in CI.
-if [ -n "${TMS_CADDY_FIXTURE_DIR:-}" ]; then
-  mkdir -p "$TMS_CADDY_FIXTURE_DIR"
-  write_caddy_config panel.example.test 2095 "$TMS_CADDY_FIXTURE_DIR/Caddyfile"
+if [ -n "${LIBRELAY_CADDY_FIXTURE_DIR:-}" ]; then
+  mkdir -p "$LIBRELAY_CADDY_FIXTURE_DIR"
+  write_caddy_config panel.example.test 2095 "$LIBRELAY_CADDY_FIXTURE_DIR/Caddyfile"
 fi
 prepare_host() { :; }
 setup_domain() { printf '%s %s\n' "$1" "$2"; }

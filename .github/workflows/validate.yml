@@ -12,7 +12,7 @@ jobs:
       schema-mysql:
         image: mysql:5.7
         env:
-          MYSQL_DATABASE: tms_schema_test
+          MYSQL_DATABASE: librelay_schema_test
           MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
           MYSQL_ROOT_HOST: '%'
         ports:
@@ -23,7 +23,7 @@ jobs:
           --health-timeout=5s
           --health-retries=30
     env:
-      TMS_SCHEMA_TEST_URL: jdbc:mysql://127.0.0.1:3306/tms_schema_test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      LIBRELAY_SCHEMA_TEST_URL: jdbc:mysql://127.0.0.1:3306/librelay_schema_test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -43,7 +43,7 @@ jobs:
         run: mvn -B -f springboot-backend/pom.xml test package
       - name: Validate all protocol configs with the node sing-box version
         run: |
-          fixture_dir="$RUNNER_TEMP/tms-protocol-fixtures"
+          fixture_dir="$RUNNER_TEMP/librelay-protocol-fixtures"
           mkdir -p "$fixture_dir"
           openssl req -x509 -newkey rsa:2048 -nodes -keyout "$fixture_dir/self.key" -out "$fixture_dir/self.crt" -days 1 -subj /CN=localhost
           mvn -B -f springboot-backend/pom.xml -Dtest=RealityPortTest \
@@ -58,26 +58,26 @@ jobs:
         env:
           MYSQL_SERVICE_ID: ${{ job.services.schema-mysql.id }}
         run: |
-          docker build -t tms-backend:ci springboot-backend
+          docker build -t librelay-backend:ci springboot-backend
           network=$(docker inspect -f '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}}{{end}}' "$MYSQL_SERVICE_ID")
           export JWT_SECRET=$(openssl rand -hex 48)
-          docker run -d --name tms-backend-ci --network "$network" \
-            -e DB_HOST=schema-mysql -e DB_NAME=tms_schema_test -e DB_USER=root -e DB_PASSWORD= \
-            -e JWT_SECRET -e LOG_DIR=/app/logs tms-backend:ci
+          docker run -d --name librelay-backend-ci --network "$network" \
+            -e DB_HOST=schema-mysql -e DB_NAME=librelay_schema_test -e DB_USER=root -e DB_PASSWORD= \
+            -e JWT_SECRET -e LOG_DIR=/app/logs librelay-backend:ci
           for attempt in $(seq 1 60); do
-            health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' tms-backend-ci)
+            health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' librelay-backend-ci)
             if [ "$health" = healthy ]; then
-              docker exec tms-backend-ci curl -fsS -X POST http://127.0.0.1:6365/api/v1/captcha/check
+              docker exec librelay-backend-ci curl -fsS -X POST http://127.0.0.1:6365/api/v1/captcha/check
               exit 0
             fi
             sleep 3
           done
-          docker logs tms-backend-ci --tail 100
-          docker inspect -f '{{json .State.Health}}' tms-backend-ci
+          docker logs librelay-backend-ci --tail 100
+          docker inspect -f '{{json .State.Health}}' librelay-backend-ci
           exit 1
       - name: Clean up backend smoke container
         if: always()
-        run: docker rm -f tms-backend-ci 2>/dev/null || true
+        run: docker rm -f librelay-backend-ci 2>/dev/null || true
       - name: Frontend tests and production build
         working-directory: vite-frontend
         run: |
@@ -90,48 +90,49 @@ jobs:
           cd go-gost/x
           go test ./socket ./handler/socks/v5 ./config/parsing/service
           cd ..
-          CGO_ENABLED=0 go build -mod=mod -o /tmp/tms-gost .
+          CGO_ENABLED=0 go build -mod=mod -o /tmp/librelay-gost .
       - name: Installer syntax and regression
         run: |
-          bash -n panel_install.sh install.sh tms-hybrid.sh
+          bash -n panel_install.sh install.sh librelay-hybrid.sh tms-hybrid.sh
           if command -v shellcheck >/dev/null; then shellcheck -S error panel_install.sh tests/panel_deploy_test.sh; fi
           bash tests/installer_test.sh
+          bash tests/branding_upgrade_test.sh
           compose_plugin=$(docker info --format '{{range .ClientInfo.Plugins}}{{if eq .Name "compose"}}{{.Path}}{{end}}{{end}}')
-          TMS_TEST_COMPOSE="$compose_plugin" bash tests/panel_deploy_test.sh
+          LIBRELAY_TEST_COMPOSE="$compose_plugin" bash tests/panel_deploy_test.sh
           bash tests/node_installer_test.sh
           bash tests/domain_test.sh
       - name: Custom Caddy HTTPS port validation
         run: |
-          export TMS_CADDY_FIXTURE_DIR="$RUNNER_TEMP/tms-caddy-test"
+          export LIBRELAY_CADDY_FIXTURE_DIR="$RUNNER_TEMP/librelay-caddy-test"
           bash tests/domain_test.sh
-          docker run --rm -v "$TMS_CADDY_FIXTURE_DIR/Caddyfile":/etc/caddy/Caddyfile:ro \
-            caddy:2-alpine caddy adapt --config /etc/caddy/Caddyfile --validate > "$TMS_CADDY_FIXTURE_DIR/config.json"
-          jq -e '[.apps.http.servers[].listen[]] | index(":2095") != null' "$TMS_CADDY_FIXTURE_DIR/config.json"
-          jq -e '[.apps.http.servers[].listen[]] | index(":443") == null' "$TMS_CADDY_FIXTURE_DIR/config.json"
+          docker run --rm -v "$LIBRELAY_CADDY_FIXTURE_DIR/Caddyfile":/etc/caddy/Caddyfile:ro \
+            caddy:2-alpine caddy adapt --config /etc/caddy/Caddyfile --validate > "$LIBRELAY_CADDY_FIXTURE_DIR/config.json"
+          jq -e '[.apps.http.servers[].listen[]] | index(":2095") != null' "$LIBRELAY_CADDY_FIXTURE_DIR/config.json"
+          jq -e '[.apps.http.servers[].listen[]] | index(":443") == null' "$LIBRELAY_CADDY_FIXTURE_DIR/config.json"
           # Use local test certificates so CI never requests a public certificate.
           sed '/    tls {/,/^    }/d;s/    encode gzip/    tls internal\n    encode gzip/' \
-            "$TMS_CADDY_FIXTURE_DIR/Caddyfile" > "$TMS_CADDY_FIXTURE_DIR/Caddyfile.local"
-          docker network create tms-caddy-test
-          docker run -d --name frontend --network tms-caddy-test nginx:alpine
+            "$LIBRELAY_CADDY_FIXTURE_DIR/Caddyfile" > "$LIBRELAY_CADDY_FIXTURE_DIR/Caddyfile.local"
+          docker network create librelay-caddy-test
+          docker run -d --name frontend --network librelay-caddy-test nginx:alpine
           docker run -d --name reality-port-fixture -p 443:80 nginx:alpine
-          docker run -d --name tms-caddy-test --network tms-caddy-test -p 80:80 -p 2095:2095 \
-            -v "$TMS_CADDY_FIXTURE_DIR/Caddyfile.local":/etc/caddy/Caddyfile:ro caddy:2-alpine
+          docker run -d --name librelay-caddy-test --network librelay-caddy-test -p 80:80 -p 2095:2095 \
+            -v "$LIBRELAY_CADDY_FIXTURE_DIR/Caddyfile.local":/etc/caddy/Caddyfile:ro caddy:2-alpine
           for attempt in $(seq 1 20); do
             if curl --noproxy '*' -fkSs --resolve panel.example.test:2095:127.0.0.1 \
-                https://panel.example.test:2095/ > "$TMS_CADDY_FIXTURE_DIR/response"; then
-              grep -q 'Welcome to nginx' "$TMS_CADDY_FIXTURE_DIR/response"
+                https://panel.example.test:2095/ > "$LIBRELAY_CADDY_FIXTURE_DIR/response"; then
+              grep -q 'Welcome to nginx' "$LIBRELAY_CADDY_FIXTURE_DIR/response"
               curl --noproxy '*' -fsS http://127.0.0.1:443/ > /dev/null
               exit 0
             fi
             sleep 2
           done
-          docker logs tms-caddy-test
+          docker logs librelay-caddy-test
           exit 1
       - name: Clean up Caddy smoke containers
         if: always()
         run: |
-          docker rm -f tms-caddy-test frontend reality-port-fixture 2>/dev/null || true
-          docker network rm tms-caddy-test 2>/dev/null || true
+          docker rm -f librelay-caddy-test frontend reality-port-fixture 2>/dev/null || true
+          docker network rm librelay-caddy-test 2>/dev/null || true
       - name: Docker Compose validation
         run: |
           for compose in docker-compose-v4.yml docker-compose-v6.yml docker-compose-hybrid.yml; do

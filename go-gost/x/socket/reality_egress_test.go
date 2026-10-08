@@ -33,6 +33,11 @@ func unusedAddress(t *testing.T) string {
 	return address
 }
 func TestPrivateRealityEgressAndLifecycle(t *testing.T) {
+	for _, key := range []string{"librelay.privateEgress", "tms.privateEgress"} {
+		t.Run(key, func(t *testing.T) { testPrivateRealityEgressAndLifecycle(t, key) })
+	}
+}
+func testPrivateRealityEgressAndLifecycle(t *testing.T, metadataKey string) {
 	oldLogger := logger.Default()
 	logger.SetDefault(xlogger.NewLogger(xlogger.OutputOption(io.Discard)))
 	if oldLogger != nil {
@@ -45,8 +50,8 @@ func TestPrivateRealityEgressAndLifecycle(t *testing.T) {
 	gatewayAddress, userAddress := unusedAddress(t), unusedAddress(t)
 	var services []config.ServiceConfig
 	raw, _ := json.Marshal([]map[string]interface{}{
-		{"name": "test-gateway", "addr": gatewayAddress, "metadata": map[string]interface{}{"tms.privateEgress": true}, "handler": map[string]interface{}{"type": "socks5", "metadata": map[string]interface{}{"udp": true, "notls": true}}, "listener": map[string]interface{}{"type": "tcp"}},
-		{"name": "123_7_0_tcp", "addr": userAddress, "metadata": map[string]interface{}{"tms.privateEgress": true}, "handler": map[string]interface{}{"type": "socks5", "chain": "123_7_0_chains", "metadata": map[string]interface{}{"udp": true, "notls": true}}, "listener": map[string]interface{}{"type": "tcp"}},
+		{"name": "test-gateway", "addr": gatewayAddress, "metadata": map[string]interface{}{metadataKey: true}, "handler": map[string]interface{}{"type": "socks5", "metadata": map[string]interface{}{"udp": true, "notls": true}}, "listener": map[string]interface{}{"type": "tcp"}},
+		{"name": "123_7_0_tcp", "addr": userAddress, "metadata": map[string]interface{}{metadataKey: true}, "handler": map[string]interface{}{"type": "socks5", "chain": "123_7_0_chains", "metadata": map[string]interface{}{"udp": true, "notls": true}}, "listener": map[string]interface{}{"type": "tcp"}},
 	})
 	if err := json.Unmarshal(raw, &services); err != nil {
 		t.Fatal(err)

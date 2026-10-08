@@ -63,30 +63,61 @@ jobs:
           done
       - name: Install and update using published images, retaining data
         run: |
-          install_dir="$RUNNER_TEMP/tms-image-install"
+          install_dir="$RUNNER_TEMP/librelay-image-install"
           sudo env GITHUB_REPO="$GITHUB_REPOSITORY" GITHUB_REF="$GITHUB_SHA" \
             bash "$GITHUB_WORKSPACE/panel_install.sh" --install-dir "$install_dir" --port 8080
           sudo cp "$install_dir/.env" "$install_dir/expected.env"
           sudo sh -c 'printf "# retained Caddy configuration\n" > "$1/Caddyfile"' sh "$install_dir"
-          docker exec gost-mysql sh -c '
+          docker exec librelay-mysql sh -c '
             export MYSQL_PWD="$MYSQL_PASSWORD"
             mysql --user="$MYSQL_USER" --database="$MYSQL_DATABASE" -e "$1"
           ' sh "INSERT INTO vite_config(name,value,time) VALUES ('ci_persist','saved',1); INSERT INTO inbound(node_id,tag,protocol,listen_port,created_time) VALUES (7,'ci-legacy','vless',20000,1);"
-          docker restart gost-mysql springboot-backend vite-frontend
-          sudo env GITHUB_REPO="$GITHUB_REPOSITORY" GITHUB_REF="$GITHUB_SHA" TMS_SELF_UPDATED=1 \
+          docker restart librelay-mysql librelay-backend librelay-frontend
+          sudo env GITHUB_REPO="$GITHUB_REPOSITORY" GITHUB_REF="$GITHUB_SHA" LIBRELAY_SELF_UPDATED=1 \
             bash "$GITHUB_WORKSPACE/panel_install.sh" update --install-dir "$install_dir"
           sudo cmp "$install_dir/.env" "$install_dir/expected.env"
           sudo grep -q 'retained Caddy configuration' "$install_dir/Caddyfile"
-          result=$(docker exec gost-mysql sh -c '
+          result=$(docker exec librelay-mysql sh -c '
             export MYSQL_PWD="$MYSQL_PASSWORD"
             mysql --user="$MYSQL_USER" --database="$MYSQL_DATABASE" --batch --skip-column-names -e "$1"
           ' sh "SELECT value FROM vite_config WHERE name='ci_persist'; SELECT listen_port FROM inbound WHERE tag='ci-legacy';")
           test "$result" = $'saved\n20000'
           curl -fsS http://127.0.0.1:8080/ > /dev/null
           curl -fsS -X POST http://127.0.0.1:6365/api/v1/captcha/check | grep -Eq '\"code\"[[:space:]]*:[[:space:]]*0'
-          sudo grep -q '^MODE=images$' "$install_dir/.tms-deployment"
+          sudo grep -q '^MODE=images$' "$install_dir/.librelay-deployment"
+      - name: Upgrade a legacy deployment without replacing its storage
+        run: |
+          # All containers and volumes in this runner are disposable fixtures.
+          docker rm -f librelay-mysql librelay-backend librelay-frontend
+          docker volume rm librelay_mysql_data librelay_backend_logs
+          legacy_dir="$RUNNER_TEMP/legacy-panel"
+          mkdir -p "$legacy_dir"
+          cp gost.sql "$legacy_dir/gost.sql"
+          db_secret=$(openssl rand -hex 32)
+          jwt_secret=$(openssl rand -hex 48)
+          (umask 077; printf 'DB_NAME=gost\nDB_USER=gost\nDB_PASSWORD=%s\nJWT_SECRET=%s\nGITHUB_REPO=ThatYT/Tms_EN\nGITHUB_REF=%s\nFRONTEND_PORT=8080\nBACKEND_PORT=6365\n' "$db_secret" "$jwt_secret" "$GITHUB_SHA" > "$legacy_dir/.env")
+          cp "$legacy_dir/.env" "$legacy_dir/original.env"
+          sudo env LIBRELAY_SELF_UPDATED=1 bash panel_install.sh update --install-dir "$legacy_dir"
+          sudo cmp "$legacy_dir/original.env" "$legacy_dir/.env.before-librelay"
+          docker exec gost-mysql sh -c '
+            export MYSQL_PWD="$MYSQL_PASSWORD"
+            mysql --user="$MYSQL_USER" --database="$MYSQL_DATABASE" -e "$1"
+          ' sh "INSERT INTO vite_config(name,value,time) VALUES ('legacy_persist','retained',1); INSERT INTO inbound(node_id,tag,protocol,listen_port,created_time) VALUES (7,'legacy-reality','vless',20000,1);"
+          sudo cp "$legacy_dir/.env" "$legacy_dir/expected.env"
+          docker restart gost-mysql springboot-backend vite-frontend
+          sudo env LIBRELAY_SELF_UPDATED=1 bash panel_install.sh update --install-dir "$legacy_dir"
+          sudo cmp "$legacy_dir/.env" "$legacy_dir/expected.env"
+          test "$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/var/lib/mysql"}}{{.Name}}{{end}}{{end}}' gost-mysql)" = mysql_data
+          result=$(docker exec gost-mysql sh -c '
+            export MYSQL_PWD="$MYSQL_PASSWORD"
+            mysql --user="$MYSQL_USER" --database="$MYSQL_DATABASE" --batch --skip-column-names -e "$1"
+          ' sh "SELECT value FROM vite_config WHERE name='legacy_persist'; SELECT listen_port FROM inbound WHERE tag='legacy-reality';")
+          test "$result" = $'retained\n20000'
+          sudo librelay info
+          sudo tms status
+          curl -fsS -X POST http://127.0.0.1:6365/api/v1/captcha/check | grep -Eq '\"code\"[[:space:]]*:[[:space:]]*0'
       - name: Clean up disposable installer smoke deployment
         if: always()
         run: |
-          docker rm -f gost-mysql springboot-backend vite-frontend 2>/dev/null || true
-          docker volume rm mysql_data backend_logs 2>/dev/null || true
+          docker rm -f librelay-mysql librelay-backend librelay-frontend gost-mysql springboot-backend vite-frontend 2>/dev/null || true
+          docker volume rm librelay_mysql_data librelay_backend_logs mysql_data backend_logs 2>/dev/null || true

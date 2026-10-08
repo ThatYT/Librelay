@@ -4,14 +4,14 @@ import zh from "./locales/zh-CN.json";
 import en from "./locales/en-US.json";
 
 export type Language = "zh-CN" | "en-US";
-export const languageKey = "tms.language";
+export const languageKey = "librelay.language";
 export function initialLanguage(saved: string | null, browser: string): Language {
   if (saved === "zh-CN" || saved === "en-US") return saved;
   return browser.toLowerCase().startsWith("zh") ? "zh-CN" : "en-US";
 }
 void i18next.use(initReactI18next).init({
   resources: { "zh-CN": { translation: zh }, "en-US": { translation: en } },
-  lng: initialLanguage(localStorage.getItem(languageKey), navigator.language),
+  lng: initialLanguage(localStorage.getItem(languageKey) ?? localStorage.getItem("tms.language"), navigator.language),
   fallbackLng: "en-US",
   keySeparator: false,
   interpolation: { escapeValue: false },

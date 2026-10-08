@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Flux"
+rootProject.name = "Librelay"
 include ':app'

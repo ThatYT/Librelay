@@ -1,5 +1,7 @@
 package com.admin.service.impl;
 
+import com.admin.common.utils.GostUtil;
+
 import com.admin.common.dto.ForwardDto;
 import com.admin.common.dto.GostDto;
 import com.admin.common.dto.InboundDto;
@@ -438,7 +440,7 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
         fdto.setName("inbound-" + in.getId() + "-user-" + user.getId());
         fdto.setTunnelId(tunnel.getId().intValue());
         fdto.setRemoteAddr(Boolean.TRUE.equals(in.getPublicListen())
-                ? "tms-socks://127.0.0.1:" + in.getEgressPort()
+                ? "librelay-socks://127.0.0.1:" + in.getEgressPort()
                 : "127.0.0.1:" + in.getListenPort());
         fdto.setStrategy("fifo");
         fdto.setSpeedId(userLimiter); // 转发引用车友专属限速器
@@ -664,7 +666,7 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
         fdto.setName("inbound-" + in.getId() + "-user-" + user.getId());
         fdto.setTunnelId(tunnel.getId().intValue());
         fdto.setRemoteAddr(Boolean.TRUE.equals(in.getPublicListen())
-                ? "tms-socks://127.0.0.1:" + in.getEgressPort()
+                ? "librelay-socks://127.0.0.1:" + in.getEgressPort()
                 : "127.0.0.1:" + in.getListenPort());
         fdto.setStrategy("fifo");
         fdto.setSpeedId(limiterName); // 转发引用车友专属限速器
@@ -1529,7 +1531,7 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
         for (Tunnel tunnel : tunnels) byId.put(tunnel.getId().intValue(), tunnel);
         if (!byId.isEmpty()) for (Forward forward : forwardMapper.selectList(new QueryWrapper<Forward>().in("tunnel_id", byId.keySet()))) {
             Tunnel tunnel = byId.get(forward.getTunnelId());
-            boolean privateSocks = forward.getRemoteAddr() != null && forward.getRemoteAddr().startsWith("tms-socks://");
+            boolean privateSocks = GostUtil.isPrivateSocksRemote(forward.getRemoteAddr());
             for (String network : networks) {
                 boolean entry = nodeId.equals(tunnel.getInNodeId()) && Integer.valueOf(port).equals(forward.getInPort())
                         && (!privateSocks || "tcp".equals(network));
@@ -1577,7 +1579,7 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
             Forward f = user.getGostForwardId() == null ? null : forwardMapper.selectById(user.getGostForwardId());
             if (f != null) {
                 oldTargets.put(f.getId(), f.getRemoteAddr());
-                f.setRemoteAddr("tms-socks://127.0.0.1:" + in.getEgressPort());
+                f.setRemoteAddr("librelay-socks://127.0.0.1:" + in.getEgressPort());
                 forwardService.updateById(f);
                 pushed = forwardService.updateInboundForward(f);
                 if (pushed.getCode() != 0) break;

@@ -315,7 +315,7 @@ COMMIT;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 
 -- ============================================================
--- TMS 合体面板 schema(协议管理 / 中转 / 线路)
+-- Librelay 合体面板 schema(协议管理 / 中转 / 线路)
 -- 新装时随本文件一次建好;老库升级请单独执行 hybrid-schema-v1/v2/v3.sql。
 -- 注意:合并进来后,docker-compose 里不要再额外挂载那三个文件,
 --       否则 ALTER TABLE 会重复执行报 1060 导致 MySQL 初始化中断。
@@ -426,7 +426,7 @@ ALTER TABLE `inbound`
   ADD COLUMN `landing_id` int(10) DEFAULT NULL COMMENT '落地ID:空=直连,有=经该落地中转出网';
 
 
--- TMS 面板 · 阶段4 数据库 schema(把「线路」正式建模,支持每条线路独立配额)
+-- Librelay 面板 · 阶段4 数据库 schema(把「线路」正式建模,支持每条线路独立配额)
 -- 加法式迁移:只新增表,不动现有数据。可在现有库上直接执行。
 -- 目标库:MySQL 5.7 / utf8mb4。
 

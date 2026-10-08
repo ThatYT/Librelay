@@ -20,7 +20,7 @@ import java.util.Map;
 /**
  * 版本信息 / 更新检查。
  *
- * TMS 安装使用不可变提交镜像,用【构建时注入的 git commit】
+ * Librelay 安装使用不可变提交镜像,用【构建时注入的 git commit】
  * 跟 GitHub 上 main 分支的最新 commit 比 —— 不一样就是有新版本。
  * 构建 commit 由 CI 通过 Docker build-arg 注入(见 docker-build.yml 和 Dockerfile),
  * 本地跑没注入时是 "dev",这种情况一律不提示更新。
@@ -59,7 +59,7 @@ public class VersionController extends BaseController {
         Map<String, Object> data = new HashMap<>();
         data.put("panelVersion", PANEL_VERSION);
         data.put("commit", current);
-        data.put("buildTime", System.getenv("TMS_BUILD_TIME"));
+        data.put("buildTime", System.getenv().getOrDefault("LIBRELAY_BUILD_TIME", System.getenv("TMS_BUILD_TIME")));
 
         String latest = latestCommit();
         data.put("latest", latest);
@@ -75,7 +75,7 @@ public class VersionController extends BaseController {
 
     /** 构建时注入的短 commit;本地开发没注入就是 dev */
     private String buildCommit() {
-        String c = System.getenv("TMS_BUILD_COMMIT");
+        String c = System.getenv().getOrDefault("LIBRELAY_BUILD_COMMIT", System.getenv("TMS_BUILD_COMMIT"));
         if (c == null || c.trim().isEmpty()) {
             return "dev";
         }

@@ -259,3 +259,8 @@ device.id
 commit.sh
 # Local dependency/test caches
 .pnpm-store/
+
+# Local deployment metadata and private installer migration backups
+.env.*
+.librelay-*
+.tms-*

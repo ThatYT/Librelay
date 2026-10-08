@@ -362,7 +362,7 @@ func ParseService(cfg *config.ServiceConfig) (service.Service, error) {
 
 	internalTransport := false
 	if cfg.Metadata != nil {
-		internalTransport = mdutil.GetBool(metadata.NewMetadata(cfg.Metadata), "tms.privateEgress")
+		internalTransport = mdutil.GetBool(metadata.NewMetadata(cfg.Metadata), "librelay.privateEgress") || mdutil.GetBool(metadata.NewMetadata(cfg.Metadata), "tms.privateEgress")
 	}
 	s := xservice.NewService(cfg.Name, ln, h,
 		xservice.InternalTransportOption(internalTransport),

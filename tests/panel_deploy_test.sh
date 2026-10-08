@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 repo_dir=$(cd "$(dirname "$0")/.." && pwd)
-export GITHUB_REPO=example/tms GITHUB_REF=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa TMS_PANEL_SOURCE=0
+export GITHUB_REPO=example/tms GITHUB_REF=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa LIBRELAY_PANEL_SOURCE=0
 source "$repo_dir/panel_install.sh"
 workspace=$(mktemp -d)
 trap 'rm -rf "$workspace"' EXIT
@@ -48,17 +48,17 @@ fixture_compose() {
   case "$action" in
     config)
       [ -s "$candidate" ]
-      if [ -n "${TMS_TEST_COMPOSE:-}" ]; then
-        "$TMS_TEST_COMPOSE" --project-directory "$PWD" --env-file .env -f "$candidate" config --quiet
+      if [ -n "${LIBRELAY_TEST_COMPOSE:-}" ]; then
+        "$LIBRELAY_TEST_COMPOSE" --project-directory "$PWD" --env-file .env -f "$candidate" config --quiet
       fi ;;
     pull)
       printf 'pull %s\n' "$*" >> calls
-      [ "$TMS_PANEL_SOURCE" = 0 ]
+      [ "$LIBRELAY_PANEL_SOURCE" = 0 ]
       grep -q "sha-$fixture_revision" "$candidate"
       [ "${FAIL_PULL:-0}" = 0 ] ;;
     build)
       printf 'build %s\n' "${*: -1}" >> calls
-      [ "$TMS_PANEL_SOURCE" = 1 ]
+      [ "$LIBRELAY_PANEL_SOURCE" = 1 ]
       [ "$COMPOSE_PARALLEL_LIMIT" = 1 ]
       [[ "$*" = *"BUILD_COMMIT=$fixture_revision"* ]]
       [ "${FAIL_BUILD:-0}" = 0 ] ;;
@@ -92,7 +92,7 @@ assert_saved_data() { cmp .env expected.env; cmp gost.sql previous.sql; cmp Cadd
   ! grep -q 'build:' docker-compose.yml
   grep -q "ghcr.io/example/springboot-backend:sha-$fixture_revision" docker-compose.yml
   grep -q "ghcr.io/example/vite-frontend:sha-$fixture_revision" docker-compose.yml
-  grep -q '^MODE=images$' .tms-deployment
+  grep -q '^MODE=images$' .librelay-deployment
   ! grep -q '^build ' calls
   [ "$(grep -c '^up$' calls)" = 1 ]
 )
@@ -103,7 +103,7 @@ for failure in pull revision; do (
   assert_saved_data
   cmp docker-compose.yml previous.yml
   ! grep -q '^up$' calls
-  [ ! -e .tms-deployment ]
+  [ ! -e .librelay-deployment ]
 ); done
 (
   prepare_fixture rollback
@@ -112,30 +112,30 @@ for failure in pull revision; do (
   assert_saved_data
   cmp docker-compose.yml previous.yml
   [ "$(grep -c '^up$' calls)" = 2 ]
-  [ ! -e .tms-deployment ]
+  [ ! -e .librelay-deployment ]
 )
 (
   prepare_fixture source
-  TMS_PANEL_SOURCE=1
+  LIBRELAY_PANEL_SOURCE=1
   deploy_panel
   assert_saved_data
   [ "$(sed -n '/^build /p' calls)" = 'build backend'$'\n''build frontend' ]
   ! grep -q '^pull ' calls
   [ -d .source/springboot-backend ]
   grep -q 'context: ./.source/springboot-backend' docker-compose.yml
-  grep -q '^MODE=source$' .tms-deployment
+  grep -q '^MODE=source$' .librelay-deployment
 )
 (
   prepare_fixture source-rollback
   mkdir .source; printf 'old source' > .source/sentinel
-  TMS_PANEL_SOURCE=1 FAIL_READY=1
+  LIBRELAY_PANEL_SOURCE=1 FAIL_READY=1
   if deploy_panel; then echo 'Accepted unready source backend'; exit 1; fi
   assert_saved_data; cmp docker-compose.yml previous.yml
   [ "$(cat .source/sentinel)" = 'old source' ]
 )
 (
   prepare_fixture build-failed
-  TMS_PANEL_SOURCE=1 FAIL_BUILD=1
+  LIBRELAY_PANEL_SOURCE=1 FAIL_BUILD=1
   if deploy_panel; then echo 'Accepted failed source build'; exit 1; fi
   assert_saved_data; cmp docker-compose.yml previous.yml
   ! grep -q '^up$' calls
@@ -150,9 +150,9 @@ if sed -n '/^update_panel()/,/^# Export a database backup\./p' "$repo_dir/panel_
 fi
 # CLI mode remains explicit, and resource mode is never enabled for status/domain.
 prepare_host() { :; }
-install_panel() { echo "$TMS_PANEL_SOURCE"; }
-TMS_PANEL_SOURCE=0
+install_panel() { echo "$LIBRELAY_PANEL_SOURCE"; }
+LIBRELAY_PANEL_SOURCE=0
 [ "$(main --source --install-dir "$workspace/cli")" = 1 ]
 if (main status --source --install-dir "$workspace/cli") >/dev/null 2>&1; then exit 1; fi
-if (TMS_PANEL_SOURCE=invalid; main --install-dir "$workspace/cli") >/dev/null 2>&1; then exit 1; fi
+if (LIBRELAY_PANEL_SOURCE=invalid; main --install-dir "$workspace/cli") >/dev/null 2>&1; then exit 1; fi
 printf 'Panel image/source deployment regression checks passed\n'

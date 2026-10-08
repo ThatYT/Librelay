@@ -11,6 +11,11 @@ import org.aspectj.apache.bcel.generic.RET;
 import java.util.Objects;
 
 public class GostUtil {
+    /** Stored legacy forwards remain usable after the branding migration. */
+    public static boolean isPrivateSocksRemote(String address) {
+        return address != null && (address.startsWith("librelay-socks://") || address.startsWith("tms-socks://"));
+    }
+
 
 
     private static GostDto ensureSocksChain(Long nodeId, String name, String gateway) {
@@ -51,11 +56,11 @@ public class GostUtil {
 
     public static GostDto AddService(Long node_id, String name, Integer in_port, Integer limiter, String remoteAddr, Integer fow_type, Tunnel tunnel, String strategy, String interfaceName) {
         JSONArray services = new JSONArray();
-        if (remoteAddr != null && remoteAddr.startsWith("tms-socks://")) {
-            GostDto chain = ensureSocksChain(node_id, name, remoteAddr.substring("tms-socks://".length()));
+        if (isPrivateSocksRemote(remoteAddr)) {
+            GostDto chain = ensureSocksChain(node_id, name, remoteAddr.substring(remoteAddr.indexOf("://") + 3));
             if (chain == null || !"OK".equals(chain.getMsg())) return chain;
         }
-        String[] protocols = remoteAddr != null && remoteAddr.startsWith("tms-socks://")
+        String[] protocols = isPrivateSocksRemote(remoteAddr)
                 ? new String[]{"tcp"} : new String[]{"tcp", "udp"};
         for (String protocol : protocols) {
             JSONObject service = createServiceConfig(name, in_port, limiter, remoteAddr, protocol, fow_type, tunnel, strategy, interfaceName);
@@ -66,11 +71,11 @@ public class GostUtil {
 
     public static GostDto UpdateService(Long node_id, String name, Integer in_port, Integer limiter, String remoteAddr, Integer fow_type, Tunnel tunnel, String strategy, String interfaceName) {
         JSONArray services = new JSONArray();
-        if (remoteAddr != null && remoteAddr.startsWith("tms-socks://")) {
-            GostDto chain = ensureSocksChain(node_id, name, remoteAddr.substring("tms-socks://".length()));
+        if (isPrivateSocksRemote(remoteAddr)) {
+            GostDto chain = ensureSocksChain(node_id, name, remoteAddr.substring(remoteAddr.indexOf("://") + 3));
             if (chain == null || !"OK".equals(chain.getMsg())) return chain;
         }
-        String[] protocols = remoteAddr != null && remoteAddr.startsWith("tms-socks://")
+        String[] protocols = isPrivateSocksRemote(remoteAddr)
                 ? new String[]{"tcp"} : new String[]{"tcp", "udp"};
         for (String protocol : protocols) {
             JSONObject service = createServiceConfig(name, in_port, limiter, remoteAddr, protocol, fow_type, tunnel, strategy, interfaceName);
@@ -345,9 +350,9 @@ public class GostUtil {
     private static JSONObject createServiceConfig(String name, Integer in_port, Integer limiter, String remoteAddr, String protocol, Integer fow_type, Tunnel tunnel, String strategy, String interfaceName) {
         JSONObject service = new JSONObject();
         service.put("name", name + "_" + protocol);
-        if (remoteAddr != null && remoteAddr.startsWith("tms-socks://")) {
+        if (isPrivateSocksRemote(remoteAddr)) {
             service.put("addr", "127.0.0.1:" + in_port);
-            JSONObject serviceMetadata = new JSONObject(); serviceMetadata.put("tms.privateEgress", true);
+            JSONObject serviceMetadata = new JSONObject(); serviceMetadata.put("librelay.privateEgress", true); serviceMetadata.put("tms.privateEgress", true); // Older node agents still read the legacy metadata key.
             service.put("metadata", serviceMetadata);
             JSONObject handler = new JSONObject();
             handler.put("type", "socks5");

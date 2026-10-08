@@ -4,9 +4,9 @@ package com.admin.common.utils;
 public final class RepositoryConfig {
     private RepositoryConfig() {}
     public static String repo() {
-        String value = System.getenv().getOrDefault("GITHUB_REPO", "Teminuosi/Tms");
+        String value = System.getenv().getOrDefault("GITHUB_REPO", "ThatYT/Librelay");
         if (!value.matches("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")) throw new IllegalArgumentException("Invalid GITHUB_REPO");
-        return value;
+        return "ThatYT/Tms_EN".equalsIgnoreCase(value) ? "ThatYT/Librelay" : value;
     }
     public static String ref() {
         String value = System.getenv().getOrDefault("GITHUB_REF", "main");

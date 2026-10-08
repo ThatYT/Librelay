@@ -7,7 +7,9 @@ if [ -z "${GITHUB_REPO:-}" ] && [ -r /etc/gost/repository.conf ]; then
   GITHUB_REPO=$(sed -n 's/^GITHUB_REPO=//p' /etc/gost/repository.conf | head -1)
   GITHUB_REF=$(sed -n 's/^GITHUB_REF=//p' /etc/gost/repository.conf | head -1)
 fi
-GITHUB_REPO="${GITHUB_REPO:-Teminuosi/Tms}"
+GITHUB_REPO="${GITHUB_REPO:-ThatYT/Librelay}"
+# Canonicalize the previous fork name for old generated installation commands.
+case "$GITHUB_REPO" in ThatYT/Tms_EN|thatyt/tms_en) GITHUB_REPO=ThatYT/Librelay ;; esac
 GITHUB_REF="${GITHUB_REF:-main}"
 [[ "$GITHUB_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ && "$GITHUB_REF" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "Invalid repository identity" >&2; exit 1; }
 
@@ -37,7 +39,7 @@ node_asset_url() {
 download_prebuilt_agent() {
   local destination="$1" staging="$2" architecture release revision expected actual
   architecture=$(get_architecture) || return 1
-  release=${TMS_NODE_RELEASE:-}
+  release=${LIBRELAY_NODE_RELEASE:-${TMS_NODE_RELEASE:-}}
   if [ -z "$release" ]; then
     curl -fLsS --retry 3 --max-time 30 "https://api.github.com/repos/${GITHUB_REPO}/commits/${GITHUB_REF}" -o "$staging/revision.json" || return 1
     revision=$(jq -r '.sha // empty' "$staging/revision.json")
@@ -51,7 +53,7 @@ download_prebuilt_agent() {
   echo "Downloading prebuilt node agent: $release ($architecture)..."
   if ! curl -fLsS --retry 2 --max-time 60 "$(node_asset_url "$release" checksums.sha256)" -o "$staging/checksums.sha256"; then
     echo "Prebuilt node release/checksums not available yet. Wait for the Node binaries workflow: https://github.com/${GITHUB_REPO}/actions" >&2
-    echo "Source compilation is optional: TMS_NODE_SOURCE=1 (requires at least 3 GiB free build space)." >&2
+    echo "Source compilation is optional: LIBRELAY_NODE_SOURCE=1 (requires at least 3 GiB free build space)." >&2
     return 1
   fi
   expected=$(awk -v file="gost-${architecture}" '$2 == file {print $1}' "$staging/checksums.sha256")
@@ -65,10 +67,10 @@ download_prebuilt_agent() {
 
 build_source_agent() {
   local destination="$1" staging architecture build_parent
-  build_parent=${TMS_NODE_BUILD_DIR:-/var/tmp}
+  build_parent=${LIBRELAY_NODE_BUILD_DIR:-${TMS_NODE_BUILD_DIR:-/var/tmp}}
   [ -d "$build_parent" ] || { echo "Node build directory must already exist: $build_parent" >&2; return 1; }
   check_node_space "$build_parent" 3145728 || return 1
-  staging=$(mktemp -d "$build_parent/tms-node-build.XXXXXX") || return 1
+  staging=$(mktemp -d "$build_parent/librelay-node-build.XXXXXX") || return 1
   architecture=$(get_architecture) || { rm -rf "$staging"; return 1; }
   echo "Building node agent from $GITHUB_REPO ($GITHUB_REF) with one compiler worker..."
   if ! curl -fLsS --retry 3 "https://codeload.github.com/${GITHUB_REPO}/tar.gz/${GITHUB_REF}" -o "$staging/source.tar.gz" \
@@ -90,7 +92,7 @@ download_agent() {
   local destination="$1" staging result=1
   check_node_space "$(dirname "$destination")" 131072 || return 1
   staging=$(mktemp -d "$(dirname "$destination")/.node-download.XXXXXX") || return 1
-  if [ "${TMS_NODE_SOURCE:-0}" = 1 ]; then
+  if [ "${LIBRELAY_NODE_SOURCE:-${TMS_NODE_SOURCE:-0}}" = 1 ]; then
     if build_source_agent "$staging/gost"; then result=0; fi
   else
     if download_prebuilt_agent "$staging/gost" "$staging"; then result=0; fi

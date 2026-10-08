@@ -373,10 +373,10 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
         String url = "https://raw.githubusercontent.com/" + repository + "/" + ref + "/install.sh";
         StringBuilder command = new StringBuilder();
         command.append("curl -fLsS ").append(com.admin.common.utils.RepositoryConfig.shellQuote(url))
-                .append(" -o /tmp/tms-node.sh && GITHUB_REPO=")
+                .append(" -o /tmp/librelay-node.sh && GITHUB_REPO=")
                 .append(com.admin.common.utils.RepositoryConfig.shellQuote(repository))
                 .append(" GITHUB_REF=").append(com.admin.common.utils.RepositoryConfig.shellQuote(ref))
-                .append(" bash /tmp/tms-node.sh -a ")
+                .append(" bash /tmp/librelay-node.sh -a ")
                 .append(com.admin.common.utils.RepositoryConfig.shellQuote(processServerAddress(viteConfig.getValue())))
                 .append(" -s ").append(com.admin.common.utils.RepositoryConfig.shellQuote(node.getSecret()));
         return R.ok(command.toString());
