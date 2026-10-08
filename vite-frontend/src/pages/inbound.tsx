@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { t } from "@/i18n";
+import { defaultProtocolPort, parseProtocolPort } from "@/utils/protocol-port";
 import { useState, useEffect } from "react";
 import { Card, CardBody } from "@heroui/card";
 import { Button } from "@heroui/button";
@@ -128,8 +129,8 @@ export default function InboundPage() {
   const handleCreate = async () => {
     if (!createForm.nodeId) return toast.error(t("m8e5fd7759166"));
     if (isReality(createForm.protocol) && !createForm.sni) return toast.error(t("mb49080a2f3b9"));
-    if (createForm.protocol === "vless" && (!/^\d+$/.test(createForm.listenPort) || Number(createForm.listenPort) < 1 || Number(createForm.listenPort) > 65535))
-      return toast.error(t("port.range"));
+    const listenPort = parseProtocolPort(createForm.listenPort);
+    if (listenPort === null) return toast.error(t("port.range"));
     setCreateLoading(true);
     try {
       // 界面上「VMess + WebSocket」是一个独立选项,但后端没有 vmess-ws 这个协议 ——
@@ -140,7 +141,7 @@ export default function InboundPage() {
         protocol: isWs ? "vmess" : createForm.protocol,
         remark: createForm.remark,
       };
-      if (createForm.protocol === "vless") payload.listenPort = Number(createForm.listenPort);
+      if (listenPort !== undefined) payload.listenPort = listenPort;
       if (isWs) {
         payload.transport = "ws";
         payload.wsPath = createForm.wsPath || "";   // 留空由后端随机生成
@@ -322,7 +323,7 @@ export default function InboundPage() {
                   {nodeInbounds.map((ib) => (
                     <Chip key={ib.id} size="sm" variant="flat" color="secondary">
                       {protoLabel(ib.protocol)}:{ib.listenPort}
-                      {ib.protocol === "vless" && <button className="ml-2 underline" onClick={() => { setPortEntry(ib); setEditPort(String(ib.listenPort)); }}>{t("port.edit")}</button>}
+                      <button className="ml-2 underline" onClick={() => { setPortEntry(ib); setEditPort(String(ib.listenPort)); }}>{t("port.edit")}</button>
                     </Chip>
                   ))}
                 </div>
@@ -481,7 +482,7 @@ export default function InboundPage() {
             <Select
               label={t("mab2f31f30acf")}
               selectedKeys={[createForm.protocol]}
-              onSelectionChange={(k) => setCreateForm({ ...createForm, protocol: String(Array.from(k)[0]) })}
+              onSelectionChange={(k) => { const protocol = typeof k === "string" ? k : String(Array.from(k)[0]); setCreateForm({ ...createForm, protocol, listenPort: defaultProtocolPort(protocol) }); }}
               description={
                 isReality(createForm.protocol)
                   ? t("m820981096d63")
@@ -498,6 +499,7 @@ export default function InboundPage() {
               <SelectItem key="trojan">{t("m6a5f11d85689")}</SelectItem>
               <SelectItem key="vmess">{t("m289c5d64486e")}</SelectItem>
               <SelectItem key="vmess-ws">{t("mf76024692662")}</SelectItem>
+              <SelectItem key="shadowsocks">Shadowsocks-2022</SelectItem>
               <SelectItem key="hysteria2">{t("m0a1a83b28453")}</SelectItem>
               <SelectItem key="tuic">{t("md75b5ac2c01c")}</SelectItem>
               <SelectItem key="anytls">{t("mf3eb25daeb0d")}</SelectItem>
@@ -506,7 +508,7 @@ export default function InboundPage() {
               label={t("mece969c3f881")}
               placeholder={t("m5067180a2685")}
               selectedKeys={createForm.nodeId ? [String(createForm.nodeId)] : []}
-              onSelectionChange={(k) => setCreateForm({ ...createForm, nodeId: Number(Array.from(k)[0]) })}
+              onSelectionChange={(k) => setCreateForm({ ...createForm, nodeId: Number(typeof k === "string" ? k : Array.from(k)[0]) })}
             >
               {nodes.map((n) => (
                 <SelectItem key={n.id}>{n.name}</SelectItem>
@@ -530,9 +532,9 @@ export default function InboundPage() {
                 />
               </>
             )}
-            {createForm.protocol === "vless" && <Input label={t("port.label")} type="number" min={1} max={65535}
+            <Input label={t("port.label")} type="number" min={1} max={65535}
               value={createForm.listenPort} onChange={(event) => setCreateForm({ ...createForm, listenPort: event.target.value })}
-              description={t("port.description")} />}
+              placeholder={t("port.auto")} description={t("port.description")} />
             {isReality(createForm.protocol) && (
               <>
                 <Autocomplete

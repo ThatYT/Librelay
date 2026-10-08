@@ -120,7 +120,7 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
         String protocol = (dto.getProtocol() == null || dto.getProtocol().isEmpty())
                 ? "shadowsocks" : dto.getProtocol().toLowerCase();
 
-        // New VLESS listens publicly; legacy protocols keep their loopback listeners.
+        // All newly created protocols expose their selected port; existing rows remain unchanged.
         Inbound in = new Inbound();
         in.setNodeId(node.getId());
         in.setProtocol(protocol);
@@ -135,7 +135,7 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
         }
         int port = selectedPort;
         if (port < 1 || port > 65535) return R.err("Port must be between 1 and 65535");
-        in.setPublicListen("vless".equals(protocol));
+        in.setPublicListen(true);
         // A chosen public port is never silently changed when occupied.
         if (!automaticallySelected) {
             R available = validateListener(node.getId(), protocol, port, null);
@@ -888,7 +888,7 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
                     in.getProtocol(),
                     ClashUtil.uniqueName(remark, usedNames),
                     ip, clientPort(in, forward),
-                    iu.getUuid(), iu.getPassword(), in.getSni(),
+                    iu.getUuid(), SingboxUtil.clientPassword(in, iu), in.getSni(),
                     in.getPublicKey(), in.getShortId(), ssMethod,
                     wsPath, wsHost);
             if (proxy != null) {
@@ -965,7 +965,7 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
         switch (in.getProtocol() == null ? "" : in.getProtocol()) {
             case "shadowsocks": {
                 JSONObject cfg = JSON.parseObject(in.getConfigJson() == null ? "{}" : in.getConfigJson());
-                return SingboxUtil.buildShadowsocksLink(ip, port, cfg.getString("method"), cfg.getString("password"), remark);
+                return SingboxUtil.buildShadowsocksLink(ip, port, cfg.getString("method"), SingboxUtil.clientPassword(in, iu), remark);
             }
             case "vmess":
             {
@@ -1553,8 +1553,10 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
     public synchronized R updateListenPort(Long id, Integer port) {
         if (port == null || port < 1 || port > 65535) return R.err("Port must be between 1 and 65535");
         Inbound in = getById(id);
-        if (in == null || !"vless".equals(in.getProtocol())) return R.err("VLESS entry not found");
+        if (in == null) return R.err("Protocol entry not found");
         if (port.equals(in.getListenPort()) && Boolean.TRUE.equals(in.getPublicListen())) return R.ok(in);
+        if (listenerNetworks(in.getProtocol()).contains("tcp") && port.equals(in.getEgressPort()))
+            return R.err("TCP port " + port + " is reserved by this protocol's private gateway");
         R available = validateListener(in.getNodeId(), in.getProtocol(), port, id);
         if (available.getCode() != 0) return available;
         // Conversion is explicit: untouched legacy records never change ports or forwarding mode.

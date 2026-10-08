@@ -230,3 +230,11 @@ This pre-publication snapshot covers modified tracked files only; the new files 
 - `InboundServiceImpl.java`: check remote socket availability while allocating internal 40000+ ports, skip occupied candidates with bounded retries, stop on operational errors, and retain explicitly selected public ports.
 - `RealityPortTest.java`: verify busy gateway recovery, unchanged 443/8443 exports, other automatic protocols, timeout handling and a 25-candidate limit.
 - README/deployment guide: explain internal vs public ports and nondestructive backend update.
+
+## All-protocol public port follow-up
+
+All protocol creation and port editing forms now accept ports 1–65535. VLESS alone defaults to 443; others may be left empty for automatic allocation. Newly created protocols use public listeners and private per-user SOCKS metering for traffic, speed limits and lifecycle controls. Existing rows are untouched until explicitly edited. No database migration is needed beyond the existing public_listen/egress_port fields.
+
+SingboxUtil supplies stable named users for Trojan, VMess, Hysteria2, TUIC and AnyTLS; SS-2022 uses a 32-byte identity key derived from the existing random user credential and exports server-key:user-key credentials. URI and supported Clash/Mihomo exports share the actual public port. Existing older-core Clash exports still omit AnyTLS; its URI export remains available.
+
+Focused backend tests cover custom/automatic ports for every protocol, all-protocol edit conversion with credentials/forward IDs retained, network-specific conflicts and exported port/SS-key consistency. Frontend tests cover defaults, blank automatic allocation and invalid integers. CI also validates all seven generated configs using sing-box 1.13.12, matching the node version.

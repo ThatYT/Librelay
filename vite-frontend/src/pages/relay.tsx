@@ -1,4 +1,4 @@
-import RealityPortButton from "@/components/reality-port-button";
+import ProtocolPortButton from "@/components/protocol-port-button";
 import { useTranslation } from "react-i18next";
 import { t } from "@/i18n";
 import { useState, useEffect } from "react";
@@ -245,7 +245,7 @@ export default function RelayPage() {
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {ln.inbounds.map((ib: any) => (
-                    <Chip key={ib.id} size="sm" variant="flat" color="secondary">{protoLabel(ib.protocol)}:{ib.listenPort} {ib.protocol === "vless" && <RealityPortButton entry={ib} onSaved={loadAll} />}</Chip>
+                    <Chip key={ib.id} size="sm" variant="flat" color="secondary">{protoLabel(ib.protocol)}:{ib.listenPort} <ProtocolPortButton entry={ib} onSaved={loadAll} /></Chip>
                   ))}
                 </div>
                 <div className="flex gap-2">

@@ -85,12 +85,69 @@ class RealityPortTest {
         {
             R result=service.createInbound(dto);assertEquals(0,result.getCode());
             Inbound stored=(Inbound)result.getData();assertEquals(expected,stored.getListenPort());
-            assertEquals("vless".equals(protocol),stored.getPublicListen());
-            if ("vless".equals(protocol)) {
+            assertTrue(stored.getPublicListen());
+            {
                 int gateway = 40000;
                 while (busyPorts.contains(gateway) || gateway == expected) gateway++;
                 assertEquals(gateway,stored.getEgressPort());
             }
+        }
+    }
+    @Test void allProtocolsStoreCustomPublicPortsAndKeepAutomaticAllocation() {
+        for (String protocol : List.of("trojan", "vmess", "shadowsocks", "hysteria2", "tuic", "anytls")) {
+            createAndAssert(8443, 8443, Set.of(), protocol);
+            createAndAssert(null, 40000, Set.of(), protocol);
+        }
+    }
+    @Test void allPublicConfigsAndExportsKeepPortAndMeterIdentity() {
+        for (String protocol : List.of("vless", "trojan", "vmess", "shadowsocks", "hysteria2", "tuic", "anytls")) {
+            Inbound in = inbound(8443, true); in.setProtocol(protocol);
+            in.setConfigJson("{\"method\":\"2022-blake3-aes-256-gcm\",\"password\":\"" + Base64.getEncoder().encodeToString(new byte[32]) + "\"}");
+            InboundUser user = new InboundUser();user.setId(3L);user.setUuid(UUID.randomUUID().toString());
+            user.setPassword("stored-random-credential");user.setEgressPort(20000);
+            JSONObject config = SingboxUtil.buildNodeConfig(List.of(in), Map.of(1L, List.of(user)), Map.of());
+            JSONObject listener = config.getJSONArray("inbounds").getJSONObject(0);
+            assertEquals(8443, listener.getIntValue("listen_port"), protocol);
+            assertEquals("::", listener.getString("listen"), protocol);
+            assertEquals(user.getUuid(), listener.getJSONArray("users").getJSONObject(0).getString("name"), protocol);
+            assertEquals(user.getUuid(), config.getJSONObject("route").getJSONArray("rules").getJSONObject(0).getJSONArray("auth_user").getString(0));
+            Forward forward = new Forward();forward.setInPort(20000);
+            String password = SingboxUtil.clientPassword(in, user);
+            if (!"anytls".equals(protocol)) assertEquals(8443, ClashUtil.toProxy(protocol, "test", "node.example", InboundServiceImpl.clientPort(in, forward), user.getUuid(), password, "sni", "key", "sid", "2022-blake3-aes-256-gcm").get("port"));
+            else assertTrue(SingboxUtil.buildAnyTlsLink(password, "node.example", 8443, "sni", "test").contains("node.example:8443"));
+            Node node = new Node();node.setServerIp("node.example");
+            String link = ReflectionTestUtils.invokeMethod(new InboundServiceImpl(), "buildClientLink", in, user, node, forward);
+            if ("vmess".equals(protocol)) {
+                JSONObject exported = JSON.parseObject(new String(Base64.getDecoder().decode(link.substring(8)), java.nio.charset.StandardCharsets.UTF_8));
+                assertEquals(8443, exported.getIntValue("port"));
+            } else assertTrue(link.contains("node.example:8443"), protocol);
+            if ("shadowsocks".equals(protocol)) {
+                String[] keys = password.split(":");assertEquals(2, keys.length);
+                assertEquals(32, Base64.getDecoder().decode(keys[1]).length);
+                assertEquals(keys[1], listener.getJSONArray("users").getJSONObject(0).getString("password"));
+                in.setPublicListen(false); assertEquals(keys[0], SingboxUtil.clientPassword(in, user));
+            }
+        }
+    }
+    @Test void conflictValidationUsesEachProtocolsActualTransport() {
+        for (String protocol : List.of("vless", "trojan", "vmess", "shadowsocks", "hysteria2", "tuic", "anytls")) {
+            InboundServiceImpl service = new InboundServiceImpl();emptyTunnelReservations(service);
+            InboundMapper mapper = mock(InboundMapper.class);NodeCommandClient commands = mock(NodeCommandClient.class);
+            ReflectionTestUtils.setField(service, "baseMapper", mapper);ReflectionTestUtils.setField(service, "nodeCommands", commands);
+            when(mapper.selectList(any())).thenReturn(List.of());
+            GostDto ok = new GostDto();ok.setMsg("OK");
+            when(commands.send(anyLong(),any(),anyString())).thenReturn(ok);
+            R result = (R) ReflectionTestUtils.invokeMethod(service, "validateListener", 7L, protocol, 443, null);
+            assertEquals(0,result.getCode());
+            org.mockito.ArgumentCaptor<JSONObject> requests = org.mockito.ArgumentCaptor.forClass(JSONObject.class);
+            int count = "shadowsocks".equals(protocol) ? 2 : 1;
+            verify(commands,times(count)).send(eq(7L),requests.capture(),eq("CheckListenPort"));
+            Set<String> networks = new HashSet<>();for(JSONObject request:requests.getAllValues())networks.add(request.getString("network"));
+            assertEquals("shadowsocks".equals(protocol) ? Set.of("tcp","udp") : Set.of(List.of("hysteria2","tuic").contains(protocol) ? "udp" : "tcp"), networks);
+            Inbound udp = inbound(443,true);udp.setId(2L);udp.setProtocol("hysteria2");
+            when(mapper.selectList(any())).thenReturn(List.of(udp));
+            result = (R) ReflectionTestUtils.invokeMethod(service,"validateListener",7L,protocol,443,null);
+            assertEquals(networks.contains("udp"), result.getCode()!=0);
         }
     }
     @Test void internalAllocationStopsOnTimeoutAndBoundsBusyRetries() {
@@ -141,8 +198,23 @@ class RealityPortTest {
         InboundUser user = new InboundUser(); user.setId(3L); user.setUuid(UUID.randomUUID().toString()); user.setEgressPort(20000);
         JSONObject config = SingboxUtil.buildNodeConfig(List.of(in), Map.of(1L, List.of(user)), Map.of());
         java.nio.file.Files.writeString(java.nio.file.Path.of(file), config.toJSONString());
+        for (String protocol : List.of("trojan", "vmess", "shadowsocks", "hysteria2", "tuic", "anytls")) {
+            in.setProtocol(protocol); user.setPassword("stored-random-credential");
+            in.setConfigJson("{\"method\":\"2022-blake3-aes-256-gcm\",\"password\":\"" + Base64.getEncoder().encodeToString(new byte[32]) + "\"}");
+            config = SingboxUtil.buildNodeConfig(List.of(in), Map.of(1L, List.of(user)), Map.of());
+            JSONObject tls = config.getJSONArray("inbounds").getJSONObject(0).getJSONObject("tls");
+            if (tls != null && tls.containsKey("certificate_path")) {
+                tls.put("certificate_path", System.getProperty("tms.singbox.cert", "/etc/gost/certs/self.crt"));
+                tls.put("key_path", System.getProperty("tms.singbox.key", "/etc/gost/certs/self.key"));
+            }
+            java.nio.file.Files.writeString(java.nio.file.Path.of(file + "." + protocol), config.toJSONString());
+        }
     }
     @Test void editingPortPreservesCredentialsAndDoesNotReallocateUserForward() {
+        for (String protocol : List.of("vless", "trojan", "vmess", "shadowsocks", "hysteria2", "tuic", "anytls"))
+            editAndAssert(protocol);
+    }
+    private void editAndAssert(String protocol) {
         InboundServiceImpl service = new InboundServiceImpl();
         emptyTunnelReservations(service);
         InboundMapper mapper = mock(InboundMapper.class);
@@ -155,7 +227,7 @@ class RealityPortTest {
         ReflectionTestUtils.setField(service, "forwardMapper", forwards);
         ReflectionTestUtils.setField(service, "forwardService", forwardService);
         ReflectionTestUtils.setField(service, "nodeCommands", commands);
-        Inbound in = inbound(40000, false); in.setEgressPort(null);
+        Inbound in = inbound(40000, false); in.setEgressPort(null); in.setProtocol(protocol);
         when(mapper.selectById(1L)).thenReturn(in);
         when(mapper.selectList(any())).thenReturn(List.of(in));
         when(mapper.updateById(any())).thenReturn(1);

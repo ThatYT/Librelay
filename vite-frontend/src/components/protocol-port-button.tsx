@@ -6,7 +6,7 @@ import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@herou
 import toast from "@/utils/toast";
 import { updateInboundPort } from "@/api";
 
-export default function RealityPortButton({ entry, onSaved }: { entry: { id: number; listenPort: number }; onSaved: () => void }) {
+export default function ProtocolPortButton({ entry, onSaved }: { entry: { id: number; listenPort: number }; onSaved: () => void }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [port, setPort] = useState(String(entry.listenPort));

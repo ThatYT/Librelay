@@ -972,14 +972,14 @@
   "m40dbe1145b15": "Line revoked",
   "m77bc1ca22a81": "Access denied. Only administrators may perform this action",
   "m041615056966": "⚠️ Partially completed: {{v0}}",
-  "port.label": "Listening port (TCP)",
+  "port.label": "Listening port (TCP / UDP)",
   "port.range": "Port must be between 1 and 65535",
   "port.updated": "Listening port updated",
   "port.failed": "Failed to update listening port",
-  "port.description": "Public port on this proxy node. Independent of panel and transfer ports.",
+  "port.description": "Public port on this proxy node. Leave empty for automatic allocation (VLESS defaults to 443). Independent of panel and transfer ports.",
   "port.edit": "Edit port",
-  "port.title": "Edit Reality listening port",
-  "port.legacy": "Updating a legacy entry moves it to the shared public Reality listener. Refresh client subscriptions afterwards.",
+  "port.title": "Edit protocol listening port",
+  "port.legacy": "Updating a legacy entry moves it to a shared public listener. Refresh client subscriptions afterwards.",
   "button.save": "Save",
   "button.cancel": "Cancel",
   "theme.light": "Light",
@@ -1084,5 +1084,6 @@
   "error.portReserved": "{{network}} port {{port}} is reserved by a forwarding service on node {{node}}",
   "error.nodeUnavailable": "node unavailable",
   "error.vlessMissing": "VLESS entry not found",
-  "error.privatePorts": "No private gateway ports available on this node"
+  "error.privatePorts": "No private gateway ports available on this node",
+  "port.auto": "Automatic allocation"
 }

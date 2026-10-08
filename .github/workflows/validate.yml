@@ -41,6 +41,19 @@ jobs:
             go-gost/x/go.sum
       - name: Backend tests and build
         run: mvn -B -f springboot-backend/pom.xml test package
+      - name: Validate all protocol configs with the node sing-box version
+        run: |
+          fixture_dir="$RUNNER_TEMP/tms-protocol-fixtures"
+          mkdir -p "$fixture_dir"
+          openssl req -x509 -newkey rsa:2048 -nodes -keyout "$fixture_dir/self.key" -out "$fixture_dir/self.crt" -days 1 -subj /CN=localhost
+          mvn -B -f springboot-backend/pom.xml -Dtest=RealityPortTest \
+            -Dtms.singbox.fixture="$fixture_dir/config.json" \
+            -Dtms.singbox.cert="$fixture_dir/self.crt" -Dtms.singbox.key="$fixture_dir/self.key" test
+          curl -fLsS https://github.com/SagerNet/sing-box/releases/download/v1.13.12/sing-box-1.13.12-linux-amd64.tar.gz -o "$fixture_dir/sing-box.tar.gz"
+          tar -xzf "$fixture_dir/sing-box.tar.gz" -C "$fixture_dir"
+          for config in "$fixture_dir"/config.json*; do
+            "$fixture_dir/sing-box-1.13.12-linux-amd64/sing-box" check -c "$config"
+          done
       - name: Backend image and login readiness smoke test
         env:
           MYSQL_SERVICE_ID: ${{ job.services.schema-mysql.id }}

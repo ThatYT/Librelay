@@ -15,7 +15,7 @@ The panel is Spring Boot plus a React/Vite frontend, MySQL, and an optional inde
 
 Panel HTTPS 443 and Reality 443 on a different node are valid together. A TCP service already listening on the same node's 443 blocks Reality 443; a UDP listener on 443 does not. Reality binds all node addresses, so a TCP listener bound to any overlapping local address also conflicts. The panel never probes its own ports on behalf of a remote node.
 
-Previously, sing-box used an internal loopback port starting at 40000 and each user's public gost forward used an automatically allocated port starting at 20000. Existing protocols retain that behavior after upgrade. New Reality protocols expose their selected sing-box port directly. To retain per-user traffic, limits, expiry and pause/resume, authenticated users route through private loopback gost SOCKS services and a private sing-box SOCKS gateway. Their automatically allocated private ports are separate from both the public Reality listening port and a transfer machine's allowed public port range.
+Previously, sing-box used an internal loopback port starting at 40000 and each user's public gost forward used an automatically allocated port starting at 20000. Existing protocols retain that behavior after upgrade. All new protocols expose their selected sing-box port directly. To retain per-user traffic, limits, expiry and pause/resume, authenticated users route through private loopback gost SOCKS services and a private sing-box SOCKS gateway. Their automatically allocated private ports are separate from both the public Reality listening port and a transfer machine's allowed public port range.
 
 ## New installation
 
@@ -104,7 +104,7 @@ Existing Caddy bindings are distinguished from other occupied Docker/service por
 
 ## Occupied automatic internal port (40000+)
 
-An error about TCP 40000 refers to an automatically chosen internal listener/gateway, not the Reality client's selected public port. Earlier code chose the first database-unreserved port and stopped when the remote OS probe found a conflict. Allocation now skips real TCP/UDP bind conflicts and forwarding reservations, trying at most 25 unreserved candidates. Timeout, permission and unsupported-command errors stop immediately instead of repeatedly contacting an unavailable node.
+For VLESS-Reality, TCP 40000 usually refers to the automatically chosen private gateway, not its selected public port. Other new protocols may also use 40000+ as their automatically selected public listener. Earlier code chose the first database-unreserved port and stopped when the remote OS probe found a conflict. Allocation now skips real TCP/UDP bind conflicts and forwarding reservations, trying at most 25 unreserved candidates. Timeout, permission and unsupported-command errors stop immediately instead of repeatedly contacting an unavailable node.
 
 This applies to new internal Reality gateways, explicit legacy Reality conversion and other automatically allocated protocol listeners. Existing ports/credentials stay intact, and explicitly selected public Reality ports are never silently changed. Update the panel backend and retry creation; no agent/schema migration is required for this fix. Regression tests cover multiple busy internal ports, unchanged public 443/8443, automatic VMess allocation, retry limits and timeout handling.
 
@@ -112,9 +112,9 @@ This applies to new internal Reality gateways, explicit legacy Reality conversio
 
 In protocol management, create VLESS-Reality and choose its node. The listening port field starts at **443**. Enter **8443** if desired. One-click and relay creation also expose the field. Submit the form; frontend and backend both enforce integer ports 1–65535. The backend checks database reservations and asks the selected remote node to probe TCP availability before applying the configuration.
 
-Click an existing Reality protocol's port to edit it. Credentials and existing user-forward identifiers are retained. Explicitly editing a legacy entry converts it to the public listener architecture; merely upgrading does not convert it or change its current port.
+Click any existing protocol's port to edit it. Credentials and existing user-forward identifiers are retained. Explicitly editing a legacy entry converts it to the public listener architecture; merely upgrading does not convert it or change its current port.
 
-Generated sing-box `listen_port`, VLESS URI subscriptions consumed by v2rayN/v2rayNG, and Clash/Mihomo proxy exports use the same public port. Existing legacy subscriptions continue using their original per-user public forward ports. Other protocol types keep their automatic allocation behavior. A node firewall/security group must allow the selected public TCP port.
+Generated sing-box `listen_port`, VLESS URI subscriptions consumed by v2rayN/v2rayNG, and Clash/Mihomo proxy exports use the same public port. Existing legacy subscriptions continue using their original per-user public forward ports. All protocol forms accept a custom public port; leaving it empty keeps automatic allocation (VLESS defaults to 443). New non-VLESS automatic listeners use an available 40000+ port. Allow TCP for VLESS/Trojan/VMess/AnyTLS, UDP for Hysteria2/TUIC, and both for Shadowsocks. SS-2022 public listeners use per-user identity keys with server-key:user-key client credentials, preserving individual metering. Existing AnyTLS URI export is supported; legacy Clash exports still omit AnyTLS for older-core compatibility.
 
 ## Database compatibility
 

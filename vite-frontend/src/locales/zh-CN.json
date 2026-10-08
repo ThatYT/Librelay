@@ -972,14 +972,14 @@
   "m40dbe1145b15": "已收回这条线路",
   "m77bc1ca22a81": "权限不足，仅管理员可操作",
   "m041615056966": "⚠️ 做了一部分:{{v0}}",
-  "port.label": "监听端口 (TCP)",
+  "port.label": "监听端口（TCP / UDP）",
   "port.range": "端口必须在 1–65535 之间",
   "port.updated": "监听端口已更新",
   "port.failed": "更新监听端口失败",
-  "port.description": "该代理节点的公网端口，与面板端口和转发端口范围独立。",
+  "port.description": "代理节点的公网端口。留空自动分配（VLESS 默认 443），与面板和转发端口独立。",
   "port.edit": "修改端口",
-  "port.title": "修改 Reality 监听端口",
-  "port.legacy": "修改旧条目会将其迁移到共享的公网 Reality 监听器。修改后请更新客户端订阅。",
+  "port.title": "编辑协议监听端口",
+  "port.legacy": "修改旧条目会将其转换为共享公网监听。保存后请刷新客户端订阅。",
   "button.save": "保存",
   "button.cancel": "取消",
   "theme.light": "浅色",
@@ -1084,5 +1084,6 @@
   "error.portReserved": "节点 {{node}} 的 {{network}} 端口 {{port}} 已由转发服务占用",
   "error.nodeUnavailable": "节点不可用",
   "error.vlessMissing": "VLESS 协议条目不存在",
-  "error.privatePorts": "该节点没有可用的内部网关端口"
+  "error.privatePorts": "该节点没有可用的内部网关端口",
+  "port.auto": "自动分配"
 }

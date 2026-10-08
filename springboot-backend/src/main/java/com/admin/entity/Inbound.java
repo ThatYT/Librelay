@@ -35,10 +35,10 @@ public class Inbound implements Serializable {
     /** vless/vmess/trojan/shadowsocks/hysteria2 */
     private String protocol;
 
-    /** sing-box 本机监听口(127.0.0.1) */
+    /** sing-box 监听端口：旧条目回环，新条目公网 */
     private Integer listenPort;
 
-    /** New public Reality listener; false for all pre-upgrade rows. */
+    /** Public protocol listener; false retains the legacy per-user forwarding mode. */
     private Boolean publicListen;
 
     /** Private SOCKS gateway back into sing-box (direct or landing outbound). */

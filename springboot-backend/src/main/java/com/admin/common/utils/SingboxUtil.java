@@ -198,7 +198,7 @@ public class SingboxUtil {
             case "vmess":
                 return buildVmess(in, users);
             case "shadowsocks":
-                return buildShadowsocks(in);
+                return buildShadowsocks(in, users);
             case "hysteria2":
                 return buildHysteria2(in, users);
             case "tuic":
@@ -212,18 +212,45 @@ public class SingboxUtil {
 
     /**
      * Shadowsocks-2022 入站(无 TLS、不依赖客户端指纹,绕开 reality 的后量子坑)。
-     * 单密码,用户靠各自的 gost 公网口区分/限速;method+password 存在 inbound.configJson。
+     * 旧条目保留单密码和各用户公网转发；新条目使用独立身份密钥及内部计量路由。
      */
-    private static JSONObject buildShadowsocks(Inbound in) {
+    private static JSONObject buildShadowsocks(Inbound in, List<InboundUser> users) {
         JSONObject cfg = parseConfig(in.getConfigJson());
         JSONObject inbound = new JSONObject();
         inbound.put("type", "shadowsocks");
         inbound.put("tag", in.getTag());
-        inbound.put("listen", "127.0.0.1");
+        inbound.put("listen", Boolean.TRUE.equals(in.getPublicListen()) ? "::" : "127.0.0.1");
         inbound.put("listen_port", in.getListenPort());
         inbound.put("method", cfg.getString("method"));
         inbound.put("password", cfg.getString("password"));
+        if (Boolean.TRUE.equals(in.getPublicListen())) {
+            JSONArray userArr = new JSONArray();
+            if (users != null) for (InboundUser user : users) {
+                if (user.getUuid() == null || user.getPassword() == null || Integer.valueOf(0).equals(user.getStatus())) continue;
+                JSONObject entry = new JSONObject();
+                entry.put("name", user.getUuid()); entry.put("password", shadowsocksUserKey(user));
+                userArr.add(entry);
+            }
+            inbound.put("users", userArr);
+        }
         return inbound;
+    }
+
+    // SS-2022 requires a 32-byte per-user identity key. Derive it from the already
+    // random stored credential, keeping existing credentials and schema intact.
+    private static String shadowsocksUserKey(InboundUser user) {
+        try {
+            return Base64.getEncoder().encodeToString(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(user.getPassword().getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+    }
+
+    public static String clientPassword(Inbound in, InboundUser user) {
+        if (!"shadowsocks".equals(in.getProtocol())) return user.getPassword();
+        String serverKey = parseConfig(in.getConfigJson()).getString("password");
+        return Boolean.TRUE.equals(in.getPublicListen()) ? serverKey + ":" + shadowsocksUserKey(user) : serverKey;
     }
 
     /** 生成 Shadowsocks 客户端分享链接(SIP002:ss://base64url(method:password)@ip:port#remark)。地址=gost 公网口 */
@@ -252,7 +279,7 @@ public class SingboxUtil {
         }
     }
 
-    /** VLESS + Reality 入站(无域名);listen 一律 127.0.0.1,公网口交给 gost 限速 */
+    /** VLESS + Reality 入站；旧条目保持回环监听，新条目公网监听并按用户计量 */
     private static JSONObject buildVlessReality(Inbound in, List<InboundUser> users) {
         JSONObject inbound = new JSONObject();
         inbound.put("type", "vless");
@@ -282,7 +309,7 @@ public class SingboxUtil {
         JSONObject inbound = new JSONObject();
         inbound.put("type", "trojan");
         inbound.put("tag", in.getTag());
-        inbound.put("listen", "127.0.0.1");
+        inbound.put("listen", Boolean.TRUE.equals(in.getPublicListen()) ? "::" : "127.0.0.1");
         inbound.put("listen_port", in.getListenPort());
 
         JSONArray userArr = new JSONArray();
@@ -292,6 +319,7 @@ public class SingboxUtil {
                 if (u.getStatus() != null && u.getStatus() == 0) continue;
                 JSONObject uj = new JSONObject();
                 uj.put("password", u.getPassword());
+                if (Boolean.TRUE.equals(in.getPublicListen())) uj.put("name", u.getUuid());
                 userArr.add(uj);
             }
         }
@@ -305,7 +333,7 @@ public class SingboxUtil {
         JSONObject inbound = new JSONObject();
         inbound.put("type", "vmess");
         inbound.put("tag", in.getTag());
-        inbound.put("listen", "127.0.0.1");
+        inbound.put("listen", Boolean.TRUE.equals(in.getPublicListen()) ? "::" : "127.0.0.1");
         inbound.put("listen_port", in.getListenPort());
         // 传输层:configJson 里存了 net=ws 才写 transport,否则保持原来的裸 TCP。
         // 【为什么 gost 那一跳不用管】它是裸字节转发(handler=relay),
@@ -333,6 +361,7 @@ public class SingboxUtil {
                 JSONObject uj = new JSONObject();
                 uj.put("uuid", u.getUuid());
                 uj.put("alterId", 0);
+                if (Boolean.TRUE.equals(in.getPublicListen())) uj.put("name", u.getUuid());
                 userArr.add(uj);
             }
         }
@@ -429,7 +458,7 @@ public class SingboxUtil {
         JSONObject inbound = new JSONObject();
         inbound.put("type", "hysteria2");
         inbound.put("tag", in.getTag());
-        inbound.put("listen", "127.0.0.1");
+        inbound.put("listen", Boolean.TRUE.equals(in.getPublicListen()) ? "::" : "127.0.0.1");
         inbound.put("listen_port", in.getListenPort());
         JSONArray userArr = new JSONArray();
         if (users != null) {
@@ -438,6 +467,7 @@ public class SingboxUtil {
                 if (u.getStatus() != null && u.getStatus() == 0) continue;
                 JSONObject uj = new JSONObject();
                 uj.put("password", u.getPassword());
+                if (Boolean.TRUE.equals(in.getPublicListen())) uj.put("name", u.getUuid());
                 userArr.add(uj);
             }
         }
@@ -451,7 +481,7 @@ public class SingboxUtil {
         JSONObject inbound = new JSONObject();
         inbound.put("type", "tuic");
         inbound.put("tag", in.getTag());
-        inbound.put("listen", "127.0.0.1");
+        inbound.put("listen", Boolean.TRUE.equals(in.getPublicListen()) ? "::" : "127.0.0.1");
         inbound.put("listen_port", in.getListenPort());
         inbound.put("congestion_control", "bbr");
         JSONArray userArr = new JSONArray();
@@ -462,6 +492,7 @@ public class SingboxUtil {
                 JSONObject uj = new JSONObject();
                 uj.put("uuid", u.getUuid());
                 uj.put("password", u.getPassword());
+                if (Boolean.TRUE.equals(in.getPublicListen())) uj.put("name", u.getUuid());
                 userArr.add(uj);
             }
         }
@@ -479,7 +510,7 @@ public class SingboxUtil {
         JSONObject inbound = new JSONObject();
         inbound.put("type", "anytls");
         inbound.put("tag", in.getTag());
-        inbound.put("listen", "127.0.0.1");
+        inbound.put("listen", Boolean.TRUE.equals(in.getPublicListen()) ? "::" : "127.0.0.1");
         inbound.put("listen_port", in.getListenPort());
         JSONArray userArr = new JSONArray();
         if (users != null) {
@@ -488,6 +519,7 @@ public class SingboxUtil {
                 if (u.getStatus() != null && u.getStatus() == 0) continue;
                 JSONObject uj = new JSONObject();
                 uj.put("password", u.getPassword());
+                if (Boolean.TRUE.equals(in.getPublicListen())) uj.put("name", u.getUuid());
                 userArr.add(uj);
             }
         }
