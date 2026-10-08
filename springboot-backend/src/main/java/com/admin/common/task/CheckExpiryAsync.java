@@ -89,6 +89,7 @@ public class CheckExpiryAsync {
         long now = System.currentTimeMillis();
         List<User> users = userService.list();
         for (User u : users) {
+            if (com.admin.service.UserLimitService.unified(u)) continue;
             if (u.getId() == null) {
                 continue;
             }
@@ -121,6 +122,7 @@ public class CheckExpiryAsync {
             if (line.getUserId() == null || line.getNodeId() == null) {
                 continue;
             }
+            if (com.admin.service.UserLimitService.unified(userService.getById(line.getUserId()))) continue;
             // 已经被标记停用的线路不用再处理:要么早停过了,要么是车主手动停的
             if (line.getStatus() != null && line.getStatus() == 0) {
                 continue;

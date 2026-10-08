@@ -66,5 +66,11 @@ public class User extends BaseEntity {
      */
     private String allSubToken;
 
+    /** Opt-in replacement for legacy line/tunnel/forward plans. */
+    private Boolean unifiedLimits;
+    private Integer speedMbps;
+    /** Durable node reservations; never silently reclaim an offline node's budget. */
+    private String limitNodes;
+
 
 }

@@ -17,6 +17,7 @@ public class UserDto {
 
     @NotNull(message = "流量不能为空")
     @Min(value = 0, message = "流量不能小于0")
+    @javax.validation.constraints.Max(value = 1000000, message = "Quota must not exceed 1000000 GiB")
     private Long flow;
 
     @NotNull(message = "转发数量不能为空")
@@ -27,7 +28,14 @@ public class UserDto {
     private Long expTime;
 
     @NotNull(message = "流量重置时间不能为空")
+    @Min(value = 0, message = "Reset day must be between 0 and 31")
+    @javax.validation.constraints.Max(value = 31, message = "Reset day must be between 0 and 31")
     private Long flowResetTime;
 
     private Integer status;
+
+    private Boolean unifiedLimits = true;
+    @Min(value = 0, message = "Speed must be non-negative")
+    @javax.validation.constraints.Max(value = 1000000, message = "Speed must not exceed 1000000 Mbps")
+    private Integer speedMbps;
 } 

@@ -41,6 +41,7 @@ import java.util.Map;
  */
 @Service
 public class UserTunnelServiceImpl extends ServiceImpl<UserTunnelMapper, UserTunnel> implements UserTunnelService {
+    @Resource private com.admin.mapper.UserMapper userMapper;
 
     // ========== 常量定义 ==========
     
@@ -402,6 +403,7 @@ public class UserTunnelServiceImpl extends ServiceImpl<UserTunnelMapper, UserTun
      * @param speedId 新的限速规则ID
      */
     private void updateUserTunnelForwardsSpeed(Integer userId, Integer tunnelId, Integer speedId) {
+        if (com.admin.service.UserLimitService.unified(userMapper.selectById(userId))) return;
         // 1. 查询该用户在该隧道下的所有转发
         QueryWrapper<Forward> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("user_id", userId).eq("tunnel_id", tunnelId);

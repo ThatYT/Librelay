@@ -40,6 +40,8 @@ public class UserPackageDto {
         private String name;
         private String user;
         private Integer status;
+        private Boolean unifiedLimits;
+        private Integer speedMbps;
         private Long flow;           // 总流量配额(GB)
         private Long inFlow;         // 已用入站流量(字节)
         private Long outFlow;        // 已用出站流量(字节)

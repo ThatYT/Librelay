@@ -55,4 +55,7 @@ public class Forward extends BaseEntity{
     /** 给车友的客户端链接:分配转发时由客户端算好推上来,聚合订阅里原样吐出。仅分配给车友的转发有值 */
     private String clientLink;
 
+    /** Distinguishes quota pauses from manual pauses, so resets only resume quota pauses. */
+    private Boolean quotaPaused;
+
 }

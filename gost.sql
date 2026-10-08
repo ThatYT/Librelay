@@ -45,7 +45,8 @@ CREATE TABLE `forward` (
   `status` int(10) NOT NULL,
   `inx` int(10) NOT NULL DEFAULT '0',
   `speed_id` int(10) DEFAULT NULL,
-  `exp_time` bigint(20) DEFAULT NULL
+  `exp_time` bigint(20) DEFAULT NULL,
+  `quota_paused` tinyint(1) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- --------------------------------------------------------
@@ -152,6 +153,9 @@ CREATE TABLE `user` (
   `flow_reset_time` bigint(20) NOT NULL,
   `num` int(10) NOT NULL,
   `all_sub_token` varchar(64) DEFAULT NULL COMMENT '全部线路聚合订阅token',
+  `unified_limits` tinyint(1) NOT NULL DEFAULT 0,
+  `speed_mbps` int NOT NULL DEFAULT 0,
+  `limit_nodes` text DEFAULT NULL,
   `created_time` bigint(20) NOT NULL,
   `updated_time` bigint(20) DEFAULT NULL,
   `status` int(10) NOT NULL

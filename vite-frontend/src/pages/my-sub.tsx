@@ -60,6 +60,8 @@ export default function MySubPage() {
   // 必须转成真正的布尔值:exp_time = 0 表示「永久」,而 `0 && ...` 返回的是 0 不是 false,
   // React 会把这个 0 原样渲染到页面上(标题下面凭空多出一个 "0")
   const accountDisabled = !!account && account.status !== undefined && account.status !== 1;
+  const accountUsed = (account?.inFlow || 0) + (account?.outFlow || 0);
+  const accountExhausted = !!account?.unifiedLimits && account.flow > 0 && accountUsed >= account.flow * GB;
   const accountExpired = !!account?.expTime && account.expTime > 0 && account.expTime <= Date.now();
 
   return (
@@ -69,10 +71,19 @@ export default function MySubPage() {
         <span className="text-sm text-default-500">{t("m76e547a8fa54")} {lines.length} {t("m17f2bbb8b6fb")}</span>
       </div>
 
-      {(accountDisabled || accountExpired) && (
+      {(accountDisabled || accountExpired || accountExhausted) && (
         <Card className="border border-danger/40 bg-danger/5">
-          <CardBody className="text-sm text-danger"> {t("m5f1fe6db40fa")}{accountExpired ? t("mb9d8853e0ce7") : t("m59c007695802")}{t("m10d6df652718")} </CardBody>
+          <CardBody className="text-sm text-danger"> {accountExhausted ? t("limits.exhausted") : t("m5f1fe6db40fa")}{accountExpired ? t("mb9d8853e0ce7") : t("m59c007695802")}{t("m10d6df652718")} </CardBody>
         </Card>
+      )}
+
+      {account?.unifiedLimits && (
+        <Card><CardBody className="space-y-2">
+          <h2 className="font-semibold">{t("limits.account")}</h2>
+          <p>{fmtGB(accountUsed)} / {account.flow > 0 ? `${account.flow} GiB` : t("limits.unlimited")}</p>
+          <p>{t("limits.speedShort")}: {account.speedMbps > 0 ? `${account.speedMbps} Mbps` : t("limits.unlimited")}</p>
+          <p className="text-xs text-default-500">{t("limits.explain")}</p>
+        </CardBody></Card>
       )}
 
       {!loading && allSubToken && lines.length > 1 && (
@@ -146,7 +157,7 @@ export default function MySubPage() {
                   </div>
 
                   {/* 这条订阅自己的套餐:流量 + 到期 */}
-                  <div className="flex items-center gap-6 text-sm">
+                  {!account?.unifiedLimits && <div className="flex items-center gap-6 text-sm">
                     <div>
                       <span className="text-default-500 text-xs">{t("m81a9d0b5a2a2")} </span>
                       <span className="font-semibold">{fmtGB(used)}</span>
@@ -160,8 +171,8 @@ export default function MySubPage() {
                         {ln.lineExpTime ? fmtDate(ln.lineExpTime) : t("m3e71ccc89a43")}
                       </span>
                     </div>
-                  </div>
-                  {quota > 0 && (
+                  </div>}
+                  {!account?.unifiedLimits && quota > 0 && (
                     <div className="w-full h-1.5 bg-default-200 rounded-full overflow-hidden">
                       <div
                         className={`h-full rounded-full ${pct > 90 ? "bg-danger" : pct > 70 ? "bg-warning" : "bg-primary"}`}

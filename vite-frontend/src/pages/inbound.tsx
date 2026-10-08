@@ -10,8 +10,6 @@ import { Select, SelectItem } from "@heroui/select";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
 import { Chip } from "@heroui/chip";
 import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
-import { DatePicker } from "@heroui/date-picker";
-import { parseDate } from "@internationalized/date";
 import toast from "@/utils/toast";
 import { toastResult } from "@/utils/partial-success";
 import {
@@ -24,7 +22,6 @@ import {
   assignSelf,
   getNodeList,
   getAllUsers,
-  getSpeedLimitList,
   pushNodeConfig,
 } from "@/api";
 import { copyTextToClipboard } from "@/utils/clipboard";
@@ -42,7 +39,6 @@ export default function InboundPage() {
   const [inbounds, setInbounds] = useState<any[]>([]);
   const [nodes, setNodes] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
-  const [speedRules, setSpeedRules] = useState<any[]>([]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState<any>({ nodeId: null, protocol: "vless", sni: DEFAULT_SNI, dest: "", remark: "", listenPort: "443" });
@@ -101,11 +97,10 @@ export default function InboundPage() {
 
   const loadAll = async () => {
     try {
-      const [ib, nd, us, sp] = await Promise.all([
+      const [ib, nd, us] = await Promise.all([
         getInboundList(),
         getNodeList(),
         getAllUsers(),
-        getSpeedLimitList(),
       ]);
       if (ib.code === 0) setInbounds(ib.data || []);
       if (nd.code === 0) setNodes(nd.data || []);
@@ -113,7 +108,6 @@ export default function InboundPage() {
         const d: any = us.data;
         setUsers(Array.isArray(d) ? d : (d && d.records ? d.records : []));
       }
-      if (sp.code === 0) setSpeedRules(sp.data || []);
     } catch (e) {
       toast.error(t("md1d044826a45"));
     }
@@ -197,10 +191,7 @@ export default function InboundPage() {
     setAssignLoading(true);
     try {
       const payload: any = { userId: assignForm.userId, nodeId: assignForm.nodeId };
-      if (assignForm.speedId) payload.speedId = assignForm.speedId;
       // 到期直接选日期(当天 23:59:59 截止),比填"多少天"直观,续费也只是把日期往后改
-      if (assignForm.expDate) payload.expTime = new Date(`${assignForm.expDate}T23:59:59`).getTime();
-      if (assignForm.flowGb) payload.flow = Math.round(assignForm.flowGb); // 单位 GB(线路配额按 GB 存)
       const res = await assignAllToUser(payload);
       if (res.code === 0) {
         {
@@ -404,32 +395,7 @@ export default function InboundPage() {
             >
               {users.map((u) => (<SelectItem key={u.id}>{u.user}</SelectItem>))}
             </Select>
-            <Select
-              label={t("m4c101d02d265")}
-              placeholder={t("me264d2c9faaf")}
-              selectedKeys={assignForm.speedId ? [String(assignForm.speedId)] : []}
-              onSelectionChange={(k) => setAssignForm({ ...assignForm, speedId: Number(Array.from(k)[0]) })}
-            >
-              {speedRules.map((s) => (<SelectItem key={s.id}>{s.name}</SelectItem>))}
-            </Select>
-            <DatePicker
-              label={t("mc6c7c46bd1ba")}
-              value={assignForm.expDate ? parseDate(assignForm.expDate) as any : null}
-              onChange={(d: any) => setAssignForm({
-                ...assignForm,
-                expDate: d ? `${d.year}-${String(d.month).padStart(2, "0")}-${String(d.day).padStart(2, "0")}` : null,
-              })}
-              showMonthAndYearPickers
-              className="cursor-pointer"
-              description={t("m94b0358dadef")}
-            />
-            <Input
-              type="number"
-              label={t("md86a0bb4c097")}
-              value={assignForm.flowGb ?? ""}
-              onChange={(e) => setAssignForm({ ...assignForm, flowGb: e.target.value ? Number(e.target.value) : null })}
-              description={t("m3f92e87650d3")}
-            />
+            <p className="text-sm text-default-500">{t("limits.assign")}</p>
           </ModalBody>
           <ModalFooter>
             <Button variant="light" onPress={() => setAssignOpen(false)}>{t("m3fd47edce45b")}</Button>

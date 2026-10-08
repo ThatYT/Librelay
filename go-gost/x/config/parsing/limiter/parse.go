@@ -22,6 +22,10 @@ func ParseTrafficLimiter(cfg *config.LimiterConfig) (lim traffic.TrafficLimiter)
 		return nil
 	}
 
+	if cfg.UserBytesPerSecond != nil {
+		return xtraffic.NewUserLimiter(*cfg.UserBytesPerSecond)
+	}
+
 	if cfg.Plugin != nil {
 		var tlsCfg *tls.Config
 		if cfg.Plugin.TLS != nil {

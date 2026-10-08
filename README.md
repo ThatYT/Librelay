@@ -75,6 +75,16 @@ bash /tmp/librelay.sh update --install-dir /opt/tms
 
 更新节点时，在已更新的面板中重新复制该节点的安装命令，并在原节点上重新执行。默认下载对应提交的预构建文件并校验 SHA-256，保留已有节点配置和证书。升级面板不会自动升级远程节点；使用新公开监听功能前也要更新节点代理。
 
+### 用户限速与流量
+
+在「用户管理 → 新增/编辑」设置账号总限速（Mbps）、账号总流量（GiB）和每月重置日。速度和流量填 `0` 表示不限制，重置日 `0` 表示不自动重置。协议、线路和隧道分配只控制访问权限。
+
+所有节点、协议的上传与下载共用账号速度和流量额度。速度固定平分到该用户已预留的节点：100 Mbps / 两台节点 = 每台 50 Mbps，节点上的多个协议共享这 50 Mbps。空闲或离线节点的预算不会自动借给其他节点；删除线路也不会自动回收节点预留，以免离线旧节点继续使用时突破总上限。限速是令牌桶的持续速度上限，允许少量短时突发。
+
+升级后，**先更新远程节点代理，再编辑旧用户并保存统一设置**。迁移只增加字段；已有用量、凭据、端口和订阅地址保留，旧线路/隧道/转发套餐不再叠加。旧用户在保存前仍按原套餐运行，界面会提示迁移。修改限速或增加节点需要已有预留节点在线；失败时会报出节点，先前完成的收紧可能已生效，恢复节点后重试。
+
+账号流量耗尽后暂停该用户的服务。重置用量或增加额度后，只恢复因账号额度暂停的服务，手动停用的服务保持停用。新流量按上传+下载的实际字节合计，不叠加旧隧道倍率；保留的历史计费用量不重算。流量由节点批量上报，断连期间或上报间隔内可能超额，恢复连接后重新检查。
+
 ### 端口与域名
 
 | 服务 | 默认端口 | 所属服务器 |
@@ -192,6 +202,16 @@ Progress is logged to `.librelay-last-deploy.log` in the installation directory.
 Add a node in the panel, enter its IP, then click its installation action. Copy the generated command and run it as root on that specific node VPS. It contains the panel address and the node's own secret. Nodes do not require Docker.
 
 To update a node, copy its installation command again from the updated panel and rerun it on the original node. The installer downloads the matching prebuilt binary, verifies SHA-256 and preserves node configuration/certificates. Updating the panel does not automatically upgrade remote agents; update agents before using new public listening features.
+
+### Per-user speed and traffic limits
+
+Use **User Management → Add/Edit** to set the account speed (Mbps), traffic quota (GiB), and monthly reset day. `0` means unlimited for speed/quota and no automatic reset for the reset day. Assigning protocols, lines or tunnels grants access without creating another plan.
+
+Upload and download across all nodes and protocols share the account budget. Speed is evenly reserved across the user's assigned nodes: 100 Mbps across two nodes gives each node a shared 50 Mbps budget for all its protocols. Idle/offline reservations are not borrowed; deleting a line does not reclaim its node's reservation, since an offline agent might still be serving traffic. The token bucket caps sustained throughput with a small burst allowance.
+
+After upgrading, **update remote agents, then edit each legacy user and save the unified policy**. Additive migrations retain usage, credentials, ports, subscription URLs and legacy records. Legacy line/tunnel/forward plans stop applying once enabled; existing users keep their old behavior until that save, with a visible migration notice. Changing speed or adding a node requires the existing reserved nodes to be online. Errors identify the node; reductions already acknowledged can remain in effect until you retry.
+
+Exhausting the account quota pauses that user's services. Resetting usage or increasing the quota resumes quota-paused services while preserving manual pauses. New usage counts actual upload + download once without legacy tunnel multipliers; historical billed counters are preserved. Batched node reporting and disconnections can allow quota overshoot; enforcement retries after reconnect.
 
 ### Ports and domains
 

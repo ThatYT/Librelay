@@ -20,13 +20,17 @@ import java.util.Objects;
 @CrossOrigin
 @RequestMapping("/api/v1/open_api")
 public class OpenApiController extends BaseController {
+    @javax.annotation.Resource private com.admin.service.UserLimitService userLimits;
+
 
     @Autowired
     private InboundService inboundService;
 
     /** 订阅:按 token 返回该用户所有协议链接的 base64(客户端订阅用,免登录) */
     @GetMapping("/sub")
-    public String sub(@RequestParam("token") String token) {
+    public String sub(@RequestParam("token") String token, javax.servlet.http.HttpServletResponse response) {
+        String header = userLimits.subscriptionHeader(token);
+        if (header != null) response.setHeader("subscription-userinfo", header);
         return inboundService.buildSubscription(token);
     }
 
@@ -36,7 +40,9 @@ public class OpenApiController extends BaseController {
      * 3x-ui 和 s-ui 也都是独立路径。
      */
     @GetMapping(value = "/clash", produces = "text/yaml; charset=utf-8")
-    public String clash(@RequestParam("token") String token) {
+    public String clash(@RequestParam("token") String token, javax.servlet.http.HttpServletResponse response) {
+        String header = userLimits.subscriptionHeader(token);
+        if (header != null) response.setHeader("subscription-userinfo", header);
         return inboundService.buildClashSubscription(token);
     }
 

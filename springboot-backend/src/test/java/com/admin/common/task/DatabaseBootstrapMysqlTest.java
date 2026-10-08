@@ -38,6 +38,8 @@ class DatabaseBootstrapMysqlTest {
                 statement.executeUpdate("INSERT INTO node (id,name,secret,ip,server_ip,port_sta,port_end,created_time,updated_time,status) VALUES (7,'legacy-node','fixture','192.0.2.7','192.0.2.7',1000,65535,1,1,0)");
                 statement.executeUpdate("ALTER TABLE node DROP COLUMN server_ip");
                 statement.executeUpdate("ALTER TABLE node DROP COLUMN port_sta");
+                statement.executeUpdate("ALTER TABLE user DROP COLUMN unified_limits, DROP COLUMN speed_mbps, DROP COLUMN limit_nodes");
+                statement.executeUpdate("ALTER TABLE forward DROP COLUMN quota_paused");
                 SchemaMigration migration = new SchemaMigration();
                 org.springframework.test.util.ReflectionTestUtils.setField(migration, "dataSource",
                         new org.springframework.jdbc.datasource.DriverManagerDataSource(System.getenv("LIBRELAY_SCHEMA_TEST_URL"), "root", ""));
@@ -48,6 +50,15 @@ class DatabaseBootstrapMysqlTest {
                 assertEquals("1000", scalar(statement, "SELECT port_sta FROM node WHERE id=7"));
                 assertEquals("20000", scalar(statement, "SELECT listen_port FROM inbound WHERE tag='legacy'"));
                 assertEquals("4", scalar(statement, "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND ((table_name='user' AND column_name='name') OR (table_name='node' AND column_name='port') OR (table_name='tunnel' AND column_name='in_port_sta') OR (table_name='forward' AND column_name='proxy_protocol'))"));
+                assertEquals("0", scalar(statement, "SELECT unified_limits FROM user WHERE id=1"));
+                assertEquals("0", scalar(statement, "SELECT speed_mbps FROM user WHERE id=1"));
+                statement.executeUpdate("UPDATE user SET unified_limits=1,speed_mbps=100,limit_nodes='[7,8]' WHERE id=1");
+                migration.run(null);
+                DatabaseBootstrap.initialize(connection);
+                assertEquals("1", scalar(statement, "SELECT unified_limits FROM user WHERE id=1"));
+                assertEquals("100", scalar(statement, "SELECT speed_mbps FROM user WHERE id=1"));
+                assertEquals("[7,8]", scalar(statement, "SELECT limit_nodes FROM user WHERE id=1"));
+                assertEquals("123", scalar(statement, "SELECT flow FROM user WHERE id=1"));
                 // Simulate import interruption before the old dump's PK/AUTO_INCREMENT ALTERs.
                 statement.executeUpdate("DROP TABLE vite_config");
                 statement.executeUpdate("ALTER TABLE user MODIFY id INT NOT NULL");

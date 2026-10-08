@@ -6,6 +6,7 @@ import lombok.Data;
 @Data
 public class ConfigItem {
     private String name;
+    private Long userBytesPerSecond;
 }
 
 

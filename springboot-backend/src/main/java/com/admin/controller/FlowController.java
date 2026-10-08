@@ -63,6 +63,9 @@ public class FlowController extends BaseController {
     private static final ConcurrentHashMap<String, AESCrypto> CRYPTO_CACHE = new ConcurrentHashMap<>();
 
     @Resource
+    private com.admin.service.UserLimitService userLimits;
+
+    @Resource
     CheckGostConfigAsync checkGostConfigAsync;
 
     // 协议/中转的线路级配额检查用
@@ -232,12 +235,22 @@ public class FlowController extends BaseController {
         int flowType = getFlowType(forward);
 
         //  处理流量倍率及单双向计算
-        FlowDto flowStats = filterFlowData(flowDataList, forward, flowType);
+        User account = userService.getById(userId);
+        // Unified quotas count actual upload + download once, without legacy tunnel multipliers.
+        FlowDto flowStats = com.admin.service.UserLimitService.unified(account)
+                ? flowDataList : filterFlowData(flowDataList, forward, flowType);
 
         // 先更新所有流量统计 - 确保流量数据的一致性
         updateForwardFlow(forwardId, flowStats);
         updateUserFlow(userId, flowStats);
         updateUserTunnelFlow(userTunnelId, flowStats);
+
+        User owner = userService.getById(userId);
+        if (com.admin.service.UserLimitService.unified(owner)) {
+            try { userLimits.enforce(owner); }
+            catch (IllegalStateException ex) { log.warn("Account limit enforcement pending for user {}: {}", userId, ex.getMessage()); }
+            return SUCCESS_RESPONSE;
+        }
 
         // 7. 检查和服务暂停操作
         String name = buildServiceName(forwardId, userId, userTunnelId);

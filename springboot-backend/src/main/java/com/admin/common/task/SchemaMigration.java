@@ -49,6 +49,10 @@ public class SchemaMigration implements ApplicationRunner {
         for (String table : new String[]{"tunnel", "forward"})
             addColumnIfMissing(table, "interface_name", "ALTER TABLE `" + table + "` ADD COLUMN `interface_name` VARCHAR(200) NULL");
         addColumnIfMissing("statistics_flow", "created_time", "ALTER TABLE `statistics_flow` ADD COLUMN `created_time` BIGINT NOT NULL DEFAULT 0");
+        addColumnIfMissing("user", "unified_limits", "ALTER TABLE `user` ADD COLUMN `unified_limits` TINYINT(1) NOT NULL DEFAULT 0");
+        addColumnIfMissing("user", "speed_mbps", "ALTER TABLE `user` ADD COLUMN `speed_mbps` INT NOT NULL DEFAULT 0");
+        addColumnIfMissing("user", "limit_nodes", "ALTER TABLE `user` ADD COLUMN `limit_nodes` TEXT NULL");
+        addColumnIfMissing("forward", "quota_paused", "ALTER TABLE `forward` ADD COLUMN `quota_paused` TINYINT(1) NOT NULL DEFAULT 0");
         backfillLegacyServerIp();
         addColumnIfMissing("inbound", "public_listen",
                 "ALTER TABLE `inbound` ADD COLUMN `public_listen` TINYINT(1) NOT NULL DEFAULT 0");

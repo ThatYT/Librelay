@@ -11,7 +11,6 @@ import TunnelPage from "@/pages/tunnel";
 import NodePage from "@/pages/node";
 import UserPage from "@/pages/user";
 import ProfilePage from "@/pages/profile";
-import LimitPage from "@/pages/limit";
 import InboundPage from "@/pages/inbound";
 import RelayPage from "@/pages/relay";
 import LandingPage from "@/pages/landing";
@@ -261,7 +260,7 @@ function App() {
         path="/limit" 
         element={
           <ProtectedRoute useSimpleLayout={true}>
-            <LimitPage />
+            <Navigate to="/user" replace />
           </ProtectedRoute>
         } 
       />

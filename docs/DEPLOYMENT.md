@@ -191,3 +191,11 @@ librelay info
 The `tms` command, `tms-hybrid.sh`, old `TMS_*` installer environment flags, older build metadata and stored private-forward addresses remain compatibility aliases. New forwards use `librelay-socks://`; old addresses remain readable. Node metadata includes the old key for agents not yet upgraded, while new agents accept both keys. Browser language is saved as `librelay.language`, with the old preference read as a fallback. No database migration or credential reset is needed for the rename.
 
 Keep the upstream attribution and third-party names (Spring Boot, Vite, MySQL, gost and sing-box). Component source directories and existing owner-scoped image package names describe those technologies and are retained. The images' repository label and all active installer URLs use Librelay. Do not reuse the old GitHub repository name, which would remove GitHub's redirect.
+
+## Unified user limits
+
+See the bilingual [user limits guide](../README.md#per-user-speed-and-traffic-limits). Upgrade the panel with `librelay update`, update each node using its regenerated installation command, then save the user's account policy.
+
+Automatic migration adds `user.unified_limits` (default 0 for existing rows), `user.speed_mbps`, `user.limit_nodes`, and `forward.quota_paused`. Existing columns and counters are retained. New users default to unified limits; existing users explicitly activate them when saving. The persistent node reservation list only grows and is preserved across restart. Reclaiming an offline reservation automatically would be unsafe, so this release does not do so.
+
+Unified limits require the updated node command `SetUserLimit`. Older agents fail clearly instead of silently treating combined speed as unlimited. Once enabled, downgrade to an older backend/agent is unsupported: old software does not enforce these policies. Keep the existing installation directory and database volume when updating.

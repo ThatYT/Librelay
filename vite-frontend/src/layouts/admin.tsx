@@ -215,7 +215,8 @@ export default function AdminLayout({
     '/config',
     '/guide',
   ];
-  menuItems.sort((a, b) => {
+  const visibleMenuItems = menuItems.filter(item => item.path !== '/limit');
+  visibleMenuItems.sort((a, b) => {
     const ia = MENU_ORDER.indexOf(a.path);
     const ib = MENU_ORDER.indexOf(b.path);
     return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
@@ -340,7 +341,7 @@ export default function AdminLayout({
   };
 
   // 过滤菜单项（根据权限）:adminOnly 只给管理员,userOnly 只给车友
-  const filteredMenuItems = menuItems.filter(item =>
+  const filteredMenuItems = visibleMenuItems.filter(item =>
     (!item.adminOnly || isAdmin) && (!item.userOnly || !isAdmin)
   );
 

@@ -89,6 +89,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     // ========== 依赖注入 ==========
     
     @Resource
+    private com.admin.service.UserLimitService userLimits;
+
+    @Resource
     private UserMapper userMapper;
     
     @Resource
@@ -233,15 +236,33 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             return updateValidationResult;
         }
 
-        // 4. 构建更新实体并保存
-        User updateUser = buildUpdateUserEntity(userUpdateDto);
-        boolean result = this.updateById(updateUser);
+        synchronized (userLimits) {
+            // 4. 构建更新实体并保存
+            User updateUser = buildUpdateUserEntity(userUpdateDto);
+            User previous = this.getById(userUpdateDto.getId());
+            if (Boolean.TRUE.equals(previous.getUnifiedLimits()) && !Boolean.TRUE.equals(updateUser.getUnifiedLimits())) {
+                updateUser.setUnifiedLimits(true); // A legacy client cannot silently restore layered limits.
+                if (updateUser.getSpeedMbps() == null) updateUser.setSpeedMbps(previous.getSpeedMbps());
+            }
+            updateUser.setInFlow(previous.getInFlow());
+            updateUser.setOutFlow(previous.getOutFlow());
+            try { userLimits.stage(updateUser, previous); }
+            catch (IllegalStateException ex) { return R.err(ex.getMessage()); }
+            // Only settings are written. Flow reports can arrive during node updates.
+            updateUser.setInFlow(null);
+            updateUser.setOutFlow(null);
+            boolean result = this.updateById(updateUser);
+            if (result) {
+                try { userLimits.apply(this.getById(updateUser.getId())); }
+                catch (IllegalStateException ex) { return R.err("User settings saved; node synchronization is pending: " + ex.getMessage()); }
+            }
         
-        if (result) {
-            // 5. 处理到期时间延时任务
-            return R.ok(SUCCESS_UPDATE_MSG);
-        } else {
-            return R.err(ERROR_UPDATE_FAILED);
+            if (result) {
+                // 5. 处理到期时间延时任务
+                return R.ok(SUCCESS_UPDATE_MSG);
+            } else {
+                return R.err(ERROR_UPDATE_FAILED);
+            }
         }
     }
 
@@ -358,7 +379,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             if (user == null) return R.err(ERROR_USER_NOT_FOUND);
             user.setInFlow(0L);
             user.setOutFlow(0L);
-            this.updateById(user);
+            this.update(null, new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<User>()
+                    .eq("id", user.getId()).set("in_flow", 0L).set("out_flow", 0L));
+            try { userLimits.enforce(user); }
+            catch (IllegalStateException ex) { return R.err("Traffic reset; resume is pending: " + ex.getMessage()); }
         }else { // 清零隧道流量
             UserTunnel tunnel = userTunnelService.getById(resetFlowDto.getId());
             if (tunnel == null) return R.err("隧道不存在");
@@ -444,6 +468,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         // 设置默认属性
         user.setStatus(userDto.getStatus() != null ? userDto.getStatus() : USER_STATUS_ACTIVE);
         user.setRoleId(USER_ROLE_ID);
+        user.setInFlow(0L); user.setOutFlow(0L);
+        if (Boolean.TRUE.equals(user.getUnifiedLimits()) && user.getSpeedMbps() == null) user.setSpeedMbps(0);
         
         // 设置时间戳
         long currentTime = System.currentTimeMillis();
@@ -717,6 +743,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         userInfo.setId(user.getId());
         userInfo.setUser(user.getUser());
         userInfo.setStatus(user.getStatus());
+        userInfo.setUnifiedLimits(user.getUnifiedLimits());
+        userInfo.setSpeedMbps(user.getSpeedMbps());
         userInfo.setFlow(user.getFlow());
         userInfo.setInFlow(user.getInFlow());
         userInfo.setOutFlow(user.getOutFlow());

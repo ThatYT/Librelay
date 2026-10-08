@@ -11,7 +11,10 @@ export interface User {
   user: string;
   pwd?: string;
   status: number; // 1-正常, 0-禁用
-  flow: number; // 流量限制(GB)
+  unifiedLimits?: boolean;
+  speedMbps?: number;
+  limitNodes?: string;
+  flow: number; // Account quota in GiB; zero means unlimited
   num: number; // 转发数量
   expTime?: number; // 过期时间戳
   flowResetTime?: number; // 流量重置日期(1-31号)
@@ -21,6 +24,8 @@ export interface User {
 }
 
 export interface UserForm {
+  unifiedLimits?: boolean;
+  speedMbps?: number;
   id?: number;
   name?: string;
   user: string;
@@ -38,7 +43,10 @@ export interface UserTunnel {
   tunnelId: number;
   tunnelName: string;
   status: number; // 1-正常, 0-禁用
-  flow: number; // 流量限制(GB)
+  unifiedLimits?: boolean;
+  speedMbps?: number;
+  limitNodes?: string;
+  flow: number; // Account quota in GiB; zero means unlimited
   num: number; // 转发数量
   expTime: number; // 过期时间戳
   flowResetTime: number; // 流量重置日期

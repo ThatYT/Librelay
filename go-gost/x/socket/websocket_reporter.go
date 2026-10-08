@@ -596,6 +596,9 @@ func (w *WebSocketReporter) routeCommand(cmd CommandMessage) {
 		response.Type = "DeleteChainsResponse"
 
 	// Limiter 相关命令
+	case "SetUserLimit":
+		err = w.handleSetUserLimit(cmd.Data)
+		response.Type = "SetUserLimitResponse"
 	case "AddLimiters":
 		err = w.handleAddLimiter(cmd.Data)
 		response.Type = "AddLimitersResponse"
@@ -645,13 +648,14 @@ func (w *WebSocketReporter) routeCommand(cmd CommandMessage) {
 		response.Type = "UnknownCommandResponse"
 	}
 
-	// 发送响应
+	// An acknowledged policy must be durable before the panel allocates another node.
+	if persistErr := saveConfig(); err == nil && persistErr != nil {
+		err = fmt.Errorf("persist node configuration: %w", persistErr)
+	}
 	if err != nil {
-		saveConfig()
 		response.Success = false
 		response.Message = err.Error()
 	} else {
-		saveConfig()
 		response.Success = true
 		response.Message = "OK"
 	}

@@ -31,6 +31,9 @@ import java.util.List;
 public class ResetFlowAsync {
 
     @Resource
+    private com.admin.service.UserLimitService userLimits;
+
+    @Resource
     UserService userService;
 
     @Resource
@@ -103,6 +106,7 @@ public class ResetFlowAsync {
             List<Forward> list = forwardService.list(new QueryWrapper<Forward>()
                     .eq("status", 1).isNotNull("exp_time").gt("exp_time", 0).lt("exp_time", new Date().getTime()));
             for (Forward forward : list) {
+                if (com.admin.service.UserLimitService.unified(userService.getById(forward.getUserId()))) continue;
                 UserTunnel ut = userTunnelService.getOne(new QueryWrapper<UserTunnel>()
                         .eq("user_id", forward.getUserId()).eq("tunnel_id", forward.getTunnelId()));
                 pauseForwardService(forward, ut != null ? ut.getId() : null);
@@ -162,7 +166,10 @@ public class ResetFlowAsync {
                 }
                 // 协议/中转的线路用量 = 该线路各转发的流量之和,只清 user 表没用:
                 // 不把转发流量一起清零,线路配额就成了"终身配额",跑满一次下个月也打不开。
-                resetProtocolLineFlow(user);
+                if (com.admin.service.UserLimitService.unified(user)) {
+                    user.setInFlow(0L); user.setOutFlow(0L);
+                    userLimits.enforce(user);
+                } else resetProtocolLineFlow(user);
             }
             
         } catch (Exception e) {
@@ -262,6 +269,7 @@ public class ResetFlowAsync {
             
             // 批量重置用户隧道流量 - 使用SQL原子操作避免与到期任务的并发冲突
             for (UserTunnel userTunnel : userTunnelsToReset) {
+                if (com.admin.service.UserLimitService.unified(userService.getById(userTunnel.getUserId()))) continue;
                 UpdateWrapper<UserTunnel> updateWrapper = new UpdateWrapper<>();
                 updateWrapper.eq("id", userTunnel.getId())
                            .setSql("in_flow = 0, out_flow = 0"); // 使用SQL原子操作，只更新流量字段
@@ -286,6 +294,7 @@ public class ResetFlowAsync {
         // 查询过期用户
         List<User> user_list = userService.list(new QueryWrapper<User>().ne("role_id", 0).eq("status", 1).isNotNull("exp_time").gt("exp_time", 0).lt("exp_time", new Date().getTime()));
         for (User user : user_list) {
+            if (com.admin.service.UserLimitService.unified(user)) continue;
             // 查询对应转发
             List<Forward> forwardList = forwardService.list(new QueryWrapper<Forward>().eq("user_id", user.getId()).eq("status", 1));
             for (Forward forward : forwardList) {
@@ -307,6 +316,7 @@ public class ResetFlowAsync {
         List<UserTunnel> user_tunnel_list = userTunnelService.list(new QueryWrapper<UserTunnel>().eq("status", 1).isNotNull("exp_time").gt("exp_time", 0).lt("exp_time", new Date().getTime()));
         // 查询对应转发
         for (UserTunnel userTunnel : user_tunnel_list) {
+            if (com.admin.service.UserLimitService.unified(userService.getById(userTunnel.getUserId()))) continue;
             List<Forward> forwardList = forwardService.list(new QueryWrapper<Forward>().eq("tunnel_id", userTunnel.getTunnelId()).eq("user_id", userTunnel.getUserId()).eq("status", 1));
             for (Forward forward : forwardList) {
                 pauseForwardService(forward, userTunnel.getId());

@@ -29,6 +29,9 @@ public class CheckGostConfigAsync {
     public static final long PER_USER_LIMITER_BASE = 900000000L;
 
     @Resource
+    private com.admin.service.UserLimitService userLimits;
+
+    @Resource
     private NodeService nodeService;
 
     @Resource
@@ -60,6 +63,8 @@ public class CheckGostConfigAsync {
             cleanOrphanedServices(gostConfig, node);
             cleanOrphanedChains(gostConfig, node);
             cleanOrphanedLimiters(gostConfig, node);
+            try { userLimits.syncNode(node.getId(), gostConfig); }
+            catch (Exception ex) { log.warn("User limit sync failed: {}", ex.getMessage()); }
         }
     }
 
@@ -156,6 +161,11 @@ public class CheckGostConfigAsync {
                 // 但也不能无条件放行,否则车友删号后限速器永远留在节点上。
                 // 判据换成「这个 userId 还在不在」:人还在就留着,人没了才清。
                 long limiterId = Long.parseLong(limiter.getName());
+                if (limiterId >= com.admin.service.UserLimitService.LIMITER_BASE && limiterId < PER_USER_LIMITER_BASE) {
+                    if (userService.getById(limiterId - com.admin.service.UserLimitService.LIMITER_BASE) == null)
+                        GostUtil.DeleteLimiters(node.getId(), limiterId);
+                    return;
+                }
                 if (limiterId >= PER_USER_LIMITER_BASE) {
                     long ownerId = limiterId - PER_USER_LIMITER_BASE;
                     if (userService.getById(ownerId) != null) {

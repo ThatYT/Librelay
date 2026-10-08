@@ -12,8 +12,6 @@ import { Spinner } from "@heroui/spinner";
 import { Switch } from "@heroui/switch";
 import { Alert } from "@heroui/alert";
 import { Accordion, AccordionItem } from "@heroui/accordion";
-import { DatePicker } from "@heroui/date-picker";
-import { parseDate } from "@internationalized/date";
 import toast from '@/utils/toast';
 import { copyTextToClipboard } from "@/utils/clipboard";
 import {
@@ -48,24 +46,11 @@ import {
   resumeForwardService,
   diagnoseForward,
   updateForwardOrder,
-  getSpeedLimitList,
   getInboundList
 } from "@/api";
 import { JwtUtil } from "@/utils/jwt";
 
 /** 时间戳 → 本地日期串。不能用 toISOString(那是 UTC,凌晨点「30天」会少算一天) */
-const toLocalDateStr = (ms: number) => {
-  const d = new Date(ms);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
-
-/** N 天后那天的 23:59:59,跟手选日期的口径保持一致 */
-const endOfDayAfter = (days: number) => {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  d.setHours(23, 59, 59, 0);
-  return d.getTime();
-};
 
 interface Forward {
   id: number;
@@ -160,7 +145,6 @@ export default function ForwardPage() {
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
   // 目标机器上已搭的协议:用来给「远程地址」做一键填入,免得手打 127.0.0.1:端口
   const [inbounds, setInbounds] = useState<any[]>([]);
-  const [speedRules, setSpeedRules] = useState<any[]>([]);
   
   // 检测是否为移动端
   const [isMobile, setIsMobile] = useState(false);
@@ -306,10 +290,9 @@ export default function ForwardPage() {
   const loadData = async (lod = true) => {
     setLoading(lod);
     try {
-      const [forwardsRes, tunnelsRes, speedRulesRes, inboundsRes] = await Promise.all([
+      const [forwardsRes, tunnelsRes, inboundsRes] = await Promise.all([
         getForwardList(),
         userTunnel(),
-        getSpeedLimitList(),
         // 车友没有这个接口的权限,失败就当没有协议可选,不影响建转发
         getInboundList().catch(() => ({ code: -1, data: [] } as any))
       ]);
@@ -381,9 +364,7 @@ export default function ForwardPage() {
         console.warn(t("m8e2d2dfe2399"), tunnelsRes.msg);
       }
 
-      if (speedRulesRes?.code === 0) {
-        setSpeedRules(speedRulesRes.data || []);
-      }
+
 
       if (inboundsRes?.code === 0) {
         setInbounds(inboundsRes.data || []);
@@ -1771,70 +1752,7 @@ export default function ForwardPage() {
                     )}
                   </div>
 
-                  {/* 套餐:限速 + 到期。跟上面的「这条转发通到哪」不是一类事,拉开距离单独成组 */}
-                  <div className="space-y-4 pt-4 border-t border-divider">
-                    <div className="text-xs font-medium text-default-500">{t("m60e059f7f625")}</div>
-
-                    <Select
-                      label={t("m798157fd4601")}
-                      placeholder={t("m08d7bea2def7")}
-                      selectedKeys={form.speedId ? [String(form.speedId)] : []}
-                      onSelectionChange={(keys) => {
-                        const k = Array.from(keys)[0] as string;
-                        setForm(prev => ({ ...prev, speedId: k ? parseInt(k) : null }));
-                      }}
-                      variant="bordered"
-                      description={t("md8dc50dc2749")}
-                    >
-                      {speedRules
-                        .filter((r: any) => r.tunnelId === form.tunnelId)
-                        .map((r: any) => (
-                          <SelectItem key={r.id}>{r.name}</SelectItem>
-                        ))}
-                    </Select>
-
-                    <div className="space-y-2">
-                      {/* 原生 datetime-local 换掉了:它空值时也一直显示「年/月/日 --:--」,
-                          HeroUI 以为没输入就把浮动 label 压在正中间,和那串占位文字叠成一坨;
-                          换成 DatePicker 顺带跟「分配用户」那边的到期选择统一 */}
-                      <DatePicker
-                        label={t("m5192466fec83")}
-                        variant="bordered"
-                        showMonthAndYearPickers
-                        className="cursor-pointer"
-                        value={form.expTime ? parseDate(toLocalDateStr(form.expTime)) as any : null}
-                        onChange={(d: any) => setForm(prev => ({
-                          ...prev,
-                          expTime: d ? new Date(d.year, d.month - 1, d.day, 23, 59, 59).getTime() : null,
-                        }))}
-                        description={t("maa3044081447")}
-                      />
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-tiny text-default-400">{t("ma30cc40a47c0")}</span>
-                        {[
-                          { label: t("mf712835e3ec7"), days: 30 },
-                          { label: t("m272499a5ea25"), days: 90 },
-                          { label: t("m6195bdd41495"), days: 182 },
-                          { label: t("m68de169ae926"), days: 365 },
-                        ].map((p) => (
-                          <Button
-                            key={p.days}
-                            size="sm"
-                            variant="flat"
-                            color="primary"
-                            onPress={() => setForm(prev => ({ ...prev, expTime: endOfDayAfter(p.days) }))}
-                          >
-                            {p.label}
-                          </Button>
-                        ))}
-                        <Button
-                          size="sm"
-                          variant="flat"
-                          onPress={() => setForm(prev => ({ ...prev, expTime: null }))}
-                        > {t("m3e71ccc89a43")} </Button>
-                      </div>
-                    </div>
-                  </div>
+                  <p className="text-sm text-default-500">{t("limits.assign")}</p>
 
                   {/* 高级挪到最后:夹在中间会把「限速/到期」这些常用项挤到折叠区下面去 */}
                   <div className="pt-1 border-t border-divider">

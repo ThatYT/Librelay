@@ -54,6 +54,9 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
     private static final long BYTES_TO_GB = 1024L * 1024L * 1024L;
 
     @Resource
+    private com.admin.service.UserLimitService userLimits;
+
+    @Resource
     @Lazy
     private TunnelService tunnelService;
 
@@ -101,6 +104,9 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         if (portAllocation.isHasError()) {
             return R.err(portAllocation.getErrorMessage() + suggestPortHint(tunnel));
         }
+
+        try { userLimits.prepare(currentUser.getUserId().longValue(), tunnel.getInNodeId()); }
+        catch (IllegalStateException ex) { return R.err(ex.getMessage()); }
 
         // 5~7. 建实体 + 下发 gost;自动分配时若端口在机器 OS 层被占(gost 报 address already in use),
         //      自动换下一个可用端口重试,不让用户自己去猜哪个端口空着
@@ -173,6 +179,9 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         if (portAllocation.isHasError()) {
             return R.err(portAllocation.getErrorMessage());
         }
+
+        try { userLimits.prepare(userId.longValue(), tunnel.getInNodeId()); }
+        catch (IllegalStateException ex) { return R.err(ex.getMessage()); }
 
         // 3. 建 Forward,归属【指定用户】(而非当前登录管理员),便于按用户汇总流量/到期
         Forward forward = new Forward();
@@ -400,8 +409,8 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
                         return R.err("隧道被禁用");
                     }
 
-                    // 检查隧道权限到期时间
-                    if (userTunnel.getExpTime() != null && userTunnel.getExpTime() > 0 && userTunnel.getExpTime() <= System.currentTimeMillis()) {
+                    // Unified accounts ignore legacy tunnel expiry.
+                    if (!com.admin.service.UserLimitService.unified(originalUser) && userTunnel.getExpTime() != null && userTunnel.getExpTime() > 0 && userTunnel.getExpTime() <= System.currentTimeMillis()) {
                         return R.err("用户的该隧道权限已到期");
                     }
 
@@ -523,7 +532,12 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         Forward f = this.getById(id);
         // exp_time = 0 是「永不过期」,不是 1970 年过期的。少了 > 0 这个守卫,
         // 不设到期的转发一旦被暂停就再也恢复不了,月初流量重置那次批量 resume 也会全军覆没
-        if (f != null && f.getExpTime() != null && f.getExpTime() > 0
+        User owner = f != null ? userService.getById(f.getUserId()) : null;
+        if (com.admin.service.UserLimitService.unified(owner)) {
+            String reason = com.admin.service.UserLimitService.blockedReason(owner);
+            if (reason != null) return R.err(reason);
+        }
+        if (!com.admin.service.UserLimitService.unified(owner) && f != null && f.getExpTime() != null && f.getExpTime() > 0
                 && f.getExpTime() < System.currentTimeMillis()) {
             return R.err("该转发已到期,无法恢复");
         }
@@ -653,6 +667,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
 
         // 9. 更新转发状态
         forward.setStatus(targetStatus);
+        forward.setQuotaPaused(false); // An explicit pause/resume is a manual access decision.
         forward.setUpdatedTime(System.currentTimeMillis());
         boolean result = this.updateById(forward);
 
@@ -1028,6 +1043,11 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
             return UserPermissionResult.error("隧道被禁用");
         }
 
+        if (com.admin.service.UserLimitService.unified(userInfo)) {
+            String reason = com.admin.service.UserLimitService.blockedReason(userInfo);
+            return reason == null ? UserPermissionResult.success(null, userTunnel) : UserPermissionResult.error(reason);
+        }
+
         // 检查隧道权限到期时间
         if (userTunnel.getExpTime() != null && userTunnel.getExpTime() > 0 && userTunnel.getExpTime() <= System.currentTimeMillis()) {
             return UserPermissionResult.error("该隧道权限已到期");
@@ -1054,6 +1074,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
      * 检查用户转发数量限制
      */
     private R checkForwardQuota(Integer userId, Integer tunnelId, UserTunnel userTunnel, User userInfo, Long excludeForwardId) {
+        if (com.admin.service.UserLimitService.unified(userInfo)) return R.ok();
         // 检查用户总转发数量限制
         long userForwardCount = this.count(new QueryWrapper<Forward>().eq("user_id", userId));
         if (userForwardCount >= userInfo.getNum()) {
@@ -1082,6 +1103,10 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
      */
     private R checkUserFlowLimits(Integer userId, Tunnel tunnel) {
         User userInfo = userService.getById(userId);
+        if (com.admin.service.UserLimitService.unified(userInfo)) {
+            String reason = com.admin.service.UserLimitService.blockedReason(userInfo);
+            return reason == null ? R.ok() : R.err(reason);
+        }
         if (userInfo.getExpTime() != null && userInfo.getExpTime() > 0 && userInfo.getExpTime() <= System.currentTimeMillis()) {
             return R.err("当前账号已到期");
         }
@@ -1207,6 +1232,13 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
      * 单条转发自带限速规则优先,否则回退到用户隧道的默认规则(功能B)。
      */
     private Integer resolveLimiter(Forward forward, Integer fallback) {
+        if (forward != null && forward.getUserId() != null) {
+            User owner = userService.getById(forward.getUserId());
+            if (com.admin.service.UserLimitService.unified(owner)) {
+                Tunnel t = tunnelService.getById(forward.getTunnelId());
+                return userLimits.prepare(owner.getId(), t.getInNodeId());
+            }
+        }
         return forward != null && forward.getSpeedId() != null ? forward.getSpeedId() : fallback;
     }
 

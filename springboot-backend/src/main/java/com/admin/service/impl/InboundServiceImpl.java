@@ -55,6 +55,9 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
     private static final int TUNNEL_TYPE_PORT_FORWARD = 1;
     private static final int SINGBOX_LISTEN_BASE = 40000;
 
+    @javax.annotation.Resource
+    private com.admin.service.UserLimitService userLimits;
+
     @Autowired
     private com.admin.common.utils.NodeCommandClient nodeCommands;
     @Autowired
@@ -396,6 +399,9 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
             return R.err("节点不存在");
         }
 
+        if (com.admin.service.UserLimitService.unified(user)) {
+            dto.setSpeedId(null); dto.setFlow(null); dto.setExpTime(null);
+        }
         // 0. 查重:已给这个用户分过这个协议 → 直接返回现有链接 + 订阅,不重复建(避免重复占端口/转发)
         InboundUser existed = inboundUserMapper.selectOne(new QueryWrapper<InboundUser>()
                 .eq("inbound_id", in.getId()).eq("user_id", user.getId()).last("limit 1"));
@@ -494,6 +500,9 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
         User user = userMapper.selectById(dto.getUserId());
         if (user == null) {
             return R.err("用户不存在");
+        }
+        if (com.admin.service.UserLimitService.unified(user)) {
+            dto.setSpeedId(null); dto.setFlow(null); dto.setExpTime(null);
         }
         // 分配的是「直连组」还是「某落地的中转组」——同一台机器的直连、每个落地各算一条独立线路/订阅
         boolean relay = Boolean.TRUE.equals(dto.getRelay());
@@ -710,6 +719,8 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
         java.util.Map<Long, String> landingNames = new HashMap<>();
 
         for (InboundUser iu : ius) {
+            User owner = userMapper.selectById(iu.getUserId());
+            if (com.admin.service.UserLimitService.unified(owner) && com.admin.service.UserLimitService.blockedReason(owner) != null) continue;
             if (iu.getStatus() != null && iu.getStatus() == 0) {
                 continue;
             }
@@ -775,6 +786,7 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
                 if (fwd.getStatus() != null && fwd.getStatus() != 1) {
                     continue;
                 }
+                if (com.admin.service.UserLimitService.unified(u) && com.admin.service.UserLimitService.blockedReason(u) != null) continue;
                 String cl = fwd.getClientLink();
                 if (cl != null && !cl.trim().isEmpty()) {
                     links.add(cl.trim());
@@ -816,6 +828,8 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
         java.util.Map<Long, String> landingNames = new HashMap<>();
 
         for (InboundUser iu : ius) {
+            User owner = userMapper.selectById(iu.getUserId());
+            if (com.admin.service.UserLimitService.unified(owner) && com.admin.service.UserLimitService.blockedReason(owner) != null) continue;
             if (iu.getStatus() != null && iu.getStatus() == 0) {
                 continue;
             }
@@ -1009,6 +1023,8 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
         // 挨个去查线路表纯属浪费。
         java.util.Map<String, Boolean> lineStopped = new HashMap<>();
         for (InboundUser iu : ius) {
+            User owner = userMapper.selectById(iu.getUserId());
+            if (com.admin.service.UserLimitService.unified(owner) && com.admin.service.UserLimitService.blockedReason(owner) != null) continue;
             if (iu.getStatus() != null && iu.getStatus() == 0) {
                 continue;
             }
@@ -1122,8 +1138,9 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
             line.put("flow", lineFlow); // 该线路已用流量(字节)
             // 该线路自己的配额/到期(线路表);quotaGb=0/null 表示不单独限,只受账号总量约束
             InboundLine lineRec = getLine(userId, nodeId, landingId);
-            line.put("quotaGb", lineRec != null ? lineRec.getFlow() : null);
-            line.put("lineExpTime", lineRec != null ? lineRec.getExpTime() : null);
+            line.put("unifiedLimits", com.admin.service.UserLimitService.unified(userMapper.selectById(userId)));
+            line.put("quotaGb", com.admin.service.UserLimitService.unified(userMapper.selectById(userId)) ? 0L : lineRec != null ? lineRec.getFlow() : null);
+            line.put("lineExpTime", com.admin.service.UserLimitService.unified(userMapper.selectById(userId)) ? 0L : lineRec != null ? lineRec.getExpTime() : null);
             line.put("lineStatus", lineRec != null ? lineRec.getStatus() : 1);
             line.put("protocolCount", count);
             line.put("subToken", token);
@@ -1294,6 +1311,8 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public R updateLine(Long userId, Long nodeId, Long landingId, Long flowGb, Long expTime, Integer speedId) {
+        if (com.admin.service.UserLimitService.unified(userMapper.selectById(userId)))
+            return R.err("Manage speed and traffic limits in User Management; line plans no longer apply to this user");
         if (userId == null || nodeId == null) {
             return R.err("参数不全");
         }
@@ -1407,6 +1426,11 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
     public R setLineStatus(Long userId, Long nodeId, Long landingId, Integer status) {
         if (userId == null || nodeId == null || status == null) {
             return R.err("参数不全");
+        }
+        User owner = userMapper.selectById(userId);
+        if (com.admin.service.UserLimitService.unified(owner) && status == 1) {
+            String reason = com.admin.service.UserLimitService.blockedReason(owner);
+            if (reason != null) return R.err(reason);
         }
         InboundLine line = getLine(userId, nodeId, landingId);
         if (line == null) {

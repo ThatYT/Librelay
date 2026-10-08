@@ -8,6 +8,10 @@ const messages = Object.entries(zh).sort((a, b) => b[1].length - a[1].length);
 export function serverMessage(message: string): string {
   const exact = messages.find(([key, value]) => value === message || (en as Record<string, string>)[key] === message);
   if (exact) return t(exact[0]);
+  const userNode = message.match(/^Cannot apply user limits on node (\d+): (.*)\. Update the node agent and ensure it is online; then retry\.$/);
+  if (userNode) return t("error.userLimitNode", { node: userNode[1], detail: serverMessage(userNode[2]) });
+  const userSaved = message.match(/^User settings saved; node synchronization is pending: (.*)$/);
+  if (userSaved) return t("error.userLimitSaved", { detail: serverMessage(userSaved[1]) });
   const unavailable = message.match(/^Cannot use (TCP|UDP) port (\d+) on node (\d+): (.*)$/);
   if (unavailable) return t("error.portUnavailable", { network: unavailable[1], port: unavailable[2], node: unavailable[3], detail: serverMessage(unavailable[4]) });
   const used = message.match(/^(TCP|UDP) port (\d+) is already used on node (\d+)$/);

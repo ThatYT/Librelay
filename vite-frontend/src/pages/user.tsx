@@ -5,21 +5,21 @@ import { useState, useEffect } from 'react';
 import { Button } from "@heroui/button";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Input } from "@heroui/input";
-import { 
-  Table, 
-  TableHeader, 
-  TableColumn, 
-  TableBody, 
-  TableRow, 
-  TableCell 
+import {
+  Table,
+  TableHeader,
+  TableColumn,
+  TableBody,
+  TableRow,
+  TableCell
 } from "@heroui/table";
-import { 
-  Modal, 
-  ModalContent, 
-  ModalHeader, 
-  ModalBody, 
+import {
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
   ModalFooter,
-  useDisclosure 
+  useDisclosure
 } from "@heroui/modal";
 import { Chip } from "@heroui/chip";
 import { Select, SelectItem } from "@heroui/select";
@@ -29,14 +29,13 @@ import { Spinner } from "@heroui/spinner";
 import { Progress } from "@heroui/progress";
 
 import toast from '@/utils/toast';
-import { 
-  User, 
-  UserForm, 
-  UserTunnel, 
-  UserTunnelForm, 
-  Tunnel, 
-  SpeedLimit, 
-  Pagination as PaginationType 
+import {
+  User,
+  UserForm,
+  UserTunnel,
+  UserTunnelForm,
+  Tunnel,
+  Pagination as PaginationType
 } from '@/types';
 import {
   getAllUsers,
@@ -48,12 +47,10 @@ import {
   getUserTunnelList,
   removeUserTunnel,
   updateUserTunnel,
-  getSpeedLimitList,
   resetUserFlow,
   getUserLines,
   setLineStatus,
   deleteLine,
-  updateLine
 } from '@/api';
 import { copyTextToClipboard } from '@/utils/clipboard';
 import { SubQrToggle } from '@/components/sub-qr';
@@ -103,14 +100,6 @@ const calculateUserTotalUsedFlow = (user: User): number => {
   return (user.inFlow || 0) + (user.outFlow || 0);
 };
 
-const calculateTunnelUsedFlow = (tunnel: UserTunnel): number => {
-  const inFlow = tunnel.inFlow || 0;
-  const outFlow = tunnel.outFlow || 0;
-  
-  // 后端已按计费类型处理流量，前端直接使用入站+出站总和
-  return inFlow + outFlow;
-};
-
 export default function UserPage() {
   useTranslation();
   // 状态管理
@@ -126,15 +115,14 @@ export default function UserPage() {
   // 用户表单相关状态
   const { isOpen: isUserModalOpen, onOpen: onUserModalOpen, onClose: onUserModalClose } = useDisclosure();
   const [isEdit, setIsEdit] = useState(false);
-  // 用户表单只管「人」(账号/密码/状态)。
-  // 套餐参数(限速、流量、到期、重置日)一律在「分配用户」时按线路填 —— 那才是卖出去的东西。
-  // 这里的 flow/num 对协议和中转都不生效(流量按线路算、转发数量分配路径根本不查),
-  // 留着只是给老的端口/隧道转发业务用,所以给足量默认值、表单里不再让人操心。
+  // Speed, traffic and reset policy are managed only on the account.
   const [userForm, setUserForm] = useState<UserForm>({
     user: '',
     pwd: '',
     status: 1,
-    flow: 99999,
+    unifiedLimits: true,
+    speedMbps: 0,
+    flow: 0,
     num: 99999,
     expTime: null,
     flowResetTime: 1
@@ -145,13 +133,13 @@ export default function UserPage() {
   const { isOpen: isTunnelModalOpen, onOpen: onTunnelModalOpen, onClose: onTunnelModalClose } = useDisclosure();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userTunnels, setUserTunnels] = useState<UserTunnel[]>([]);
-  const [tunnelListLoading, setTunnelListLoading] = useState(false);  
-  
+  const [tunnelListLoading, setTunnelListLoading] = useState(false);
+
   // 分配新隧道权限相关状态
   const [tunnelForm, setTunnelForm] = useState<UserTunnelForm>({
     tunnelId: null,
-    flow: 100,
-    num: 10,
+    flow: 0,
+    num: 99999,
     expTime: null,
     flowResetTime: 0,
     speedId: null
@@ -177,7 +165,6 @@ export default function UserPage() {
   const [resetFlowLoading, setResetFlowLoading] = useState(false);
 
   // 重置隧道流量确认相关状态
-  const { isOpen: isResetTunnelFlowModalOpen, onOpen: onResetTunnelFlowModalOpen, onClose: onResetTunnelFlowModalClose } = useDisclosure();
 
   // 订阅线路模态框(合体面板:车友的每台机器一条订阅,直连/中转各一条)
   const { isOpen: isSubModalOpen, onOpen: onSubModalOpen, onClose: onSubModalClose } = useDisclosure();
@@ -216,18 +203,14 @@ export default function UserPage() {
   };
   const [subUserId, setSubUserId] = useState<number | null>(null);
 
-  const [tunnelToReset, setTunnelToReset] = useState<UserTunnel | null>(null);
-  const [resetTunnelFlowLoading, setResetTunnelFlowLoading] = useState(false);
 
   // 其他数据
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
-  const [speedLimits, setSpeedLimits] = useState<SpeedLimit[]>([]);
 
   // 生命周期
   useEffect(() => {
     loadUsers();
     loadTunnels();
-    loadSpeedLimits();
   }, [pagination.current, pagination.size, searchKeyword]);
 
   // 数据加载函数
@@ -239,7 +222,7 @@ export default function UserPage() {
         size: pagination.size,
         keyword: searchKeyword
       });
-      
+
       if (response.code === 0) {
         const data = response.data || {};
         setUsers(data || []);
@@ -264,16 +247,6 @@ export default function UserPage() {
     }
   };
 
-  const loadSpeedLimits = async () => {
-    try {
-      const response = await getSpeedLimitList();
-      if (response.code === 0) {
-        setSpeedLimits(response.data || []);
-      }
-    } catch (error) {
-      console.error(t("m9565b9954105"), error);
-    }
-  };
 
   const loadUserTunnels = async (userId: number) => {
     setTunnelListLoading(true);
@@ -303,8 +276,10 @@ export default function UserPage() {
       user: '',
       pwd: '',
       status: 1,
-      flow: 100,
-      num: 10,
+      unifiedLimits: true,
+      speedMbps: 0,
+      flow: 0,
+      num: 99999,
       expTime: null,
       flowResetTime: 0
     });
@@ -319,6 +294,8 @@ export default function UserPage() {
       user: user.user,
       pwd: '',
       status: user.status,
+      unifiedLimits: true,
+      speedMbps: user.speedMbps ?? 0,
       flow: user.flow,
       num: user.num,
       expTime: user.expTime ? new Date(user.expTime) : null,
@@ -356,6 +333,10 @@ export default function UserPage() {
       return;
     }
 
+    if (![userForm.flow, userForm.speedMbps ?? 0].every(v => Number.isSafeInteger(v) && v >= 0) ||
+        (userForm.speedMbps ?? 0) > 1000000 || userForm.flow > 1000000) {
+      toast.error(t("limits.invalid")); return;
+    }
     setUserFormLoading(true);
     try {
       const submitData: any = {
@@ -369,7 +350,7 @@ export default function UserPage() {
       }
 
       const response = isEdit ? await updateUser(submitData) : await createUser(submitData);
-      
+
       if (response.code === 0) {
         toast.success(isEdit ? t("m7c0d2664869c") : t("m1ab62884f4ee"));
         onUserModalClose();
@@ -389,8 +370,8 @@ export default function UserPage() {
     setCurrentUser(user);
     setTunnelForm({
       tunnelId: null,
-      flow: 100,
-      num: 10,
+      flow: 0,
+      num: 99999,
       expTime: null,
       flowResetTime: 0,
       speedId: null
@@ -422,8 +403,8 @@ export default function UserPage() {
         toast.success(t("mc5ebe5c0c2f7"));
         setTunnelForm({
           tunnelId: null,
-          flow: 100,
-          num: 10,
+          flow: 0,
+          num: 99999,
           expTime: null,
           flowResetTime: 0,
           speedId: null
@@ -514,11 +495,11 @@ export default function UserPage() {
 
     setResetFlowLoading(true);
     try {
-      const response = await resetUserFlow({ 
-        id: userToReset.id, 
+      const response = await resetUserFlow({
+        id: userToReset.id,
         type: 1 // 1表示重置用户流量
       });
-      
+
       if (response.code === 0) {
         toast.success(t("mbbd3d1a1fd12"));
         onResetFlowModalClose();
@@ -535,59 +516,20 @@ export default function UserPage() {
   };
 
   // 隧道流量重置相关函数
-  const handleResetTunnelFlow = (userTunnel: UserTunnel) => {
-    setTunnelToReset(userTunnel);
-    onResetTunnelFlowModalOpen();
-  };
 
-  const handleConfirmResetTunnelFlow = async () => {
-    if (!tunnelToReset) return;
-
-    setResetTunnelFlowLoading(true);
-    try {
-      const response = await resetUserFlow({ 
-        id: tunnelToReset.id, 
-        type: 2 // 2表示重置隧道流量
-      });
-      
-      if (response.code === 0) {
-        toast.success(t("m9de444e21108"));
-        onResetTunnelFlowModalClose();
-        setTunnelToReset(null);
-        if (currentUser) {
-          loadUserTunnels(currentUser.id); // 重新加载隧道权限列表
-        }
-      } else {
-        toast.error(response.msg || t("m4230b353344a"));
-      }
-    } catch (error) {
-      toast.error(t("m4230b353344a"));
-    } finally {
-      setResetTunnelFlowLoading(false);
-    }
-  };
-
-  // 过滤数据
+// 过滤数据
   const availableTunnels = tunnels.filter(
     tunnel => !userTunnels.some(ut => ut.tunnelId === tunnel.id)
   );
 
-  const availableSpeedLimits = speedLimits.filter(
-    speedLimit => speedLimit.tunnelId === tunnelForm.tunnelId
-  );
-
-  const editAvailableSpeedLimits = speedLimits.filter(
-    speedLimit => speedLimit.tunnelId === editTunnelForm?.tunnelId
-  );
-
   return (
-    
+
       <div className="px-3 lg:px-6 py-8">
       {/* 页面头部 */}
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex items-center gap-3">
         </div>
-        
+
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
           <div className="flex items-center gap-3 flex-1 max-w-md">
             <Input
@@ -613,12 +555,12 @@ export default function UserPage() {
               <SearchIcon className="w-4 h-4" />
             </Button>
           </div>
-          
+
           <Button
               variant="flat"
               color="primary"
               onPress={handleAdd}
-             
+
             > {t("m0006d696d8e1")} </Button>
         </div>
       </div>
@@ -652,10 +594,10 @@ export default function UserPage() {
             const expStatus = user.expTime ? getExpireStatus(user.expTime) : null;
             const usedFlow = calculateUserTotalUsedFlow(user);
             const flowPercent = user.flow > 0 ? Math.min((usedFlow / (user.flow * 1024 * 1024 * 1024)) * 100, 100) : 0;
-            
+
             return (
-              <Card 
-                key={user.id} 
+              <Card
+                key={user.id}
                 className="shadow-sm border border-divider hover:shadow-md transition-shadow duration-200"
               >
                 <CardHeader className="pb-2">
@@ -667,9 +609,9 @@ export default function UserPage() {
                       <p className="text-xs text-default-500 truncate">@{user.user}</p>
                     </div>
                     <div className="flex items-center gap-1.5 ml-2">
-                      <Chip 
-                        color={userStatus.color} 
-                        variant="flat" 
+                      <Chip
+                        color={userStatus.color}
+                        variant="flat"
                         size="sm"
                         className="text-xs"
                       >
@@ -681,18 +623,22 @@ export default function UserPage() {
 
                 <CardBody className="pt-0 pb-3">
                   <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>{t("limits.speedShort")}</span>
+                      <span>{user.unifiedLimits ? (user.speedMbps ? `${user.speedMbps} Mbps` : t("limits.unlimited")) : t("limits.legacy")}</span>
+                    </div>
                     {/* 流量信息 */}
                     <div className="space-y-1.5">
                       <div className="flex justify-between text-sm">
                         <span className="text-default-600">{t("mc79978d039ab")}</span>
-                        <span className="font-medium text-xs">{formatFlow(user.flow, 'gb')}</span>
+                        <span className="font-medium text-xs">{user.flow > 0 ? formatFlow(user.flow, 'gb') : t('limits.unlimited')}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-default-600">{t("m9845c165151d")}</span>
                         <span className="font-medium text-xs text-danger">{formatFlow(usedFlow)}</span>
                       </div>
-                      <Progress 
-                        size="sm" 
+                      <Progress
+                        size="sm"
                         value={flowPercent}
                         color={flowPercent > 90 ? 'danger' : flowPercent > 70 ? 'warning' : 'success'}
                         className="mt-1"
@@ -702,10 +648,6 @@ export default function UserPage() {
 
                     {/* 其他信息 */}
                     <div className="space-y-1.5 pt-2 border-t border-divider">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-default-600">{t("m5ce44f1d307c")}</span>
-                        <span className="font-medium text-xs">{user.num}</span>
-                      </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-default-600">{t("mddbf5e74cf57")}</span>
                         <span className="text-xs">{user.flowResetTime === 0 ? t("m09cb21113af0") : t("m43f6165be04b", {v0: user.flowResetTime})}</span>
@@ -718,9 +660,9 @@ export default function UserPage() {
                             {expStatus && expStatus.color === 'success' ? (
                               <div className="text-xs">{formatDate(user.expTime)}</div>
                             ) : (
-                              <Chip 
-                                color={expStatus?.color || 'default'} 
-                                variant="flat" 
+                              <Chip
+                                color={expStatus?.color || 'default'}
+                                variant="flat"
                                 size="sm"
                                 className="text-xs"
                               >
@@ -732,7 +674,7 @@ export default function UserPage() {
                       )}
                     </div>
                   </div>
-                  
+
                   <div className="space-y-1.5 mt-3">
                     {/* 第一行：编辑和重置 */}
                     <div className="flex gap-1.5">
@@ -757,7 +699,7 @@ export default function UserPage() {
                         }
                       > {t("mcb5d682bac3d")} </Button>
                     </div>
-                    
+
                     {/* 第二行：权限和删除 */}
                     <div className="flex gap-1.5">
                       <Button
@@ -843,55 +785,25 @@ export default function UserPage() {
               />
             </div>
 
-            <div className="text-xs text-default-500 mt-2"> {t("m4d9e0c9f6ee4")} </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input label={t("limits.speed")} type="number" min="0" max="1000000" step="1"
+                value={String(userForm.speedMbps ?? 0)} description={t("limits.zero")}
+                onChange={e => setUserForm(p => ({...p, speedMbps: Number(e.target.value)}))} />
+              <Input label={t("limits.quota")} type="number" min="0" max="1000000" step="1"
+                value={String(userForm.flow)} description={t("limits.zero")}
+                onChange={e => setUserForm(p => ({...p, flow: Number(e.target.value)}))} />
+              <Select label={t("mab5fa4fb2901")} selectedKeys={[String(userForm.flowResetTime)]}
+                onSelectionChange={keys => setUserForm(p => ({...p, flowResetTime: Number(Array.from(keys)[0])}))}>
+                <>
+                  <SelectItem key="0">{t("m09cb21113af0")}</SelectItem>
+                  {Array.from({length:31}, (_,i) => i+1).map(day => <SelectItem key={String(day)}>{t("m2ba4797e14d3", {v0:day})}</SelectItem>)}
+                </>
+              </Select>
+            </div>
+            <p className="text-xs text-default-500">{t("limits.explain")}</p>
+            {isEdit && !users.find(u => u.id === userForm.id)?.unifiedLimits &&
+              <p className="text-sm text-warning">{t("limits.migrate")}</p>}
 
-            {/* 老的端口/隧道转发业务才用得上的账号级配额,默认折叠,别干扰卖订阅的主流程 */}
-            <details className="mt-2">
-              <summary className="text-xs text-default-500 cursor-pointer select-none"> {t("m29565f97e850")} </summary>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
-                <Input
-                  label={t("mfa2a5242a715")}
-                  type="number"
-                  value={userForm.flow.toString()}
-                  onChange={(e) => {
-                    const value = Math.min(Math.max(Number(e.target.value) || 0, 1), 99999);
-                    setUserForm(prev => ({ ...prev, flow: value }));
-                  }}
-                  min="1"
-                  max="99999"
-                  description={t("m382af3b610bb")}
-                />
-                <Input
-                  label={t("m5ce44f1d307c")}
-                  type="number"
-                  value={userForm.num.toString()}
-                  onChange={(e) => {
-                    const value = Math.min(Math.max(Number(e.target.value) || 0, 1), 99999);
-                    setUserForm(prev => ({ ...prev, num: value }));
-                  }}
-                  min="1"
-                  max="99999"
-                  description={t("m35d54ade2300")}
-                />
-                <Select
-                  label={t("mab5fa4fb2901")}
-                  description={t("me6d7f16631ff")}
-                  selectedKeys={[userForm.flowResetTime.toString()]}
-                  onSelectionChange={(keys) => {
-                    const value = Array.from(keys)[0] as string;
-                    setUserForm(prev => ({ ...prev, flowResetTime: Number(value) }));
-                  }}
-                >
-                  <>
-                    <SelectItem key="0" textValue={t("m09cb21113af0")}>{t("m09cb21113af0")}</SelectItem>
-                    {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
-                      <SelectItem key={day.toString()} textValue={t("m2ba4797e14d3", {v0: day})}> {t("m68b21af949de")}{day}{t("mdfc2a4ecfc26")} </SelectItem>
-                    ))}
-                  </>
-                </Select>
-              </div>
-            </details>
-            
             <RadioGroup
               label={t("m6320b4a8722a")}
               value={userForm.status.toString()}
@@ -949,82 +861,9 @@ export default function UserPage() {
                         </SelectItem>
                       ))}
                     </Select>
-                    
-                    <Select
-                      label={t("m798157fd4601")}
-                      selectedKeys={tunnelForm.speedId ? [tunnelForm.speedId.toString()] : ["null"]}
-                      onSelectionChange={(keys) => {
-                        const value = Array.from(keys)[0] as string;
-                        setTunnelForm(prev => ({ ...prev, speedId: value === "null" ? null : Number(value) }));
-                      }}
-                      isDisabled={!tunnelForm.tunnelId}
-                    >
-                      {[
-                        <SelectItem key="null" textValue={t("me264d2c9faaf")}>{t("me264d2c9faaf")}</SelectItem>,
-                        ...availableSpeedLimits.map(speedLimit => (
-                          <SelectItem key={speedLimit.id.toString()} textValue={speedLimit.name}>
-                            {speedLimit.name}
-                          </SelectItem>
-                        ))
-                      ]}
-                    </Select>
-                    
-                    <Input
-                      label={t("mfa2a5242a715")}
-                      type="number"
-                      value={tunnelForm.flow.toString()}
-                      onChange={(e) => {
-                        const value = Math.min(Math.max(Number(e.target.value) || 0, 1), 99999);
-                        setTunnelForm(prev => ({ ...prev, flow: value }));
-                      }}
-                      min="1"
-                      max="99999"
-                    />
-                    
-                    <Input
-                      label={t("m5ce44f1d307c")}
-                      type="number"
-                      value={tunnelForm.num.toString()}
-                      onChange={(e) => {
-                        const value = Math.min(Math.max(Number(e.target.value) || 0, 1), 99999);
-                        setTunnelForm(prev => ({ ...prev, num: value }));
-                      }}
-                      min="1"
-                      max="99999"
-                    />
-                    
-                    <Select
-                      label={t("mab5fa4fb2901")}
-                      selectedKeys={[tunnelForm.flowResetTime.toString()]}
-                      onSelectionChange={(keys) => {
-                        const value = Array.from(keys)[0] as string;
-                        setTunnelForm(prev => ({ ...prev, flowResetTime: Number(value) }));
-                      }}
-                    >
-                      <>
-                        <SelectItem key="0" textValue={t("m09cb21113af0")}> {t("m09cb21113af0")} </SelectItem>
-                      {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
-                        <SelectItem key={day.toString()} textValue={t("m2ba4797e14d3", {v0: day})}> {t("m68b21af949de")}{day}{t("mdfc2a4ecfc26")} </SelectItem>
-                      ))}
-                      </>
-                    </Select>
-                    
-                    <DatePicker
-                      label={t("m5192466fec83")}
-                      value={tunnelForm.expTime ? parseDate(tunnelForm.expTime.toISOString().split('T')[0]) as any : null}
-                      onChange={(date) => {
-                        if (date) {
-                          const jsDate = new Date(date.year, date.month - 1, date.day, 23, 59, 59);
-                          setTunnelForm(prev => ({ ...prev, expTime: jsDate }));
-                        } else {
-                          setTunnelForm(prev => ({ ...prev, expTime: null }));
-                        }
-                      }}
-                      showMonthAndYearPickers
-                      className="cursor-pointer"
-                    />
-                  </div>
-                  
+
+</div>
+
                   <Button
                     color="primary"
                     onPress={handleAssignTunnel}
@@ -1045,13 +884,11 @@ export default function UserPage() {
                 >
                   <TableHeader>
                     <TableColumn>{t("mb679939ed787")}</TableColumn>
-                    <TableColumn>{t("mff3790a87c0a")}</TableColumn>
-                    <TableColumn>{t("m5ce44f1d307c")}</TableColumn>
+
+
                     <TableColumn>{t("m6320b4a8722a")}</TableColumn>
-                    <TableColumn>{t("m798157fd4601")}</TableColumn>
-                    <TableColumn>{t("mf90638383727")}</TableColumn>
-                    <TableColumn>{t("m9ca4b75d0326")}</TableColumn>
-                    <TableColumn>{t("med31fbb483ee")}</TableColumn>
+
+<TableColumn>{t("med31fbb483ee")}</TableColumn>
                   </TableHeader>
                   <TableBody
                     items={userTunnels}
@@ -1062,21 +899,8 @@ export default function UserPage() {
                     {(userTunnel) => (
                       <TableRow key={userTunnel.id}>
                         <TableCell>{userTunnel.tunnelName}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-1">
-                            <div className="flex justify-between text-small">
-                              <span className="text-gray-600">{t("m975119cd6962")}</span>
-                              <span className="font-medium">{formatFlow(userTunnel.flow, 'gb')}</span>
-                            </div>
-                            <div className="flex justify-between text-small">
-                              <span className="text-gray-600">{t("m7fbac733cbe4")}</span>
-                              <span className="font-medium text-danger">
-                                {formatFlow(calculateTunnelUsedFlow(userTunnel))}
-                              </span>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>{userTunnel.num}</TableCell>
+
+
                         <TableCell>
                           <Chip
                             color={userTunnel.status === 1 ? 'success' : 'danger'}
@@ -1086,18 +910,8 @@ export default function UserPage() {
                             {userTunnel.status === 1 ? t("m296de0e31f8c") : t("m7df5c456c765")}
                           </Chip>
                         </TableCell>
-                        <TableCell>
-                          <Chip
-                            color={userTunnel.speedLimitName ? 'warning' : 'success'}
-                            size="sm"
-                            variant="flat"
-                          >
-                            {userTunnel.speedLimitName || t("me264d2c9faaf")}
-                          </Chip>
-                        </TableCell>
-                        <TableCell>{userTunnel.flowResetTime === 0 ? t("m09cb21113af0") : t("m43f6165be04b", {v0: userTunnel.flowResetTime})}</TableCell>
-                        <TableCell>{formatDate(userTunnel.expTime)}</TableCell>
-                        <TableCell>
+
+<TableCell>
                           <div className="flex items-center gap-2">
                             <Button
                               size="sm"
@@ -1108,18 +922,7 @@ export default function UserPage() {
                             >
                               <EditIcon className="w-4 h-4" />
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="flat"
-                              color="warning"
-                              isIconOnly
-                              onClick={() => handleResetTunnelFlow(userTunnel)}
-                              title={t("m9d2297f8b467")}
-                            >
-                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-                              </svg>
-                            </Button>
+
                             <Button
                               size="sm"
                               variant="flat"
@@ -1161,81 +964,9 @@ export default function UserPage() {
             {editTunnelForm && (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input
-                    label={t("mfa2a5242a715")}
-                    type="number"
-                    value={editTunnelForm.flow.toString()}
-                    onChange={(e) => {
-                      const value = Math.min(Math.max(Number(e.target.value) || 0, 1), 99999);
-                      setEditTunnelForm(prev => prev ? { ...prev, flow: value } : null);
-                    }}
-                    min="1"
-                    max="99999"
-                  />
-                  
-                  <Input
-                    label={t("m5ce44f1d307c")}
-                    type="number"
-                    value={editTunnelForm.num.toString()}
-                    onChange={(e) => {
-                      const value = Math.min(Math.max(Number(e.target.value) || 0, 1), 99999);
-                      setEditTunnelForm(prev => prev ? { ...prev, num: value } : null);
-                    }}
-                    min="1"
-                    max="99999"
-                  />
-                  
-                  <Select
-                    label={t("m798157fd4601")}
-                    selectedKeys={editTunnelForm.speedId ? [editTunnelForm.speedId.toString()] : ['null']}
-                    onSelectionChange={(keys) => {
-                      const value = Array.from(keys)[0] as string;
-                      setEditTunnelForm(prev => prev ? { ...prev, speedId: value === 'null' ? null : Number(value) } : null);
-                    }}
-                  >
-                    {[
-                      <SelectItem key="null" textValue={t("me264d2c9faaf")}>{t("me264d2c9faaf")}</SelectItem>,
-                      ...editAvailableSpeedLimits.map(speedLimit => (
-                        <SelectItem key={speedLimit.id.toString()} textValue={speedLimit.name}>
-                          {speedLimit.name}
-                        </SelectItem>
-                      ))
-                    ]}
-                  </Select>
-                  
-                  <Select
-                    label={t("mab5fa4fb2901")}
-                    selectedKeys={[editTunnelForm.flowResetTime.toString()]}
-                    onSelectionChange={(keys) => {
-                      const value = Array.from(keys)[0] as string;
-                      setEditTunnelForm(prev => prev ? { ...prev, flowResetTime: Number(value) } : null);
-                    }}
-                  >
-                    <>
-                      <SelectItem key="0" textValue={t("m09cb21113af0")}> {t("m09cb21113af0")} </SelectItem>
-                    {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
-                      <SelectItem key={day.toString()} textValue={t("m2ba4797e14d3", {v0: day})}> {t("m68b21af949de")}{day}{t("mdfc2a4ecfc26")} </SelectItem>
-                    ))}
-                    </>
-                  </Select>
-                  
-                  <DatePicker
-                    label={t("m5192466fec83")}
-                    value={editTunnelForm.expTime ? parseDate(new Date(editTunnelForm.expTime).toISOString().split('T')[0]) as any : null}
-                    onChange={(date) => {
-                      if (date) {
-                        const jsDate = new Date(date.year, date.month - 1, date.day, 23, 59, 59);
-                        setEditTunnelForm(prev => prev ? { ...prev, expTime: jsDate.getTime() } : null);
-                      } else {
-                        // 清空 = 永久(0)。之前这里给的是 Date.now(),等于一清空权限立刻过期,行为反了
-                        setEditTunnelForm(prev => prev ? { ...prev, expTime: 0 } : null);
-                      }
-                    }}
-                    showMonthAndYearPickers
-                    className="cursor-pointer"
-                  />
-                </div>
-                
+
+</div>
+
                 <RadioGroup
                   label={t("m6320b4a8722a")}
                   value={editTunnelForm.status.toString()}
@@ -1282,12 +1013,12 @@ export default function UserPage() {
             </div>
           </ModalBody>
           <ModalFooter>
-            <Button 
-              variant="light" 
+            <Button
+              variant="light"
               onPress={onDeleteModalClose}
             > {t("m2cd0f3be8738")} </Button>
-            <Button 
-              color="danger" 
+            <Button
+              color="danger"
               onPress={handleConfirmDelete}
             > {t("ma3ea3c17b401")} </Button>
           </ModalFooter>
@@ -1317,12 +1048,12 @@ export default function UserPage() {
             </div>
           </ModalBody>
           <ModalFooter>
-            <Button 
-              variant="light" 
+            <Button
+              variant="light"
               onPress={onDeleteTunnelModalClose}
             > {t("m2cd0f3be8738")} </Button>
-            <Button 
-              color="danger" 
+            <Button
+              color="danger"
               onPress={handleConfirmRemoveTunnel}
             > {t("ma3ea3c17b401")} </Button>
           </ModalFooter>
@@ -1373,12 +1104,12 @@ export default function UserPage() {
             </div>
           </ModalBody>
           <ModalFooter>
-            <Button 
-              variant="light" 
+            <Button
+              variant="light"
               onPress={onResetFlowModalClose}
             > {t("m2cd0f3be8738")} </Button>
-            <Button 
-              color="warning" 
+            <Button
+              color="warning"
               onPress={handleConfirmResetFlow}
               isLoading={resetFlowLoading}
             > {t("m96f2cb4f04d3")} </Button>
@@ -1387,61 +1118,7 @@ export default function UserPage() {
       </Modal>
 
       {/* 重置隧道流量确认对话框 */}
-      <Modal
-        isOpen={isResetTunnelFlowModalOpen}
-        onClose={onResetTunnelFlowModalClose}
-        size="2xl"
-      scrollBehavior="outside"
-      backdrop="blur"
-      placement="center"
-      >
-        <ModalContent>
-          <ModalHeader className="flex flex-col gap-1"> {t("m21bda86ba2f2")} </ModalHeader>
-          <ModalBody>
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-warning-100 rounded-full flex items-center justify-center">
-                <svg className="w-6 h-6 text-warning" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <p className="text-foreground"> {t("mb903ed640fbb")} <span className="font-semibold">{currentUser?.user}</span> {t("m9dc5de93a87e")} <span className="font-semibold text-warning">"{tunnelToReset?.tunnelName}"</span> {t("md0bfb193f1f2")} </p>
-                <p className="text-small text-default-500 mt-1"> {t("m1f2cfef01ba0")} </p>
-                <div className="mt-2 p-2 bg-warning-50 dark:bg-warning-100/10 rounded text-xs">
-                  <div className="text-warning-700 dark:text-warning-300"> {t("md51a7fd0f624")} </div>
-                  <div className="mt-1 space-y-1">
-                    <div className="flex justify-between">
-                      <span>{t("m0b6c2f353b04")}</span>
-                      <span className="font-mono">{tunnelToReset ? formatFlow(tunnelToReset.inFlow || 0) : '-'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>{t("m49132ee73d23")}</span>
-                      <span className="font-mono">{tunnelToReset ? formatFlow(tunnelToReset.outFlow || 0) : '-'}</span>
-                    </div>
-                    <div className="flex justify-between font-medium">
-                      <span>{t("md4da4de326b4")}</span>
-                      <span className="font-mono text-warning-700 dark:text-warning-300">
-                        {tunnelToReset ? formatFlow(calculateTunnelUsedFlow(tunnelToReset)) : '-'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </ModalBody>
-          <ModalFooter>
-            <Button 
-              variant="light" 
-              onPress={onResetTunnelFlowModalClose}
-            > {t("m2cd0f3be8738")} </Button>
-            <Button 
-              color="warning" 
-              onPress={handleConfirmResetTunnelFlow}
-              isLoading={resetTunnelFlowLoading}
-            > {t("m96f2cb4f04d3")} </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+
 
       {/* 订阅线路(合体面板:车友的每台机器一条订阅,直连/中转各一条) */}
       <Modal isOpen={isSubModalOpen} onClose={onSubModalClose} size="2xl" backdrop="blur" placement="center">
@@ -1533,39 +1210,6 @@ export default function UserPage() {
                     {/* 收回这条线路的入口。停用是可逆的:UUID 和端口都留着,
                         恢复之后对方手上的订阅原样能用;删除会把端口也释放掉,
                         以后要再给他用就得重新分配、重新发链接。 */}
-                    {/* 续费:改额度/到期,不动 UUID 和端口 —— 车友不用重导订阅。
-                        这一页的线路行本身就在弹窗里,再套一层 Modal 很别扭,
-                        所以沿用这个文件已有的 confirm/prompt 风格。
-                        要连限速一起改,用客户端「车友」页那个完整表单。 */}
-                    <Button
-                      size="sm"
-                      variant="flat"
-                      onPress={async () => {
-                        if (subUserId == null) return;
-                        const curFlow = ln.quotaGb ?? 0;
-                        const fRaw = prompt(t("m2bbcd3729b93", {v0: ln.nodeName}), String(curFlow));
-                        if (fRaw === null) return;
-                        const flow = Number(fRaw);
-                        if (!(flow >= 0)) { toast.error(t("mfb26c23a5691")); return; }
-                        const leftDays = ln.lineExpTime ? Math.max(0, Math.ceil((ln.lineExpTime - Date.now()) / 86400000)) : 0;
-                        const dRaw = prompt(t("m649c116182d1"), String(leftDays));
-                        if (dRaw === null) return;
-                        const days = Number(dRaw);
-                        if (!(days >= 0)) { toast.error(t("md15f691a6741")); return; }
-                        const res = await updateLine(subUserId, ln.nodeId, ln.landingId ?? null, {
-                          flow, expTime: days > 0 ? Date.now() + days * 86400000 : 0,
-                        });
-                        if (res.code === 0) {
-                          // 后端会顺带判断改完还该不该停,如实转述 —— 别让人以为续了就一定活了
-                          const d: any = res.data || {};
-                          if (d.status === 0) toast.error(t("mefe1a47532f0", {v0: d.reason || '未达到恢复条件'}));
-                          else toast.success(d.resumed ? t("md98a7932d9d4") : t("m58ccc33720f8"));
-                          await reloadSubLines(subUserId);
-                        } else {
-                          toast.error(res.msg || t("m251c5eb150c3"));
-                        }
-                      }}
-                    > {t("m5f663f70a3f0")} </Button>
                     <Button
                       size="sm"
                       variant="flat"
