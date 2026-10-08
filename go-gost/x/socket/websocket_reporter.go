@@ -16,6 +16,7 @@ import (
 
 	"github.com/go-gost/x/config"
 	"github.com/go-gost/x/internal/util/crypto"
+	"github.com/go-gost/x/internal/util/panel"
 	"github.com/go-gost/x/service"
 	"github.com/gorilla/websocket"
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -235,20 +236,20 @@ func (w *WebSocketReporter) connect() error {
 	}
 
 	// 使用最新的配置重新构建 URL
-	currentURL := "ws://" + w.addr + "/system-info?type=1&secret=" + w.secret + "&version=" + w.version +
-		"&http=" + strconv.Itoa(cfg.Http) + "&tls=" + strconv.Itoa(cfg.Tls) + "&socks=" + strconv.Itoa(cfg.Socks)
-
-	u, err := url.Parse(currentURL)
+	currentURL, err := reporterURL(w.addr, w.secret, w.version, cfg.Http, cfg.Tls, cfg.Socks)
 	if err != nil {
-		return fmt.Errorf("解析URL失败: %v", err)
+		return err
 	}
 
-	dialer := websocket.DefaultDialer
+	dialer := *websocket.DefaultDialer
 	dialer.HandshakeTimeout = 10 * time.Second
 
-	conn, _, err := dialer.Dial(u.String(), nil)
+	conn, response, err := dialer.Dial(currentURL, nil)
 	if err != nil {
-		return fmt.Errorf("连接WebSocket失败: %v", err)
+		if response != nil {
+			return fmt.Errorf("panel WebSocket connection failed (HTTP %d): %v", response.StatusCode, panel.SafeError(err))
+		}
+		return fmt.Errorf("panel WebSocket connection failed: %v", panel.SafeError(err))
 	}
 
 	// 如果在连接过程中已经有连接了，关闭新连接
@@ -1133,15 +1134,14 @@ func getMemoryInfo() MemoryInfo {
 // StartWebSocketReporterWithConfig 使用配置字段启动WebSocket报告器
 func StartWebSocketReporterWithConfig(addr string, secret string, http int, tls int, socks int, version string) *WebSocketReporter {
 
-	// 容错:面板后端地址应为 host:port,但用户常误填 http://host:port,
-	// 会拼成非法的 ws://http://... 导致连不上。这里剥掉 scheme 前缀。
-	addr = strings.TrimPrefix(addr, "http://")
-	addr = strings.TrimPrefix(addr, "https://")
-
-	// 构建初始 WebSocket URL
-	fullURL := "ws://" + addr + "/system-info?type=1&secret=" + secret + "&version=" + version + "&http=" + strconv.Itoa(http) + "&tls=" + strconv.Itoa(tls) + "&socks=" + strconv.Itoa(socks)
-
-	fmt.Printf("🔗 WebSocket连接URL: %s\n", fullURL)
+	fullURL, err := reporterURL(addr, secret, version, http, tls, socks)
+	if err != nil {
+		fmt.Printf("Invalid panel endpoint: %v\n", err)
+	}
+	safe, _ := panel.Normalize(addr)
+	if safe != nil {
+		fmt.Printf("Panel connection endpoint: %s\n", safe.String())
+	}
 
 	reporter := NewWebSocketReporter(fullURL, secret)
 	// 保存 addr, secret, version 供重连时使用
@@ -1360,4 +1360,12 @@ func (w *WebSocketReporter) processDurationInData(data interface{}) interface{} 
 	default:
 		return v
 	}
+}
+
+// reporterURL is shared by initial connections and reconnects.
+func reporterURL(addr, secret, version string, http, tls, socks int) (string, error) {
+	return panel.Endpoint(addr, "/system-info", url.Values{
+		"type": {"1"}, "secret": {secret}, "version": {version},
+		"http": {strconv.Itoa(http)}, "tls": {strconv.Itoa(tls)}, "socks": {strconv.Itoa(socks)},
+	}, true)
 }

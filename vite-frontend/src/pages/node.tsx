@@ -510,10 +510,9 @@ export default function NodePage() {
     
     try {
       let res = await getNodeInstallCommand(node.id);
-      // 面板地址(网站配置的 ip)没设时,自动用当前访问域名 + 后端默认口 6365 填好再重试,
-      // 免得用户手配或手打命令(手打易带 http:// 导致节点离线)
+      // Use the public reverse proxy origin, preserving HTTPS and its port.
       if (res.code !== 0 && String(res.msg || "").includes("ip")) {
-        await updateConfig("ip", `${window.location.hostname}:6365`);
+        await updateConfig("ip", window.location.origin);
         res = await getNodeInstallCommand(node.id);
       }
       if (res.code === 0 && res.data) {

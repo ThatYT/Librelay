@@ -75,6 +75,8 @@ bash /tmp/librelay.sh update --install-dir /opt/tms
 
 更新节点时，在已更新的面板中重新复制该节点的安装命令，并在原节点上重新执行。默认下载对应提交的预构建文件并校验 SHA-256，保留已有节点配置和证书。升级面板不会自动升级远程节点；使用新公开监听功能前也要更新节点代理。
 
+面板地址支持 `https://panel.example.com:2095`，节点 WebSocket 使用 WSS，流量和配置上报使用 HTTPS。安装时未写协议的 `host:port` 会先检测 HTTPS，再检查兼容的 HTTP；显式 URL 保留原协议，TLS 证书正常校验。遇到连接失败，请在网站配置中填写完整公开面板 URL，重新生成节点安装命令后执行。
+
 ### 用户限速与流量
 
 在「用户管理 → 新增/编辑」设置账号总限速（Mbps）、账号总流量（GiB）和每月重置日。速度和流量填 `0` 表示不限制，重置日 `0` 表示不自动重置。协议、线路和隧道分配只控制访问权限。
@@ -202,6 +204,8 @@ Progress is logged to `.librelay-last-deploy.log` in the installation directory.
 Add a node in the panel, enter its IP, then click its installation action. Copy the generated command and run it as root on that specific node VPS. It contains the panel address and the node's own secret. Nodes do not require Docker.
 
 To update a node, copy its installation command again from the updated panel and rerun it on the original node. The installer downloads the matching prebuilt binary, verifies SHA-256 and preserves node configuration/certificates. Updating the panel does not automatically upgrade remote agents; update agents before using new public listening features.
+
+Panel addresses support `https://panel.example.com:2095`: the node uses WSS for its connection and HTTPS for traffic/config reports, with certificate verification enabled. For a scheme-less `host:port`, installation probes HTTPS first, then compatible HTTP; explicit URLs preserve their scheme. If connection fails, set the complete public panel URL in site settings, regenerate the node installation command, and rerun it.
 
 ### Per-user speed and traffic limits
 

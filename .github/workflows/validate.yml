@@ -88,13 +88,13 @@ jobs:
       - name: Node regression and Linux build
         run: |
           cd go-gost/x
-          go test -race ./limiter/traffic ./socket ./handler/socks/v5 ./config/parsing/service
+          go test -race ./internal/util/panel ./service ./limiter/traffic ./socket ./handler/socks/v5 ./config/parsing/service
           cd ..
           CGO_ENABLED=0 go build -mod=mod -o /tmp/librelay-gost .
       - name: Installer syntax and regression
         run: |
           bash -n panel_install.sh install.sh librelay-hybrid.sh tms-hybrid.sh
-          if command -v shellcheck >/dev/null; then shellcheck -S error panel_install.sh tests/panel_deploy_test.sh; fi
+          if command -v shellcheck >/dev/null; then shellcheck -S error panel_install.sh install.sh tests/panel_deploy_test.sh tests/node_installer_test.sh; fi
           bash tests/installer_test.sh
           bash tests/branding_upgrade_test.sh
           compose_plugin=$(docker info --format '{{range .ClientInfo.Plugins}}{{if eq .Name "compose"}}{{.Path}}{{end}}{{end}}')

@@ -218,6 +218,46 @@ check_and_install_tcpkill() {
 }
 
 
+# Resolve transport before stopping an existing agent. Probes never include a secret.
+resolve_panel_address() {
+  local code address="${SERVER_ADDR%/}"
+  if [[ -z "$address" || "$address" == *[[:space:]\\@\?\#]* ]]; then
+    echo "Invalid panel address; use an HTTP/HTTPS URL or host:port without credentials, query or fragment." >&2
+    return 1
+  fi
+  case "$address" in
+    http://*|https://*) ;;
+    *://*) echo "Panel address must use http:// or https://." >&2; return 1 ;;
+    *)
+      if curl -sS --connect-timeout 5 --max-time 10 -o /dev/null "https://$address/" 2>/dev/null; then
+        address="https://$address"
+      else
+        code=$(curl -sS --connect-timeout 5 --max-time 10 -o /dev/null -w '%{http_code}' "http://$address/" 2>/dev/null) || {
+          echo "Cannot reach the panel. Check address, firewall and TLS certificate; supply an explicit HTTP/HTTPS URL." >&2; return 1;
+        }
+        case "$code" in
+          200|301|302|307|308|401|403|404) address="http://$address" ;;
+          *) echo "Panel transport detection failed (HTTP $code). Supply the correct explicit HTTP/HTTPS URL." >&2; return 1 ;;
+        esac
+      fi ;;
+  esac
+  SERVER_ADDR="$address"
+  echo "Panel endpoint: $SERVER_ADDR"
+}
+
+# Migrate only the endpoint during menu-based updates; retain credentials/settings.
+resolve_existing_panel() {
+  local config="$INSTALL_DIR/config.json" candidate
+  SERVER_ADDR=$(jq -er '.addr' "$config") || return 1
+  resolve_panel_address || return 1
+  candidate=$(mktemp "$INSTALL_DIR/.config-address.XXXXXX") || return 1
+  if ! jq --arg addr "$SERVER_ADDR" '.addr=$addr' "$config" > "$candidate"; then
+    rm -f "$candidate"; return 1
+  fi
+  chmod 600 "$candidate"
+  mv "$candidate" "$config"
+}
+
 # Read node configuration.
 get_config_params() {
   if [[ -z "$SERVER_ADDR" || -z "$SECRET" ]]; then
@@ -242,6 +282,7 @@ get_config_params() {
 install_gost() {
   echo "🚀 Installing GOST..."
   get_config_params
+  resolve_panel_address || return 1
 
     # Check/install tcpkill.
   check_and_install_tcpkill
@@ -341,6 +382,8 @@ update_gost() {
     echo "❌ Download failed."
     return 1
   fi
+
+  resolve_existing_panel || { rm -f "$INSTALL_DIR/gost.new"; return 1; }
 
   # Stop the service.
   if systemctl list-units --full -all | grep -Fq "gost.service"; then

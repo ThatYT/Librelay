@@ -55,3 +55,35 @@ if (main); then echo 'Reported failed node install as success'; exit 1; fi
 df() { printf 'Filesystem 1024-blocks Used Available Capacity Mounted\nfixture 100 99 1 99%% /\n'; }
 if check_node_space "$workspace" 131072; then echo 'Ignored low disk space'; exit 1; fi
 printf 'Node installer regression checks passed\n'
+
+# Detect HTTPS without passing the node secret, while retaining legacy HTTP.
+curl() {
+  local last="${!#}"
+  case "$last" in
+    https://secure.example:2095/) return 0 ;;
+    https://legacy.example:6365/) return 1 ;;
+    http://legacy.example:6365/) printf 200 ;;
+    https://broken.example:2095/) return 1 ;;
+    http://broken.example:2095/) printf 400 ;;
+    *) return 1 ;;
+  esac
+}
+SERVER_ADDR=secure.example:2095
+resolve_panel_address
+[ "$SERVER_ADDR" = https://secure.example:2095 ]
+SERVER_ADDR=legacy.example:6365
+resolve_panel_address
+[ "$SERVER_ADDR" = http://legacy.example:6365 ]
+SERVER_ADDR=https://secure.example:2095
+resolve_panel_address
+[ "$SERVER_ADDR" = https://secure.example:2095 ]
+SERVER_ADDR=broken.example:2095
+if resolve_panel_address; then echo 'Accepted mismatched TLS endpoint'; exit 1; fi
+SERVER_ADDR='https://user:secret@example.com'
+if resolve_panel_address; then echo 'Accepted embedded credentials'; exit 1; fi
+printf 'Panel transport detection regression checks passed\n'
+
+printf '{"addr":"secure.example:2095","secret":"fixture","http":7,"services":["preserved"]}' > "$INSTALL_DIR/config.json"
+resolve_existing_panel
+jq -e '.addr=="https://secure.example:2095" and .secret=="fixture" and .http==7 and .services==["preserved"]' "$INSTALL_DIR/config.json" >/dev/null
+printf 'Node endpoint migration preserves existing settings\n'

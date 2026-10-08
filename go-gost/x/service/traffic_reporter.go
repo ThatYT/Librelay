@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/go-gost/x/internal/util/panel"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -27,8 +29,9 @@ type TrafficReportItem struct {
 }
 
 func SetHTTPReportURL(addr string, secret string) {
-	httpReportURL = "http://" + addr + "/flow/upload?secret=" + secret
-	configReportURL = "http://" + addr + "/flow/config?secret=" + secret
+	query := url.Values{"secret": {secret}}
+	httpReportURL, _ = panel.Endpoint(addr, "/flow/upload", query, false)
+	configReportURL, _ = panel.Endpoint(addr, "/flow/config", query, false)
 
 	// 创建 AES 加密器
 	var err error
@@ -87,7 +90,7 @@ func sendTrafficReport(ctx context.Context, reportItems TrafficReportItem) (bool
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return false, fmt.Errorf("发送HTTP请求失败: %v", err)
+		return false, fmt.Errorf("panel HTTP request failed: %v", panel.SafeError(err))
 	}
 	defer resp.Body.Close()
 
@@ -163,7 +166,7 @@ func sendConfigReport(ctx context.Context) (bool, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return false, fmt.Errorf("发送HTTP请求失败: %v", err)
+		return false, fmt.Errorf("panel HTTP request failed: %v", panel.SafeError(err))
 	}
 	defer resp.Body.Close()
 

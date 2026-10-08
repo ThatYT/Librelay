@@ -394,7 +394,7 @@ public class NodeServiceImpl extends ServiceImpl<NodeMapper, Node> implements No
         }
         
         // 如果已经被方括号包裹，直接返回
-        if (serverAddr.startsWith("[")) {
+        if (serverAddr.startsWith("http://") || serverAddr.startsWith("https://") || serverAddr.startsWith("[")) {
             return serverAddr;
         }
         
