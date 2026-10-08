@@ -1,9 +1,11 @@
-# 构建阶段
-FROM maven:3.9.6-eclipse-temurin-21 AS build
+# syntax=docker/dockerfile:1
+# JAR is architecture-independent; compile once on the native builder.
+FROM --platform=$BUILDPLATFORM maven:3.9.6-eclipse-temurin-21 AS build
 WORKDIR /app
 COPY pom.xml .
 COPY src ./src
-RUN mvn clean package -DskipTests
+ARG MAVEN_BUILD_OPTS="-Xmx512m"
+RUN --mount=type=cache,target=/root/.m2 MAVEN_OPTS="$MAVEN_BUILD_OPTS" mvn -B package -DskipTests
 
 # 运行阶段
 FROM eclipse-temurin:21-jre
@@ -14,6 +16,7 @@ WORKDIR /app
 # 本地手工构建不传就是 dev,面板一律不提示更新。
 ARG BUILD_COMMIT=dev
 ARG BUILD_TIME=""
+LABEL org.opencontainers.image.revision=$BUILD_COMMIT
 ENV TMS_BUILD_COMMIT=$BUILD_COMMIT
 ENV TMS_BUILD_TIME=$BUILD_TIME
 

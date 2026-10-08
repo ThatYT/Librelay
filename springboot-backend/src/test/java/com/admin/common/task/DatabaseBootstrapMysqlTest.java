@@ -30,6 +30,24 @@ class DatabaseBootstrapMysqlTest {
                 assertEquals("20000", scalar(statement, "SELECT listen_port FROM inbound WHERE tag='legacy'"));
                 assertEquals("0", scalar(statement, "SELECT public_listen FROM inbound WHERE tag='legacy'"));
                 assertEquals("TMS", scalar(statement, "SELECT value FROM vite_config WHERE name='app_name'"));
+                // Old installer columns must survive updates, while missing fields are added.
+                statement.executeUpdate("ALTER TABLE user ADD COLUMN name VARCHAR(100) DEFAULT 'legacy-name'");
+                statement.executeUpdate("ALTER TABLE node ADD COLUMN port INT DEFAULT 1234");
+                statement.executeUpdate("ALTER TABLE tunnel ADD COLUMN in_port_sta INT DEFAULT 2222");
+                statement.executeUpdate("ALTER TABLE forward ADD COLUMN proxy_protocol INT DEFAULT 1");
+                statement.executeUpdate("INSERT INTO node (id,name,secret,ip,server_ip,port_sta,port_end,created_time,updated_time,status) VALUES (7,'legacy-node','fixture','192.0.2.7','192.0.2.7',1000,65535,1,1,0)");
+                statement.executeUpdate("ALTER TABLE node DROP COLUMN server_ip");
+                statement.executeUpdate("ALTER TABLE node DROP COLUMN port_sta");
+                SchemaMigration migration = new SchemaMigration();
+                org.springframework.test.util.ReflectionTestUtils.setField(migration, "dataSource",
+                        new org.springframework.jdbc.datasource.DriverManagerDataSource(System.getenv("TMS_SCHEMA_TEST_URL"), "root", ""));
+                migration.run(null); migration.run(null);
+                assertEquals("legacy-name", scalar(statement, "SELECT name FROM user WHERE id=1"));
+                assertEquals("1234", scalar(statement, "SELECT port FROM node WHERE id=7"));
+                assertEquals("192.0.2.7", scalar(statement, "SELECT server_ip FROM node WHERE id=7"));
+                assertEquals("1000", scalar(statement, "SELECT port_sta FROM node WHERE id=7"));
+                assertEquals("20000", scalar(statement, "SELECT listen_port FROM inbound WHERE tag='legacy'"));
+                assertEquals("4", scalar(statement, "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND ((table_name='user' AND column_name='name') OR (table_name='node' AND column_name='port') OR (table_name='tunnel' AND column_name='in_port_sta') OR (table_name='forward' AND column_name='proxy_protocol'))"));
                 // Simulate import interruption before the old dump's PK/AUTO_INCREMENT ALTERs.
                 statement.executeUpdate("DROP TABLE vite_config");
                 statement.executeUpdate("ALTER TABLE user MODIFY id INT NOT NULL");

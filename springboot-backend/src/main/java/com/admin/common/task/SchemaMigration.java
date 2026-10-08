@@ -33,6 +33,23 @@ public class SchemaMigration implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        // Retain old columns/data; the installer no longer runs destructive legacy SQL.
+        addColumnIfMissing("node", "server_ip", "ALTER TABLE `node` ADD COLUMN `server_ip` VARCHAR(100) NULL");
+        addColumnIfMissing("node", "version", "ALTER TABLE `node` ADD COLUMN `version` VARCHAR(100) NULL");
+        addColumnIfMissing("node", "port_sta", "ALTER TABLE `node` ADD COLUMN `port_sta` INT DEFAULT 1000");
+        addColumnIfMissing("node", "port_end", "ALTER TABLE `node` ADD COLUMN `port_end` INT DEFAULT 65535");
+        for (String column : new String[]{"http", "tls", "socks"})
+            addColumnIfMissing("node", column, "ALTER TABLE `node` ADD COLUMN `" + column + "` INT DEFAULT 0");
+        for (String column : new String[]{"tcp_listen_addr", "udp_listen_addr"})
+            addColumnIfMissing("tunnel", column, "ALTER TABLE `tunnel` ADD COLUMN `" + column + "` VARCHAR(100) DEFAULT '0.0.0.0'");
+        addColumnIfMissing("tunnel", "protocol", "ALTER TABLE `tunnel` ADD COLUMN `protocol` VARCHAR(10) DEFAULT 'tls'");
+        addColumnIfMissing("tunnel", "traffic_ratio", "ALTER TABLE `tunnel` ADD COLUMN `traffic_ratio` DECIMAL(5,1) DEFAULT 1.0");
+        addColumnIfMissing("forward", "strategy", "ALTER TABLE `forward` ADD COLUMN `strategy` VARCHAR(100) DEFAULT 'fifo'");
+        addColumnIfMissing("forward", "inx", "ALTER TABLE `forward` ADD COLUMN `inx` INT DEFAULT 0");
+        for (String table : new String[]{"tunnel", "forward"})
+            addColumnIfMissing(table, "interface_name", "ALTER TABLE `" + table + "` ADD COLUMN `interface_name` VARCHAR(200) NULL");
+        addColumnIfMissing("statistics_flow", "created_time", "ALTER TABLE `statistics_flow` ADD COLUMN `created_time` BIGINT NOT NULL DEFAULT 0");
+        backfillLegacyServerIp();
         addColumnIfMissing("inbound", "public_listen",
                 "ALTER TABLE `inbound` ADD COLUMN `public_listen` TINYINT(1) NOT NULL DEFAULT 0");
         addColumnIfMissing("inbound", "egress_port",
@@ -55,6 +72,18 @@ public class SchemaMigration implements ApplicationRunner {
         // 只存分配给车友的那些;车主自己的转发不写这一列。
         addColumnIfMissing("forward", "client_link",
                 "ALTER TABLE `forward` ADD COLUMN `client_link` VARCHAR(1024) NULL COMMENT '给车友的客户端链接(进聚合订阅用)'");
+    }
+
+    private void backfillLegacyServerIp() {
+        try (Connection conn = dataSource.getConnection()) {
+            if (columnExists(conn, "node", "ip") && columnExists(conn, "node", "server_ip")) {
+                try (Statement statement = conn.createStatement()) {
+                    statement.executeUpdate("UPDATE `node` SET `server_ip`=`ip` WHERE `server_ip` IS NULL");
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Legacy node address backfill failed: {}", e.getMessage());
+        }
     }
 
     /** 列不存在才执行 ddl;任何异常都吞掉(只记日志),不能因为迁移失败导致面板起不来 */

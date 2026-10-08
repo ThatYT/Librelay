@@ -20,7 +20,7 @@ import java.util.Map;
 /**
  * 版本信息 / 更新检查。
  *
- * TMS 的镜像 tag 固定是 :latest,没有语义化版本号可比,所以拿【构建时注入的 git commit】
+ * TMS 安装使用不可变提交镜像,用【构建时注入的 git commit】
  * 跟 GitHub 上 main 分支的最新 commit 比 —— 不一样就是有新版本。
  * 构建 commit 由 CI 通过 Docker build-arg 注入(见 docker-build.yml 和 Dockerfile),
  * 本地跑没注入时是 "dev",这种情况一律不提示更新。
@@ -42,7 +42,7 @@ public class VersionController extends BaseController {
      * 按构建成功的 head_sha 比,提示亮起来时镜像一定已经在 GHCR 上了。
      */
     private static final String RUNS_API =
-            "https://api.github.com/repos/" + com.admin.common.utils.RepositoryConfig.repo() + "/actions/runs"
+            "https://api.github.com/repos/" + com.admin.common.utils.RepositoryConfig.repo() + "/actions/workflows/docker-build.yml/runs"
                     + "?branch=" + com.admin.common.utils.RepositoryConfig.ref() + "&status=success&per_page=1";
 
     /** GitHub 未认证接口每小时每 IP 只有 60 次,而且国内机大概率连不上,查一次缓存 6 小时 */

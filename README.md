@@ -50,7 +50,7 @@
 bash <(curl -Ls https://raw.githubusercontent.com/ThatYT/Tms_EN/main/panel_install.sh)
 ```
 
-如果系统尚未安装 curl，先用系统包管理器安装 curl。脚本会检查并安装其他必要工具、Docker 和 Docker Compose 插件，然后从本仓库下载源码并构建面板。默认安装目录为 `/opt/tms`，首次构建需要一定的时间和内存。
+如果系统尚未安装 curl，先用系统包管理器安装 curl。脚本会检查并安装其他必要工具、Docker 和 Docker Compose 插件，然后拉取 GitHub CI 为同一提交预先构建的前后端镜像。默认安装目录为 `/opt/tms`；VPS 不再默认运行 Maven、TypeScript 或 Vite 编译，适合小内存机器。支持 amd64 / arm64。
 
 交互安装时会提示：
 
@@ -106,6 +106,25 @@ bash <(curl -Ls "https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_REF}/
 
 > [!NOTE]
 > 节点默认下载 GitHub CI 为所选仓库分支提交构建的 Linux amd64 / arm64 二进制，替换前校验 SHA-256；无需在 VPS 上安装 Go 或编译依赖。刚推送新提交时，请等待「Node binaries」workflow 发布完成再装节点。网络受限时仍需保证 GitHub API 和 Release 文件可以访问。
+
+#### 面板安装 / 更新资源优化
+
+面板默认从 GHCR 拉取 `sha-完整提交SHA` 镜像，前后端使用同一提交并校验镜像版本，不使用可能不同步的 `latest`。请等待 GitHub 的 **Build and publish panel images** 成功后运行安装/更新。下载失败时保留当前运行的服务，不会自动改为本机源码编译；私有 fork 的镜像需要先 `docker login ghcr.io`。
+
+```bash
+curl -fLsS https://raw.githubusercontent.com/ThatYT/Tms_EN/main/panel_install.sh -o /tmp/tms.sh
+bash /tmp/tms.sh update --install-dir /opt/tms
+```
+
+如果旧更新仍在编译，先在旧窗口按 `Ctrl+C` 停止构建，再执行新命令。新版会显示阶段和下载进度，日志位于 `/opt/tms/.tms-last-deploy.log`；`tms info` 显示部署提交及模式。更新保留 `.env`、MySQL 数据卷、已有协议端口和 Caddy 配置；启动检查失败会尝试恢复上一个 Compose 配置和容器，数据库不回滚、不删除。
+
+确需本机编译时显式指定 `--source`（安装、更新均支持）：
+
+```bash
+bash /tmp/tms.sh update --source --install-dir /opt/tms
+```
+
+源码模式先后构建后端和前端，限制 Maven / Node 堆内存并复用 Maven 缓存；要求可用内存加空闲 Swap 至少 2.5GiB。该检查不能保证所有机器都能完成构建；默认镜像模式没有此编译资源要求。脚本不自动创建 Swap，也不会修改系统磁盘或内存设置。
 
 #### 节点安装提示磁盘不足或编译进程被杀死
 

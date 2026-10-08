@@ -15,10 +15,13 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 # vite build 吃内存,小内存 VPS 上会 JS heap OOM;调大 Node 老生代堆上限
-RUN NODE_OPTIONS=--max-old-space-size=2048 pnpm run build
+ARG NODE_BUILD_HEAP=1536
+RUN NODE_OPTIONS=--max-old-space-size=$NODE_BUILD_HEAP pnpm run build
 
 # 生产阶段
 FROM nginx:stable-alpine AS production-stage
+ARG BUILD_COMMIT=dev
+LABEL org.opencontainers.image.revision=$BUILD_COMMIT
 
 COPY nginx.conf /etc/nginx/nginx.conf
 

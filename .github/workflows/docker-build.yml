@@ -1,367 +1,92 @@
-name: Build and Push Images Based on Version
-
-# 在这里定义统一版本号
-env:
-  VERSION: "1.0.1"
-
+name: Build and publish panel images
 on:
   push:
-    branches:
-      - main
-
+    branches: [main]
+  workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
   packages: write
-
 jobs:
-  check-version:
-    name: Check Version and Decide Build
+  images:
     runs-on: ubuntu-latest
-    outputs:
-      version: ${{ env.VERSION }}
-      should_build: ${{ steps.check-tag.outputs.should_build }}
-      should_build_gost: ${{ steps.check-tag.outputs.should_build_gost }}
-      tag_exists: ${{ steps.check-tag.outputs.tag_exists }}
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [springboot-backend, vite-frontend]
     steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Display version
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Image identity
+        id: identity
         run: |
-          echo "Current version: ${{ env.VERSION }}"
-
-      - name: Check if tag exists and detect changes
-        id: check-tag
-        run: |
-          if git rev-parse "${{ env.VERSION }}" >/dev/null 2>&1; then
-            echo "Tag ${{ env.VERSION }} already exists"
-            echo "tag_exists=true" >> $GITHUB_OUTPUT
-            echo "should_build=false" >> $GITHUB_OUTPUT
-            
-            # 检查从tag到现在，go-gost目录下的文件是否有变化
-            TAG_COMMIT=$(git rev-list -n 1 "${{ env.VERSION }}")
-            echo "Tag commit: $TAG_COMMIT"
-            echo "Current HEAD: $(git rev-parse HEAD)"
-            
-            # 检查 go-gost 目录下是否有实际的文件内容变化
-            # 使用 --ignore-all-space 和 --ignore-blank-lines 来忽略空白差异
-            # 使用 --exit-code: 0表示无差异，1表示有差异
-            if git diff --quiet --ignore-all-space --ignore-blank-lines $TAG_COMMIT HEAD -- go-gost/ 2>/dev/null; then
-              echo "✅ GOST files unchanged since tag (no content changes)"
-              echo "should_build_gost=false" >> $GITHUB_OUTPUT
-            else
-              # 显示差异以便调试
-              echo "🔄 Detected changes in go-gost directory:"
-              git diff --stat $TAG_COMMIT HEAD -- go-gost/ || true
-              echo "should_build_gost=true" >> $GITHUB_OUTPUT
-            fi
-          else
-            echo "Tag ${{ env.VERSION }} does not exist, will build all components"
-            echo "should_build=true" >> $GITHUB_OUTPUT
-            echo "should_build_gost=true" >> $GITHUB_OUTPUT
-            echo "tag_exists=false" >> $GITHUB_OUTPUT
-          fi
-
-  build-gost:
-    name: Build & Compress GOST Binary
-    needs: check-version
-    if: needs.check-version.outputs.should_build_gost == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.21'
-
-      - name: Cache Go modules
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Install UPX
-        run: |
-          wget https://github.com/upx/upx/releases/download/v4.2.1/upx-4.2.1-amd64_linux.tar.xz
-          tar -xf upx-4.2.1-amd64_linux.tar.xz
-          sudo mv upx-4.2.1-amd64_linux/upx /usr/local/bin/
-          rm -rf upx-4.2.1-amd64_linux*
-
-      - name: Build GOST binary (AMD64)
-        working-directory: ./go-gost
-        run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o gost-amd64
-
-      - name: Build GOST binary (ARM64)
-        working-directory: ./go-gost
-        run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o gost-arm64
-
-      - name: Compress with UPX (AMD64)
-        working-directory: ./go-gost
-        run: |
-          upx --best --lzma gost-amd64
-
-      - name: Compress with UPX (ARM64)
-        working-directory: ./go-gost
-        run: |
-          upx --best --lzma gost-arm64
-
-      - name: Upload GOST AMD64 artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: gost-binary-amd64
-          path: ./go-gost/gost-amd64
-
-      - name: Upload GOST ARM64 artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: gost-binary-arm64
-          path: ./go-gost/gost-arm64
-
-  build-vite:
-    name: Build & Push Vite Frontend
-    needs: check-version
-    # 镜像每次推 main 都重建::latest 必须始终等于 main 的代码。
-    # 以前这里挂在 should_build 上(只有 VERSION 变了才建),导致 tag 一建好、
-    # 后续所有提交都跳过构建 —— 重装面板拿到的还是旧镜像,前端改动全丢。
-    # 版本 tag / release 仍然只在 VERSION 变化时创建(见 create-release)。
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+          owner=$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+          echo "image=ghcr.io/$owner/${{ matrix.component }}" >> "$GITHUB_OUTPUT"
+          echo "time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push Vite Docker images
-        run: |
-          VERSION="${{ needs.check-version.outputs.version }}"
-          IMAGE_OWNER=$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
-          TAGS="-t ghcr.io/${IMAGE_OWNER}/vite-frontend:latest"
-          # 版本号镜像只在该版本【首次发布】时打,否则同一个 1.0.x 会被后来的提交覆盖、
-          # 版本号就失去意义了。:latest 每次都更新,安装脚本用的就是它。
-          if [ "${{ needs.check-version.outputs.should_build }}" = "true" ]; then
-            TAGS="$TAGS -t ghcr.io/${IMAGE_OWNER}/vite-frontend:${VERSION}"
-          fi
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
-            --push \
-            $TAGS \
-            ./vite-frontend
-
-  build-java:
-    name: Build & Push Spring Boot Backend
-    needs: check-version
-    # 同上:每次推 main 都重建,保证 :latest 是最新代码
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.component }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ steps.identity.outputs.image }}:sha-${{ github.sha }}
+            ${{ steps.identity.outputs.image }}:latest
+          build-args: |
+            BUILD_COMMIT=${{ github.sha }}
+            BUILD_TIME=${{ steps.identity.outputs.time }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+  public-pull:
+    name: Verify anonymous installation images
+    needs: images
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up JDK and Maven
-        uses: actions/setup-java@v3
-        with:
-          java-version: 21
-          distribution: 'temurin'
-
-      - name: Cache Maven dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-m2
-
-      - name: Build Java JAR
-        working-directory: ./springboot-backend
-        run: mvn clean package -DskipTests
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push Java Docker images
+      - uses: actions/checkout@v4
+      - name: Pull both exact-commit images without registry credentials
         run: |
-          VERSION="${{ needs.check-version.outputs.version }}"
-          IMAGE_OWNER=$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
-          TAGS="-t ghcr.io/${IMAGE_OWNER}/springboot-backend:latest"
-          # 版本号镜像只在该版本首次发布时打(同上)
-          if [ "${{ needs.check-version.outputs.should_build }}" = "true" ]; then
-            TAGS="$TAGS -t ghcr.io/${IMAGE_OWNER}/springboot-backend:${VERSION}"
-          fi
-          # 注入构建标识:面板拿它跟 GitHub 上 main 的最新 commit 比,判断有没有新版本
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
-            --push \
-            --build-arg BUILD_COMMIT="${GITHUB_SHA:0:7}" \
-            --build-arg BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            $TAGS \
-            ./springboot-backend
-
-  create-release:
-    name: Create Release and Tag
-    needs: [check-version, build-gost, build-vite, build-java]
-    if: needs.check-version.outputs.should_build == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Download GOST AMD64 binary
-        uses: actions/download-artifact@v4
-        with:
-          name: gost-binary-amd64
-          path: ./artifacts/amd64
-
-      - name: Download GOST ARM64 binary
-        uses: actions/download-artifact@v4
-        with:
-          name: gost-binary-arm64
-          path: ./artifacts/arm64
-
-      - name: Rename binaries
+          owner=$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+          export DOCKER_CONFIG=$(mktemp -d)
+          trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+          for component in springboot-backend vite-frontend; do
+            image="ghcr.io/$owner/$component:sha-$GITHUB_SHA"
+            docker pull "$image"
+            revision=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image")
+            test "$revision" = "$GITHUB_SHA"
+          done
+      - name: Install and update using published images, retaining data
         run: |
-          mv ./artifacts/amd64/gost-amd64 ./artifacts/gost-amd64
-          mv ./artifacts/arm64/gost-arm64 ./artifacts/gost-arm64
-
-      - name: Create Release
-        env:
-          GH_TOKEN: ${{ github.token }}
+          install_dir="$RUNNER_TEMP/tms-image-install"
+          sudo env GITHUB_REPO="$GITHUB_REPOSITORY" GITHUB_REF="$GITHUB_SHA" \
+            bash "$GITHUB_WORKSPACE/panel_install.sh" --install-dir "$install_dir" --port 8080
+          sudo cp "$install_dir/.env" "$install_dir/expected.env"
+          sudo sh -c 'printf "# retained Caddy configuration\n" > "$1/Caddyfile"' sh "$install_dir"
+          docker exec gost-mysql sh -c '
+            export MYSQL_PWD="$MYSQL_PASSWORD"
+            mysql --user="$MYSQL_USER" --database="$MYSQL_DATABASE" -e "$1"
+          ' sh "INSERT INTO vite_config(name,value,time) VALUES ('ci_persist','saved',1); INSERT INTO inbound(node_id,tag,protocol,listen_port,created_time) VALUES (7,'ci-legacy','vless',20000,1);"
+          docker restart gost-mysql springboot-backend vite-frontend
+          sudo env GITHUB_REPO="$GITHUB_REPOSITORY" GITHUB_REF="$GITHUB_SHA" TMS_SELF_UPDATED=1 \
+            bash "$GITHUB_WORKSPACE/panel_install.sh" update --install-dir "$install_dir"
+          sudo cmp "$install_dir/.env" "$install_dir/expected.env"
+          sudo grep -q 'retained Caddy configuration' "$install_dir/Caddyfile"
+          result=$(docker exec gost-mysql sh -c '
+            export MYSQL_PWD="$MYSQL_PASSWORD"
+            mysql --user="$MYSQL_USER" --database="$MYSQL_DATABASE" --batch --skip-column-names -e "$1"
+          ' sh "SELECT value FROM vite_config WHERE name='ci_persist'; SELECT listen_port FROM inbound WHERE tag='ci-legacy';")
+          test "$result" = $'saved\n20000'
+          curl -fsS http://127.0.0.1:8080/ > /dev/null
+          curl -fsS -X POST http://127.0.0.1:6365/api/v1/captcha/check | grep -Eq '\"code\"[[:space:]]*:[[:space:]]*0'
+          sudo grep -q '^MODE=images$' "$install_dir/.tms-deployment"
+      - name: Clean up disposable installer smoke deployment
+        if: always()
         run: |
-          VERSION="${{ needs.check-version.outputs.version }}"
-          
-          # 创建并推送 tag
-          git tag "${VERSION}" ${{ github.sha }}
-          git push origin "${VERSION}"
-          
-          # 获取 commit 信息
-          COMMIT_MSG=$(git log -1 --pretty=format:"%s")
-          COMMIT_AUTHOR=$(git log -1 --pretty=format:"%an")
-          COMMIT_DATE=$(git log -1 --pretty=format:"%ai")
-          
-          # 创建 release
-          gh release create "${VERSION}" \
-            --title "Release ${VERSION}" \
-            --notes "## 📝 Commit Information
-          - **Message**: ${COMMIT_MSG}
-          - **Author**: ${COMMIT_AUTHOR}
-          - **Date**: ${COMMIT_DATE}
-          - **Commit**: [\`${GITHUB_SHA:0:7}\`](https://github.com/${{ github.repository }}/commit/${{ github.sha }})" \
-            --repo ${{ github.repository }}
-          
-          # 上传所有文件到 release
-          echo "📤 上传 GOST 二进制文件..."
-          gh release upload "${VERSION}" ./artifacts/gost-amd64 --clobber
-          gh release upload "${VERSION}" ./artifacts/gost-arm64 --clobber
-          
-          echo "📤 上传安装脚本..."
-          gh release upload "${VERSION}" ./install.sh --clobber
-          gh release upload "${VERSION}" ./panel_install.sh --clobber
-          
-          echo "📤 上传 Docker Compose 配置文件..."
-          gh release upload "${VERSION}" ./docker-compose-v4.yml --clobber
-          gh release upload "${VERSION}" ./docker-compose-v6.yml --clobber
-          
-          echo "📤 上传数据库初始化文件..."
-          gh release upload "${VERSION}" ./gost.sql --clobber
-          
-          echo "✅ 所有文件已上传到 Release ${VERSION}"
-
-  update-release-gost:
-    name: Update GOST Binaries in Release
-    needs: [check-version, build-gost]
-    if: needs.check-version.outputs.should_build == 'false' && needs.check-version.outputs.should_build_gost == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Download GOST AMD64 binary
-        uses: actions/download-artifact@v4
-        with:
-          name: gost-binary-amd64
-          path: ./artifacts/amd64
-
-      - name: Download GOST ARM64 binary
-        uses: actions/download-artifact@v4
-        with:
-          name: gost-binary-arm64
-          path: ./artifacts/arm64
-
-      - name: Rename binaries
-        run: |
-          mv ./artifacts/amd64/gost-amd64 ./artifacts/gost-amd64
-          mv ./artifacts/arm64/gost-arm64 ./artifacts/gost-arm64
-
-      - name: Update GOST binaries in Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          VERSION="${{ needs.check-version.outputs.version }}"
-          
-          echo "🔄 更新 Release ${VERSION} 中的 GOST 二进制文件..."
-          
-          gh release upload "${VERSION}" ./artifacts/gost-amd64 --clobber
-          gh release upload "${VERSION}" ./artifacts/gost-arm64 --clobber
-          
-          echo "✅ GOST 二进制文件更新完成！"
-          echo "ℹ️ Docker 镜像未重新构建"
-
-  update-release-files:
-    name: Update Release Files Only
-    needs: check-version
-    if: needs.check-version.outputs.tag_exists == 'true' && needs.check-version.outputs.should_build == 'false' && needs.check-version.outputs.should_build_gost == 'false'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Update Release Files
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          VERSION="${{ needs.check-version.outputs.version }}"
-          
-          echo "📤 更新 Release ${VERSION} 中的脚本和配置文件..."
-          
-          # 上传安装脚本（覆盖）
-          echo "📤 更新安装脚本..."
-          gh release upload "${VERSION}" ./install.sh --clobber
-          gh release upload "${VERSION}" ./panel_install.sh --clobber
-          
-          # 上传 Docker Compose 配置文件（覆盖）
-          echo "📤 更新 Docker Compose 配置文件..."
-          gh release upload "${VERSION}" ./docker-compose-v4.yml --clobber
-          gh release upload "${VERSION}" ./docker-compose-v6.yml --clobber
-          
-          # 上传数据库初始化文件（覆盖）
-          echo "📤 更新数据库初始化文件..."
-          gh release upload "${VERSION}" ./gost.sql --clobber
-          
-          echo "✅ 文件更新完成！Release ${VERSION} 中的脚本和配置已更新"
-          echo "ℹ️ Docker 镜像和 GOST 二进制未重新构建"
+          docker rm -f gost-mysql springboot-backend vite-frontend 2>/dev/null || true
+          docker volume rm mysql_data backend_logs 2>/dev/null || true

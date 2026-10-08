@@ -20,6 +20,8 @@ INSTALL_DOMAIN=""
 INSTALL_HTTPS_PORT=""
 INSTALL_DIR_EXPLICIT=0
 PORT_REQUESTED=0
+SOURCE_REQUESTED=0
+TMS_PANEL_SOURCE="${TMS_PANEL_SOURCE:-0}"
 
 prepare_host() {
   [ "$(id -u)" -eq 0 ] || { echo "Root privileges are required." >&2; exit 1; }
@@ -28,14 +30,14 @@ prepare_host() {
   . /etc/os-release
   case "$ID" in
     ubuntu|debian|raspbian)
-      if ! command -v curl >/dev/null || ! command -v ss >/dev/null || ! command -v openssl >/dev/null || ! command -v tar >/dev/null || ! command -v gzip >/dev/null; then
+      if ! command -v curl >/dev/null || ! command -v ss >/dev/null || ! command -v openssl >/dev/null || ! command -v tar >/dev/null || ! command -v gzip >/dev/null || ! command -v jq >/dev/null || ! command -v flock >/dev/null; then
         apt-get update
-        apt-get install -y curl ca-certificates openssl iproute2 tar gzip
+        apt-get install -y curl ca-certificates openssl iproute2 tar gzip jq util-linux
       fi ;;
     fedora|centos|rhel|rocky|almalinux)
-      if ! command -v curl >/dev/null || ! command -v ss >/dev/null || ! command -v openssl >/dev/null || ! command -v tar >/dev/null || ! command -v gzip >/dev/null; then
-        if command -v dnf >/dev/null; then dnf install -y curl ca-certificates openssl iproute tar gzip
-        else yum install -y curl ca-certificates openssl iproute tar gzip; fi
+      if ! command -v curl >/dev/null || ! command -v ss >/dev/null || ! command -v openssl >/dev/null || ! command -v tar >/dev/null || ! command -v gzip >/dev/null || ! command -v jq >/dev/null || ! command -v flock >/dev/null; then
+        if command -v dnf >/dev/null; then dnf install -y curl ca-certificates openssl iproute tar gzip jq util-linux
+        else yum install -y curl ca-certificates openssl iproute tar gzip jq util-linux; fi
       fi ;;
     *) echo "Unsupported Linux distribution: $ID" >&2; exit 1 ;;
   esac
@@ -43,29 +45,145 @@ prepare_host() {
 
 valid_port() { [[ "$1" =~ ^[0-9]{1,5}$ ]] && (( 10#$1 >= 1 && 10#$1 <= 65535 )); }
 
-# Download into staging; build the actual fork, never silently deploy upstream images.
-download_source() {
-  local staging
-  staging=$(mktemp -d "$PWD/.source.XXXXXX")
-  if ! curl -fLsS --retry 3 "https://codeload.github.com/${GITHUB_REPO}/tar.gz/${GITHUB_REF}" -o "$staging/source.tar.gz"; then
+# Serialise install/update; a second process must not replace .env or race Docker.
+acquire_install_lock() {
+  [ "${TMS_LOCK_HELD:-0}" = 1 ] && return 0
+  exec 9> .tms-install.lock
+  chmod 600 .tms-install.lock
+  flock -n 9 || { echo "Another TMS installation/update is running in $PWD." >&2; return 1; }
+  TMS_LOCK_HELD=1
+}
+
+resolve_panel_commit() {
+  if [[ "$GITHUB_REF" =~ ^[a-fA-F0-9]{40}$ ]]; then
+    PANEL_COMMIT=$(printf '%s' "$GITHUB_REF" | tr '[:upper:]' '[:lower:]')
+  else
+    PANEL_COMMIT=$(curl -fLsS --connect-timeout 10 --max-time 30 --retry 2 \
+      "https://api.github.com/repos/${GITHUB_REPO}/commits/${GITHUB_REF}" | jq -er '.sha') || {
+      echo "Cannot resolve $GITHUB_REPO ($GITHUB_REF). Check GitHub connectivity/API rate limits." >&2
+      return 1
+    }
+  fi
+  [[ "$PANEL_COMMIT" =~ ^[a-f0-9]{40}$ ]] || { echo "Invalid GitHub commit response." >&2; return 1; }
+}
+
+check_source_resources() {
+  local available
+  available=$(awk '/^MemAvailable:|^SwapFree:/ {total += $2} END {printf "%.0f", total}' /proc/meminfo)
+  if [ "$available" -lt 2621440 ]; then
+    echo "Source build needs at least 2.5 GiB available RAM + free swap. Use the default prebuilt images, or add swap first." >&2
+    return 1
+  fi
+}
+
+# Keep pipeline failure handling local; legacy management commands use grep -q
+# pipelines, whose intentional early exit must not turn into a false failure.
+run_deploy_logged() (
+  set -o pipefail
+  "$@" 2>&1 | tee -a .tms-last-deploy.log
+)
+
+# Prepare everything before replacing the running deployment. Both image tags
+# identify the same source commit; never mix latest tags or silently build locally.
+deploy_panel() {
+  local staging candidate owner mode=images had_compose=0 had_source=0
+  acquire_install_lock || return 1
+  resolve_panel_commit || return 1
+  [ "$TMS_PANEL_SOURCE" = 0 ] || { mode=source; check_source_resources || return 1; }
+  staging=$(mktemp -d "$PWD/.deployment.XXXXXX")
+  candidate="$staging/docker-compose.yml"
+  owner=$(printf '%s' "${GITHUB_REPO%%/*}" | tr '[:upper:]' '[:lower:]')
+  umask 077
+  : > .tms-last-deploy.log
+  chmod 600 .tms-last-deploy.log
+  echo "Deployment: $GITHUB_REPO @ ${PANEL_COMMIT:0:12} ($mode)"
+  echo "Progress log: $PWD/.tms-last-deploy.log"
+  if [ "$mode" = images ]; then
+    if ! curl -fLsS --connect-timeout 10 --max-time 60 --retry 2 \
+      "https://raw.githubusercontent.com/${GITHUB_REPO}/${PANEL_COMMIT}/docker-compose-images.yml" -o "$candidate"; then
+      rm -rf "$staging"; return 1
+    fi
+    sed "s@TMS_BACKEND_IMAGE@ghcr.io/$owner/springboot-backend:sha-$PANEL_COMMIT@;s@TMS_FRONTEND_IMAGE@ghcr.io/$owner/vite-frontend:sha-$PANEL_COMMIT@" "$candidate" > "$candidate.new"
+    mv "$candidate.new" "$candidate"
+  else
+    echo "Source mode requested: frontend/backend will build one at a time."
+    mkdir "$staging/source"
+    if ! curl -fLsS --connect-timeout 10 --max-time 180 --retry 2 \
+      "https://codeload.github.com/${GITHUB_REPO}/tar.gz/${PANEL_COMMIT}" -o "$staging/source.tar.gz" \
+      || ! tar -xzf "$staging/source.tar.gz" --strip-components=1 -C "$staging/source"; then
+      rm -rf "$staging"; return 1
+    fi
+    [ -f "$staging/source/docker-compose-hybrid.yml" ] || { rm -rf "$staging"; return 1; }
+    sed "s@context: ./springboot-backend@context: $staging/source/springboot-backend@;s@context: ./vite-frontend@context: $staging/source/vite-frontend@;s@tms-backend:hybrid@tms-backend:sha-$PANEL_COMMIT@;s@tms-frontend:hybrid@tms-frontend:sha-$PANEL_COMMIT@" \
+      "$staging/source/docker-compose-hybrid.yml" > "$candidate"
+  fi
+  if ! $DOCKER_CMD --project-directory "$PWD" --env-file .env -f "$candidate" config --quiet; then
     rm -rf "$staging"; return 1
   fi
-  tar -xzf "$staging/source.tar.gz" --strip-components=1 -C "$staging"
-  rm "$staging/source.tar.gz"
-  [ -f "$staging/docker-compose-hybrid.yml" ] && [ -f "$staging/gost.sql" ] || { rm -rf "$staging"; return 1; }
-  sed 's@context: ./springboot-backend@context: ./.source/springboot-backend@;s@context: ./vite-frontend@context: ./.source/vite-frontend@' "$staging/docker-compose-hybrid.yml" > docker-compose.yml.new
-  if ! $DOCKER_CMD --env-file .env -f docker-compose.yml.new config --quiet; then
-    rm -f docker-compose.yml.new; rm -rf "$staging"; return 1
+  if [ ! -f gost.sql ]; then
+    if ! curl -fLsS --connect-timeout 10 --max-time 60 --retry 2 \
+      "https://raw.githubusercontent.com/${GITHUB_REPO}/${PANEL_COMMIT}/gost.sql" -o "$staging/gost.sql"; then
+      rm -rf "$staging"; return 1
+    fi
+    [ -s "$staging/gost.sql" ] || { rm -rf "$staging"; return 1; }
+    mv "$staging/gost.sql" gost.sql
   fi
-  rm -rf .source.previous
-  [ ! -d .source ] || mv .source .source.previous
-  mv "$staging" .source
-  mv docker-compose.yml.new docker-compose.yml
-  if [ ! -f gost.sql ]; then cp .source/gost.sql gost.sql; fi
-  # .env stays private, but MySQL's unprivileged init process must read this
-  # public schema file. The install-wide umask 077 otherwise makes it mode 600.
   chmod 644 gost.sql
-  rm -rf .source.previous
+  if [ "$mode" = images ]; then
+    echo "[1/3] Downloading version-matched panel images (no local compilation)..."
+    if ! COMPOSE_PARALLEL_LIMIT=1 run_deploy_logged $DOCKER_CMD --project-directory "$PWD" --env-file .env -f "$candidate" pull backend frontend; then
+      echo "Image download failed; running containers/configuration are untouched." >&2
+      echo "Wait for 'Build and publish panel images' on GitHub to finish. Private forks need docker login ghcr.io. Local compilation requires explicit --source." >&2
+      rm -rf "$staging"; return 1
+    fi
+    local image revision
+    for image in "ghcr.io/$owner/springboot-backend:sha-$PANEL_COMMIT" "ghcr.io/$owner/vite-frontend:sha-$PANEL_COMMIT"; do
+      revision=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image") || revision=""
+      if [ "$revision" != "$PANEL_COMMIT" ]; then
+        echo "Image revision mismatch: $image. Running deployment unchanged." >&2
+        rm -rf "$staging"; return 1
+      fi
+    done
+  else
+    echo "[1/3] Building source sequentially..."
+    local service
+    for service in backend frontend; do
+      if ! COMPOSE_PARALLEL_LIMIT=1 run_deploy_logged $DOCKER_CMD --progress plain --project-directory "$PWD" --env-file .env -f "$candidate" \
+        build --build-arg "BUILD_COMMIT=$PANEL_COMMIT" "$service"; then
+        echo "Source build failed; running deployment unchanged." >&2
+        rm -rf "$staging"; return 1
+      fi
+    done
+  fi
+  if ! docker image inspect mysql:5.7 >/dev/null 2>&1; then
+    if ! run_deploy_logged $DOCKER_CMD --project-directory "$PWD" --env-file .env -f "$candidate" pull mysql; then
+      rm -rf "$staging"; return 1
+    fi
+  fi
+  [ ! -f docker-compose.yml ] || { cp -p docker-compose.yml "$staging/previous.yml"; had_compose=1; }
+  if [ "$mode" = source ]; then
+    [ ! -d .source ] || { mv .source "$staging/previous-source"; had_source=1; }
+    mv "$staging/source" .source
+    sed "s@$staging/source/springboot-backend@./.source/springboot-backend@;s@$staging/source/vite-frontend@./.source/vite-frontend@" "$candidate" > "$candidate.new"
+    mv "$candidate.new" "$candidate"
+  fi
+  cp "$candidate" docker-compose.yml.new
+  mv docker-compose.yml.new docker-compose.yml
+  echo "[2/3] Replacing panel containers; keeping MySQL volumes and saved settings..."
+  if ! $DOCKER_CMD --project-directory "$PWD" up -d --no-build --pull never \
+    || ! wait_backend_ready || ! verify_database_schema; then
+    echo "Deployment failed. Database/credentials retained; restoring previous Compose configuration if available." >&2
+    if [ "$had_compose" = 1 ]; then
+      cp -p "$staging/previous.yml" docker-compose.yml
+      if [ "$had_source" = 1 ]; then rm -rf .source; mv "$staging/previous-source" .source; fi
+      $DOCKER_CMD --project-directory "$PWD" up -d --no-build --pull never || echo "Previous containers could not be restored; inspect docker logs." >&2
+    fi
+    rm -rf "$staging"; return 1
+  fi
+  printf 'COMMIT=%s\nMODE=%s\n' "$PANEL_COMMIT" "$mode" > .tms-deployment.new
+  mv .tms-deployment.new .tms-deployment
+  rm -rf "$staging"
+  echo "[3/3] Login API and database schema are ready. Deployment complete."
 }
 
 # 全局下载地址配置
@@ -142,6 +260,10 @@ check_docker() {
   if ! docker info >/dev/null 2>&1; then
     systemctl enable --now docker
     docker info >/dev/null || { echo "Docker daemon is unavailable." >&2; exit 1; }
+  fi
+  if [ "$TMS_PANEL_SOURCE" = 1 ] && ! docker buildx version >/dev/null 2>&1; then
+    echo "--source requires the Docker Buildx plugin. Use default images or install docker-buildx-plugin." >&2
+    exit 1
   fi
   echo "检测到 Docker 命令：$DOCKER_CMD"
 }
@@ -369,6 +491,10 @@ get_frontend_port() {
 # 查看访问信息(地址 / 默认账号)
 show_access_info() {
   print_access_box "$(get_server_ip)" "$(get_frontend_port)"
+  if [ -f .tms-deployment ]; then
+    echo "部署提交: $(sed -n 's/^COMMIT=//p' .tms-deployment)"
+    echo "部署模式: $(sed -n 's/^MODE=//p' .tms-deployment)"
+  fi
   local d
   d="$(current_domain)"
   [ -n "$d" ] && echo "🌐 已配置域名,也可以用: $(current_https_url)"
@@ -558,6 +684,7 @@ wait_backend_ready() {
 # 安装功能
 install_panel() {
   echo "🚀 开始安装面板..."
+  acquire_install_lock || return 1
   if [ -f .env ]; then
     echo "Existing installation found. .env and database preserved. Use: tms update"
     [ -z "${FRONTEND_PORT:-}" ] || { echo "Port changes require editing the existing FRONTEND_PORT in .env." >&2; return 1; }
@@ -584,22 +711,10 @@ BACKEND_PORT=$BACKEND_PORT
 EOF
 
   install_tms_command
-  echo "Downloading source from $GITHUB_REPO ($GITHUB_REF)..."
-  download_source || { echo "Source download failed; .env retained for recovery." >&2; exit 1; }
-
-  echo "[3/4] 拉取镜像并启动服务(首次约 1-3 分钟,请耐心等待)..."
-  # 进度条太吵会把最后的访问信息刷走,这里只留结果;失败时再把日志打出来
-  if ! $DOCKER_CMD up -d --build >/tmp/tms_up.log 2>&1; then
-    echo "      ✘ 启动失败,以下是错误信息:"
-    tail -30 /tmp/tms_up.log
-    exit 1
-  fi
-  echo "      ✔ 三个容器已启动"
-  verify_database_schema || return 1
-  wait_backend_ready || return 1
+  deploy_panel || return 1
 
   # 自动写入「面板后端地址」(转发机对接要用),省得登录后再手动到网站配置里填
-  echo "[4/4] 检测公网IP并配置面板后端地址..."
+  echo "检测公网IP并配置面板后端地址..."
   PUBLIC_IP=$(curl -s --max-time 8 https://api.ipify.org || curl -s --max-time 8 https://ipinfo.io/ip || echo "")
   if [[ "$PUBLIC_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
     for i in $(seq 1 30); do
@@ -628,32 +743,27 @@ EOF
 
 }
 
-# 更新功能
+# Update the manager before taking the deployment lock, retaining all CLI options.
 update_panel() {
-  # 先自更新管理脚本本身。/usr/local/bin/tms-panel.sh 是装机时拷的副本,
-  # 仓库里修了 bug 它也不知道 —— 结果就是"脚本已经修好了,服务器上跑的还是旧的"。
-  # 用环境变量兜底,防止 exec 递归。
-  if [ -z "$TMS_SELF_UPDATED" ] && [ -w /usr/local/bin ]; then
-    if curl -fsSL -o /tmp/tms-panel.new "$PANEL_INSTALL_RAW_URL" 2>/dev/null \
-       && grep -q "install_tms_command" /tmp/tms-panel.new; then
-      if ! cmp -s /tmp/tms-panel.new /usr/local/bin/tms-panel.sh; then
-        mv -f /tmp/tms-panel.new /usr/local/bin/tms-panel.sh
-        chmod +x /usr/local/bin/tms-panel.sh
-        echo "🔄 管理脚本已更新到最新,继续..."
+  if [ -z "${TMS_SELF_UPDATED:-}" ] && [ -w /usr/local/bin ]; then
+    local manager_candidate
+    manager_candidate=$(mktemp "$PWD/.manager.XXXXXX")
+    if curl -fLsS --connect-timeout 10 --max-time 30 --retry 2 -o "$manager_candidate" "$PANEL_INSTALL_RAW_URL" \
+      && bash -n "$manager_candidate" && grep -q 'install_tms_command' "$manager_candidate"; then
+      if ! cmp -s "$manager_candidate" "$0"; then
+        install -m 755 "$manager_candidate" /usr/local/bin/tms-panel.sh
+        rm -f "$manager_candidate"
         export TMS_SELF_UPDATED=1
-        exec bash /usr/local/bin/tms-panel.sh update
+        local manager_args=(update --install-dir "$PWD")
+        [ "$TMS_PANEL_SOURCE" = 0 ] || manager_args+=(--source)
+        exec bash /usr/local/bin/tms-panel.sh "${manager_args[@]}"
       fi
     fi
-    rm -f /tmp/tms-panel.new 2>/dev/null
-
-  # 顺带把 tms 启动器重装一遍:老机器上那份可能是有 bug 的旧版本
-  # (比如只透传 $1 的那版,会让 tms domain 完全失效)。装它很便宜,每次更新都刷新一下最稳。
-  install_tms_command >/dev/null 2>&1 || true
+    rm -f "$manager_candidate"
   fi
-
   echo "🔄 开始更新面板..."
+  acquire_install_lock || return 1
   check_docker
-
   [ -f .env ] || { echo "Missing .env; restore it before updating." >&2; return 1; }
   if ! grep -q '^GITHUB_REPO=' .env; then
     echo "Adding repository identity to .env; existing credentials and ports are unchanged."
@@ -662,657 +772,11 @@ update_panel() {
   if ! grep -q '^GITHUB_REF=' .env; then printf 'GITHUB_REF=%s\n' "$GITHUB_REF" >> .env; fi
   chmod 600 .env
   unset FRONTEND_PORT BACKEND_PORT
-  download_source || { echo "Source download failed; existing installation preserved." >&2; return 1; }
-  # Build before touching running containers. Named volumes and .env are unchanged.
-  $DOCKER_CMD build
-  $DOCKER_CMD up -d
-  verify_database_schema || return 1
-  wait_backend_ready || return 1
-
-  # 等待服务启动
-  echo "⏳ 等待服务启动..."
-
-  # 检查数据库容器健康状态
-  echo "🔍 检查数据库服务状态..."
-  for i in {1..60}; do
-    if docker ps --format "{{.Names}}" | grep -q "^gost-mysql$"; then
-      DB_HEALTH=$(docker inspect -f '{{.State.Health.Status}}' gost-mysql 2>/dev/null || echo "unknown")
-      if [[ "$DB_HEALTH" == "healthy" ]]; then
-        echo "✅ 数据库服务健康检查通过"
-        break
-      elif [[ "$DB_HEALTH" == "starting" ]]; then
-        # 继续等待
-        :
-      elif [[ "$DB_HEALTH" == "unhealthy" ]]; then
-        echo "⚠️ 数据库健康状态：$DB_HEALTH"
-      fi
-    else
-      echo "⚠️ 数据库容器未找到或未运行"
-      DB_HEALTH="not_running"
-    fi
-    if [ $i -eq 60 ]; then
-      echo "❌ 数据库服务启动超时（60秒）"
-      echo "🔍 当前状态：$(docker inspect -f '{{.State.Health.Status}}' gost-mysql 2>/dev/null || echo '容器不存在')"
-      echo "🛑 更新终止"
-      return 1
-    fi
-    # 每10秒显示一次进度
-    if [ $((i % 10)) -eq 1 ]; then
-      echo "⏳ 等待数据库服务启动... ($i/60) 状态：${DB_HEALTH:-unknown}"
-    fi
-    sleep 1
-  done
-
-  # 从容器环境变量获取数据库信息
-  echo "🔍 获取数据库配置信息..."
-
-  # 等待一下让服务完全就绪
-  echo "⏳ 等待服务完全就绪..."
-  sleep 5
-
-  # 先检查后端容器是否在运行
-  if ! docker ps --format "{{.Names}}" | grep -q "^springboot-backend$"; then
-    echo "❌ 后端容器未运行，无法获取数据库配置"
-    echo "🔍 当前运行的容器："
-    docker ps --format "table {{.Names}}\t{{.Status}}"
-    echo "🛑 更新终止"
-    return 1
-  fi
-
-  DB_INFO=$(docker exec springboot-backend env | grep "^DB_" 2>/dev/null || echo "")
-
-  if [[ -n "$DB_INFO" ]]; then
-    DB_NAME=$(echo "$DB_INFO" | grep "^DB_NAME=" | cut -d'=' -f2)
-    DB_PASSWORD=$(echo "$DB_INFO" | grep "^DB_PASSWORD=" | cut -d'=' -f2)
-    DB_USER=$(echo "$DB_INFO" | grep "^DB_USER=" | cut -d'=' -f2)
-    DB_HOST=$(echo "$DB_INFO" | grep "^DB_HOST=" | cut -d'=' -f2)
-
-    echo "📋 数据库配置："
-    echo "   数据库名: $DB_NAME"
-    echo "   用户名: $DB_USER"
-    echo "   主机: $DB_HOST"
-  else
-    echo "❌ 无法获取数据库配置信息"
-    echo "🔍 尝试诊断问题："
-    echo "   容器状态: $(docker inspect -f '{{.State.Status}}' springboot-backend 2>/dev/null || echo '容器不存在')"
-    echo "   健康状态: $(docker inspect -f '{{.State.Health.Status}}' springboot-backend 2>/dev/null || echo '无健康检查')"
-
-    # 尝试从 .env 文件读取配置
-    if [[ -f ".env" ]]; then
-      echo "🔄 尝试从 .env 文件读取配置..."
-      DB_NAME=$(grep "^DB_NAME=" .env | cut -d'=' -f2 2>/dev/null)
-      DB_PASSWORD=$(grep "^DB_PASSWORD=" .env | cut -d'=' -f2 2>/dev/null)
-      DB_USER=$(grep "^DB_USER=" .env | cut -d'=' -f2 2>/dev/null)
-
-      if [[ -n "$DB_NAME" && -n "$DB_PASSWORD" && -n "$DB_USER" ]]; then
-        echo "✅ 从 .env 文件成功读取数据库配置"
-        echo "📋 数据库配置："
-        echo "   数据库名: $DB_NAME"
-        echo "   用户名: $DB_USER"
-      else
-        echo "❌ .env 文件中的数据库配置不完整"
-        echo "🛑 更新终止"
-        return 1
-      fi
-    else
-      echo "❌ 未找到 .env 文件"
-      echo "🛑 更新终止"
-      return 1
-    fi
-  fi
-
-  # 检查必要的数据库配置
-  if [[ -z "$DB_PASSWORD" || -z "$DB_USER" || -z "$DB_NAME" ]]; then
-    echo "❌ 数据库配置不完整（缺少必要参数）"
-    echo "🛑 更新终止"
-    return 1
-  fi
-
-  # 执行数据库字段变更
-  echo "🔄 执行数据库结构更新..."
-
-  # 创建临时迁移文件（现在有了数据库信息）
-  cat > temp_migration.sql <<EOF
--- 数据库结构更新
-USE \`$DB_NAME\`;
-
--- user 表：删除 name 字段（如果存在）
-SET @sql = (
-  SELECT IF(
-    EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'user'
-        AND column_name = 'name'
-    ),
-    'ALTER TABLE \`user\` DROP COLUMN \`name\`;',
-    'SELECT "Column \`name\` not exists in \`user\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- node 表：删除 port 字段、添加 server_ip 字段（如果不存在）
-SET @sql = (
-  SELECT IF(
-    EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'node'
-        AND column_name = 'port'
-    ),
-    'ALTER TABLE \`node\` DROP COLUMN \`port\`;',
-    'SELECT "Column \`port\` not exists in \`node\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @sql = (
-  SELECT IF(
-    NOT EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'node'
-        AND column_name = 'server_ip'
-    ),
-    'ALTER TABLE \`node\` ADD COLUMN \`server_ip\` VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;',
-    'SELECT "Column \`server_ip\` already exists in \`node\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- 将 ip 赋值给 server_ip（如果字段都存在）
-UPDATE \`node\`
-SET \`server_ip\` = \`ip\`
-WHERE \`server_ip\` IS NULL;
-
--- node 表：修改 ip 字段类型为 longtext
-SET @sql = (
-  SELECT IF(
-    EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'node'
-        AND column_name = 'ip'
-        AND data_type = 'varchar'
-    ),
-    'ALTER TABLE \`node\` MODIFY COLUMN \`ip\` LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;',
-    'SELECT "Column \`ip\` not exists or already modified in \`node\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- node 表：添加 version 字段（如果不存在）
-SET @sql = (
-  SELECT IF(
-    NOT EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'node'
-        AND column_name = 'version'
-    ),
-    'ALTER TABLE \`node\` ADD COLUMN \`version\` VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL;',
-    'SELECT "Column \`version\` already exists in \`node\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- node 表：添加 port_sta 字段（如果不存在）
-SET @sql = (
-  SELECT IF(
-    NOT EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'node'
-        AND column_name = 'port_sta'
-    ),
-    'ALTER TABLE \`node\` ADD COLUMN \`port_sta\` INT(10) DEFAULT 1000 COMMENT "端口起始范围";',
-    'SELECT "Column \`port_sta\` already exists in \`node\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- node 表：添加 port_end 字段（如果不存在）
-SET @sql = (
-  SELECT IF(
-    NOT EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'node'
-        AND column_name = 'port_end'
-    ),
-    'ALTER TABLE \`node\` ADD COLUMN \`port_end\` INT(10) DEFAULT 65535 COMMENT "端口结束范围";',
-    'SELECT "Column \`port_end\` already exists in \`node\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- 为现有节点设置默认端口范围
-UPDATE \`node\`
-SET \`port_sta\` = 1000, \`port_end\` = 65535
-WHERE \`port_sta\` IS NULL OR \`port_end\` IS NULL;
-
--- node 表：添加 http、tls、socks 字段（如果不存在）
-SET @sql = (
-  SELECT IF(
-    NOT EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'node'
-        AND column_name = 'http'
-    ),
-    'ALTER TABLE \`node\` ADD COLUMN \`http\` INT(10) DEFAULT 0 COMMENT "HTTP 服务端口";',
-    'SELECT "Column \`http\` already exists in \`node\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @sql = (
-  SELECT IF(
-    NOT EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'node'
-        AND column_name = 'tls'
-    ),
-    'ALTER TABLE \`node\` ADD COLUMN \`tls\` INT(10) DEFAULT 0 COMMENT "TLS 服务端口";',
-    'SELECT "Column \`tls\` already exists in \`node\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @sql = (
-  SELECT IF(
-    NOT EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'node'
-        AND column_name = 'socks'
-    ),
-    'ALTER TABLE \`node\` ADD COLUMN \`socks\` INT(10) DEFAULT 0 COMMENT "SOCKS 服务端口";',
-    'SELECT "Column \`socks\` already exists in \`node\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- 为现有节点设置 http、tls、socks 默认值
-UPDATE \`node\`
-SET \`http\` = IFNULL(\`http\`, 0),
-    \`tls\` = IFNULL(\`tls\`, 0),
-    \`socks\` = IFNULL(\`socks\`, 0);
-
--- tunnel 表：删除废弃字段（如果存在）
-SET @sql = (
-  SELECT IF(
-    EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'tunnel'
-        AND column_name = 'in_port_sta'
-    ),
-    'ALTER TABLE \`tunnel\` DROP COLUMN \`in_port_sta\`;',
-    'SELECT "Column \`in_port_sta\` not exists in \`tunnel\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @sql = (
-  SELECT IF(
-    EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'tunnel'
-        AND column_name = 'in_port_end'
-    ),
-    'ALTER TABLE \`tunnel\` DROP COLUMN \`in_port_end\`;',
-    'SELECT "Column \`in_port_end\` not exists in \`tunnel\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @sql = (
-  SELECT IF(
-    EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'tunnel'
-        AND column_name = 'out_ip_sta'
-    ),
-    'ALTER TABLE \`tunnel\` DROP COLUMN \`out_ip_sta\`;',
-    'SELECT "Column \`out_ip_sta\` not exists in \`tunnel\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @sql = (
-  SELECT IF(
-    EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'tunnel'
-        AND column_name = 'out_ip_end'
-    ),
-    'ALTER TABLE \`tunnel\` DROP COLUMN \`out_ip_end\`;',
-    'SELECT "Column \`out_ip_end\` not exists in \`tunnel\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- tunnel 表：添加 tcp_listen_addr、udp_listen_addr、protocol（如果不存在）
-
--- tcp_listen_addr
-SET @sql = (
-  SELECT IF(
-    NOT EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'tunnel'
-        AND column_name = 'tcp_listen_addr'
-    ),
-    'ALTER TABLE \`tunnel\` ADD COLUMN \`tcp_listen_addr\` VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT "0.0.0.0";',
-    'SELECT "Column \`tcp_listen_addr\` already exists in \`tunnel\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- udp_listen_addr
-SET @sql = (
-  SELECT IF(
-    NOT EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'tunnel'
-        AND column_name = 'udp_listen_addr'
-    ),
-    'ALTER TABLE \`tunnel\` ADD COLUMN \`udp_listen_addr\` VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT "0.0.0.0";',
-    'SELECT "Column \`udp_listen_addr\` already exists in \`tunnel\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- protocol
-SET @sql = (
-  SELECT IF(
-    NOT EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'tunnel'
-        AND column_name = 'protocol'
-    ),
-    'ALTER TABLE \`tunnel\` ADD COLUMN \`protocol\` VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT "tls";',
-    'SELECT "Column \`protocol\` already exists in \`tunnel\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- traffic_ratio (流量倍率)
-SET @sql = (
-  SELECT IF(
-    NOT EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'tunnel'
-        AND column_name = 'traffic_ratio'
-    ),
-    'ALTER TABLE \`tunnel\` ADD COLUMN \`traffic_ratio\` DECIMAL(5,1) DEFAULT 1.0 COMMENT "流量倍率";',
-    'SELECT "Column \`traffic_ratio\` already exists in \`tunnel\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- 为现有数据设置默认流量倍率
-UPDATE \`tunnel\`
-SET \`traffic_ratio\` = 1.0
-WHERE \`traffic_ratio\` IS NULL;
-
--- forward 表：删除 proxy_protocol 字段（如果存在）
-SET @sql = (
-  SELECT IF(
-    EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'forward'
-        AND column_name = 'proxy_protocol'
-    ),
-    'ALTER TABLE \`forward\` DROP COLUMN \`proxy_protocol\`;',
-    'SELECT "Column \`proxy_protocol\` not exists in \`forward\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- forward 表：修改 remote_addr 字段类型为 longtext
-SET @sql = (
-  SELECT IF(
-    EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'forward'
-        AND column_name = 'remote_addr'
-        AND data_type = 'varchar'
-    ),
-    'ALTER TABLE \`forward\` MODIFY COLUMN \`remote_addr\` LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL;',
-    'SELECT "Column \`remote_addr\` not exists or already modified in \`forward\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- forward 表：添加 strategy 字段（负载均衡策略）
-SET @sql = (
-  SELECT IF(
-    NOT EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'forward'
-        AND column_name = 'strategy'
-    ),
-    'ALTER TABLE \`forward\` ADD COLUMN \`strategy\` VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT "fifo" COMMENT "负载均衡策略";',
-    'SELECT "Column \`strategy\` already exists in \`forward\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- 为现有数据设置默认负载均衡策略
-UPDATE \`forward\`
-SET \`strategy\` = 'fifo'
-WHERE \`strategy\` IS NULL;
-
--- forward 表：添加 inx 字段（排序索引）
-SET @sql = (
-  SELECT IF(
-    NOT EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'forward'
-        AND column_name = 'inx'
-    ),
-    'ALTER TABLE \`forward\` ADD COLUMN \`inx\` INT(10) DEFAULT 0 COMMENT "排序索引";',
-    'SELECT "Column \`inx\` already exists in \`forward\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- 为现有数据设置默认排序索引
-UPDATE \`forward\`
-SET \`inx\` = 0
-WHERE \`inx\` IS NULL;
-
--- tunnel 表：添加 interface_name 字段（如果不存在）
-SET @sql = (
-  SELECT IF(
-    NOT EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'tunnel'
-        AND column_name = 'interface_name'
-    ),
-    'ALTER TABLE \`tunnel\` ADD COLUMN \`interface_name\` VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL;',
-    'SELECT "Column \`interface_name\` already exists in \`tunnel\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- forward 表：添加 interface_name 字段（如果不存在）
-SET @sql = (
-  SELECT IF(
-    NOT EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'forward'
-        AND column_name = 'interface_name'
-    ),
-    'ALTER TABLE \`forward\` ADD COLUMN \`interface_name\` VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL;',
-    'SELECT "Column \`interface_name\` already exists in \`forward\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- 创建 vite_config 表（如果不存在）
-CREATE TABLE IF NOT EXISTS \`vite_config\` (
-  \`id\` int(10) NOT NULL AUTO_INCREMENT,
-  \`name\` varchar(200) NOT NULL,
-  \`value\` varchar(200) NOT NULL,
-  \`time\` bigint(20) NOT NULL,
-  PRIMARY KEY (\`id\`),
-  UNIQUE KEY \`unique_name\` (\`name\`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 创建 statistics_flow 表（如果不存在）
-CREATE TABLE IF NOT EXISTS \`statistics_flow\` (
-  \`id\` bigint(20) NOT NULL AUTO_INCREMENT,
-  \`user_id\` int(10) NOT NULL,
-  \`flow\` bigint(20) NOT NULL,
-  \`total_flow\` bigint(20) NOT NULL,
-  \`time\` varchar(100) NOT NULL,
-  \`created_time\` bigint(20) NOT NULL,
-  PRIMARY KEY (\`id\`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- statistics_flow 表：添加 created_time 字段（如果不存在）
-SET @sql = (
-  SELECT IF(
-    NOT EXISTS (
-      SELECT 1
-      FROM information_schema.COLUMNS
-      WHERE table_schema = DATABASE()
-        AND table_name = 'statistics_flow'
-        AND column_name = 'created_time'
-    ),
-    'ALTER TABLE \`statistics_flow\` ADD COLUMN \`created_time\` BIGINT(20) NOT NULL DEFAULT 0 COMMENT "创建时间毫秒时间戳";',
-    'SELECT "Column \`created_time\` already exists in \`statistics_flow\`";'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- 为现有记录设置当前毫秒时间戳（仅当 created_time 为 0 或 NULL 时）
-UPDATE \`statistics_flow\`
-SET \`created_time\` = UNIX_TIMESTAMP() * 1000
-WHERE \`created_time\` = 0 OR \`created_time\` IS NULL;
-
-EOF
-
-  # 检查数据库容器
-  if ! docker ps --format "{{.Names}}" | grep -q "^gost-mysql$"; then
-    echo "❌ 数据库容器 gost-mysql 未运行"
-    echo "🔍 当前运行的容器："
-    docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
-    echo "❌ 数据库结构更新失败，请手动执行 temp_migration.sql"
-    echo "📁 迁移文件已保存为 temp_migration.sql"
-    return 1
-  fi
-
-  # 执行数据库迁移
-  if docker exec -i gost-mysql mysql -u "$DB_USER" -p"$DB_PASSWORD" < temp_migration.sql 2>/dev/null; then
-    echo "✅ 数据库结构更新完成"
-  else
-    echo "⚠️ 使用用户密码失败，尝试root密码..."
-    if docker exec -i gost-mysql mysql -u root -p"$DB_PASSWORD" < temp_migration.sql 2>/dev/null; then
-      echo "✅ 数据库结构更新完成"
-    else
-      echo "❌ 数据库结构更新失败，请手动执行 temp_migration.sql"
-      echo "📁 迁移文件已保存为 temp_migration.sql"
-      echo "🔍 数据库容器状态: $(docker inspect -f '{{.State.Status}}' gost-mysql 2>/dev/null || echo '容器不存在')"
-      echo "🛑 更新终止"
-      return 1
-    fi
-  fi
-
-  # 清理临时文件
-  rm -f temp_migration.sql
-
+  # Additive database migrations run in the backend before the readiness checks.
+  deploy_panel || return 1
+  install_tms_command
   echo "✅ 更新完成"
+  show_access_info
 }
 
 # 导出数据库备份
@@ -1903,11 +1367,12 @@ main() {
   if [[ "${1:-}" != -* && $# -gt 0 ]]; then command="$1"; shift; fi
   while [ $# -gt 0 ]; do
     case "$1" in
+      --source) TMS_PANEL_SOURCE=1; SOURCE_REQUESTED=1; shift ;;
       --port|-p) [ $# -ge 2 ] || { echo "Missing port." >&2; exit 1; }; FRONTEND_PORT="$2"; PORT_REQUESTED=1; valid_port "$FRONTEND_PORT" || { echo "Invalid panel port: $FRONTEND_PORT" >&2; exit 1; }; shift 2 ;;
       --https-port) [ $# -ge 2 ] || { echo "Missing HTTPS port." >&2; exit 1; }; INSTALL_HTTPS_PORT="$2"; valid_port "$INSTALL_HTTPS_PORT" || { echo "Invalid HTTPS port" >&2; exit 1; }; INSTALL_HTTPS_PORT=$((10#$INSTALL_HTTPS_PORT)); [ "$INSTALL_HTTPS_PORT" != 80 ] && [ "$INSTALL_HTTPS_PORT" != 2019 ] || { echo "HTTPS port conflicts with Caddy HTTP/admin listener" >&2; exit 1; }; shift 2 ;;
       --domain) [ $# -ge 2 ] || { echo "Missing domain." >&2; exit 1; }; INSTALL_DOMAIN="$2"; shift 2 ;;
       --install-dir) [ $# -ge 2 ] || { echo "Missing install directory." >&2; exit 1; }; INSTALL_DIR="$2"; INSTALL_DIR_EXPLICIT=1; shift 2 ;;
-      --help|-h) echo "Usage: panel_install.sh [install|update|status|info|domain DOMAIN] [--port PORT|-p PORT] [--domain DOMAIN] [--https-port PORT] [--install-dir /opt/tms]"; return ;;
+      --help|-h) echo "Usage: panel_install.sh [install|update|status|info|domain DOMAIN] [--source] [--port PORT|-p PORT] [--domain DOMAIN] [--https-port PORT] [--install-dir /opt/tms]"; return ;;
       -*) echo "Unknown option: $1" >&2; exit 1 ;;
       *) args+=("$1"); shift ;;
     esac
@@ -1920,6 +1385,10 @@ main() {
   fi
   if [ -n "$INSTALL_HTTPS_PORT" ] && [ "$command" != domain ] && { [ "$command" != install ] || [ -z "$INSTALL_DOMAIN" ]; }; then
     echo "--https-port requires domain DOMAIN, or --domain during install." >&2; exit 1
+  fi
+  [[ "$TMS_PANEL_SOURCE" = 0 || "$TMS_PANEL_SOURCE" = 1 ]] || { echo "TMS_PANEL_SOURCE must be 0 or 1" >&2; exit 1; }
+  if [ "$SOURCE_REQUESTED" = 1 ] && [ "$command" != install ] && [ "$command" != update ]; then
+    echo "--source applies only to install/update." >&2; exit 1
   fi
   prepare_host
   # Management launcher already enters the saved directory. Standalone commands may reuse cwd.

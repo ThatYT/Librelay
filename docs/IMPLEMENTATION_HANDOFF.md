@@ -238,3 +238,14 @@ All protocol creation and port editing forms now accept ports 1–65535. VLESS a
 SingboxUtil supplies stable named users for Trojan, VMess, Hysteria2, TUIC and AnyTLS; SS-2022 uses a 32-byte identity key derived from the existing random user credential and exports server-key:user-key credentials. URI and supported Clash/Mihomo exports share the actual public port. Existing older-core Clash exports still omit AnyTLS; its URI export remains available.
 
 Focused backend tests cover custom/automatic ports for every protocol, all-protocol edit conversion with credentials/forward IDs retained, network-specific conflicts and exported port/SS-key consistency. Frontend tests cover defaults, blank automatic allocation and invalid integers. CI also validates all seven generated configs using sing-box 1.13.12, matching the node version.
+
+## Prebuilt panel deployment follow-up
+
+- `panel_install.sh`: default exact-commit GHCR downloads, revision verification, staged Compose activation, directory lock, visible/persisted progress, explicit `--source` with RAM/swap check and sequential builds, rollback of the previous configuration on failed readiness. Self-update retains directory/source mode. Removed repeated readiness waits and destructive shell SQL.
+- `docker-compose-images.yml`: installer image-only template retaining the hybrid deployment's service names, named volumes, port defaults and network.
+- `.github/workflows/docker-build.yml`: cached frontend/backend matrix publishing amd64/arm64 `sha-<full SHA>` plus legacy `latest`; native JAR build and anonymous image-download verification. Removed redundant Go compilation/release mutation (node binaries have their own existing workflow). Existing published version tags/releases remain intact.
+- Dockerfiles: bounded source-build heaps, native backend build platform, Maven BuildKit cache and revision labels.
+- Backend `SchemaMigration`: additive equivalents of necessary old installer migrations; keeps obsolete columns and existing rows. Legacy node addresses are copied only where server_ip is null. `VersionController` checks successful panel-image workflows instead of unrelated workflow successes.
+- `tests/panel_deploy_test.sh`: image default, custom ports and secret/Caddy/SQL preservation, unavailable images, revision mismatch, failed builds, readiness rollback and sequential source build. Existing installer fixtures still cover private env/readable SQL. CI MySQL regression verifies legacy fields/data survive additive migration.
+
+Default update downloads images and does not run local compilers. Pending CI, registry/network failures or private image permissions return a clear failure while retaining the old running deployment. No database downgrade/rollback is attempted. Source mode remains explicit on each command; no implicit compile or automatic swap creation occurs.

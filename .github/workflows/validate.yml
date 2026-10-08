@@ -94,7 +94,10 @@ jobs:
       - name: Installer syntax and regression
         run: |
           bash -n panel_install.sh install.sh tms-hybrid.sh
+          if command -v shellcheck >/dev/null; then shellcheck -S error panel_install.sh tests/panel_deploy_test.sh; fi
           bash tests/installer_test.sh
+          compose_plugin=$(docker info --format '{{range .ClientInfo.Plugins}}{{if eq .Name "compose"}}{{.Path}}{{end}}{{end}}')
+          TMS_TEST_COMPOSE="$compose_plugin" bash tests/panel_deploy_test.sh
           bash tests/node_installer_test.sh
           bash tests/domain_test.sh
       - name: Custom Caddy HTTPS port validation
