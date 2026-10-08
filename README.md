@@ -50,7 +50,7 @@
 bash <(curl -Ls https://raw.githubusercontent.com/ThatYT/Tms_EN/main/panel_install.sh)
 ```
 
-如果系统尚未安装 curl，先用系统包管理器安装 curl。脚本会检查并安装其他必要工具、Docker 和 Docker Compose 插件，然后拉取 GitHub CI 为同一提交预先构建的前后端镜像。默认安装目录为 `/opt/tms`；VPS 不再默认运行 Maven、TypeScript 或 Vite 编译，适合小内存机器。支持 amd64 / arm64。
+如果系统尚未安装 curl，先用系统包管理器安装 curl。脚本会检查并安装其他必要工具、Docker 和 Docker Compose 插件，然后拉取 GitHub CI 为同一提交预先构建的前后端镜像。默认安装目录为 `/opt/tms`；VPS 不再默认运行 Maven、TypeScript 或 Vite 编译，适合小内存机器。前后端镜像提供 amd64 / arm64；当前默认数据库 MySQL 5.7 只有原生 amd64 镜像，标准完整部署请使用 amd64 VPS。
 
 交互安装时会提示：
 

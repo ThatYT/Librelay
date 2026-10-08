@@ -11,15 +11,6 @@ RUN --mount=type=cache,target=/root/.m2 MAVEN_OPTS="$MAVEN_BUILD_OPTS" mvn -B pa
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
-# CI 注入构建标识:镜像 tag 固定是 :latest,没有版本号可比,
-# 所以拿这个 commit 跟 GitHub 上 main 的最新 commit 比,判断有没有新版本。
-# 本地手工构建不传就是 dev,面板一律不提示更新。
-ARG BUILD_COMMIT=dev
-ARG BUILD_TIME=""
-LABEL org.opencontainers.image.revision=$BUILD_COMMIT
-ENV TMS_BUILD_COMMIT=$BUILD_COMMIT
-ENV TMS_BUILD_TIME=$BUILD_TIME
-
 ENV JAVA_OPTS="-Xmx512m -Xms256m -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai"
 ENV LANG=en_US.UTF-8
 ENV LANGUAGE=en_US:en
@@ -31,6 +22,16 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/target/*.jar app.jar
+# Keep changing revision metadata after the reusable runtime dependency layers.
+# CI 注入构建标识:镜像 tag 固定是 :latest,没有版本号可比,
+# 所以拿这个 commit 跟 GitHub 上 main 的最新 commit 比,判断有没有新版本。
+# 本地手工构建不传就是 dev,面板一律不提示更新。
+ARG BUILD_COMMIT=dev
+ARG BUILD_TIME=""
+LABEL org.opencontainers.image.revision=$BUILD_COMMIT
+ENV TMS_BUILD_COMMIT=$BUILD_COMMIT
+ENV TMS_BUILD_TIME=$BUILD_TIME
+
 EXPOSE 6365
 
 # Readiness includes the database query used by the login CAPTCHA check.

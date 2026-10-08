@@ -70,7 +70,7 @@ Normal install/update paths never remove the MySQL volume. Existing explicit des
 
 ## Panel deployment resources
 
-Wait for **Build and publish panel images** to finish for the selected commit. Images are published for amd64/arm64 under `ghcr.io/<lowercase repository owner>/springboot-backend:sha-<full SHA>` and `vite-frontend:sha-<full SHA>`. Existing public packages support anonymous pulls; private packages require registry login. Pending CI or network failures never trigger implicit local compilation.
+Wait for **Build and publish panel images** to finish for the selected commit. Images are published for amd64/arm64 under `ghcr.io/<lowercase repository owner>/springboot-backend:sha-<full SHA>` and `vite-frontend:sha-<full SHA>`. Existing public packages support anonymous pulls; private packages require registry login. The bundled MySQL 5.7 image is native amd64 only, so standard full-panel installation uses an amd64 host; dual-architecture frontend/backend images alone do not make the database ARM-native. No automatic database-version upgrade is attempted. Pending CI or network failures never trigger implicit local compilation.
 
 `--source` (or `TMS_PANEL_SOURCE=1`) opts into local builds. The installer checks at least 2.5 GiB available RAM plus free swap, builds backend then frontend with concurrency one, uses a 512 MiB Maven heap target and 1536 MiB Node heap limit, and reuses Maven's BuildKit cache. This reduces resource pressure without guaranteeing a build on every small host. It never creates swap automatically.
 
