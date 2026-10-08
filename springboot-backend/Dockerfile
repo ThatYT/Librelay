@@ -26,6 +26,9 @@ COPY --from=build /app/target/*.jar app.jar
 # CI 注入构建标识:镜像 tag 固定是 :latest,没有版本号可比,
 # 所以拿这个 commit 跟 GitHub 上 main 的最新 commit 比,判断有没有新版本。
 # 本地手工构建不传就是 dev,面板一律不提示更新。
+ARG APP_VERSION=0.0.0
+ENV LIBRELAY_VERSION=$APP_VERSION
+LABEL org.opencontainers.image.version=$APP_VERSION
 ARG BUILD_COMMIT=dev
 ARG BUILD_TIME=""
 LABEL org.opencontainers.image.revision=$BUILD_COMMIT

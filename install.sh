@@ -50,7 +50,7 @@ download_prebuilt_agent() {
     release=$(jq -r '.tag_name // empty' "$staging/revision.json")
   fi
   [[ "$release" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "Invalid node release tag." >&2; return 1; }
-  echo "Downloading prebuilt node agent: $release ($architecture)..."
+  echo "Downloading the version-matched node agent ($architecture)..."
   if ! curl -fLsS --retry 2 --max-time 60 "$(node_asset_url "$release" checksums.sha256)" -o "$staging/checksums.sha256"; then
     echo "Prebuilt node release/checksums not available yet. Wait for the Node binaries workflow: https://github.com/${GITHUB_REPO}/actions" >&2
     echo "Source compilation is optional: LIBRELAY_NODE_SOURCE=1 (requires at least 3 GiB free build space)." >&2
@@ -80,9 +80,14 @@ build_source_agent() {
   mkdir "$staging/source" "$staging/work"
   tar -xzf "$staging/source.tar.gz" --strip-components=1 -C "$staging/source" || { rm -rf "$staging"; return 1; }
   tar -xzf "$staging/go.tar.gz" -C "$staging" || { rm -rf "$staging"; return 1; }
+  local source_version build_flags='-s -w'
+  source_version=$(cat "$staging/source/VERSION" 2>/dev/null || true)
+  if [[ "$source_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    build_flags="-s -w -X main.version=$source_version"
+  fi
   if ! (cd "$staging/source/go-gost" && PATH="$staging/go/bin:$PATH" GOTMPDIR="$staging/work" \
     GOCACHE="$staging/cache" GOPATH="$staging/modules" GOMAXPROCS=1 GOMEMLIMIT=256MiB CGO_ENABLED=0 \
-    "$staging/go/bin/go" build -p 1 -mod=mod -trimpath -ldflags '-s -w' -o "$destination" .); then
+    "$staging/go/bin/go" build -p 1 -mod=mod -trimpath -ldflags "$build_flags" -o "$destination" .); then
     rm -rf "$staging"; return 1
   fi
   rm -rf "$staging"

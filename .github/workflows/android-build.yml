@@ -65,7 +65,7 @@ jobs:
           if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create "$tag" artifacts/*.apk artifacts/checksums.sha256 \
               --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
-              --title "Librelay Android test build ${GITHUB_SHA:0:7}" --notes-file /tmp/android-release-notes.md
+              --title "Librelay v$(cat VERSION) Android test build" --notes-file /tmp/android-release-notes.md
           fi
       - name: Upload Android diagnostics
         if: always()

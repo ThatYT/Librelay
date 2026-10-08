@@ -17,13 +17,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * 版本信息 / 更新检查。
- *
- * Librelay 安装使用不可变提交镜像,用【构建时注入的 git commit】
- * 跟 GitHub 上 main 分支的最新 commit 比 —— 不一样就是有新版本。
- * 构建 commit 由 CI 通过 Docker build-arg 注入(见 docker-build.yml 和 Dockerfile),
- * 本地跑没注入时是 "dev",这种情况一律不提示更新。
+/** Numeric release display and update checks against successfully deployed image builds.
+ * Commit metadata remains available for diagnostics and immutable artifact matching.
  */
 @Slf4j
 @RestController
@@ -31,8 +26,8 @@ import java.util.Map;
 @CrossOrigin
 public class VersionController extends BaseController {
 
-    /** 面板大版本,跟 CI 里的 VERSION 对齐,只用于展示 */
-    private static final String PANEL_VERSION = "1.0.1";
+    /** Numeric version from the central VERSION file, injected into official images. */
+    private static final String PANEL_VERSION = com.admin.common.utils.ProductVersion.current();
 
     /**
      * 注意查的是【最新一次构建成功的 workflow】,不是 main 的最新 commit。
@@ -49,6 +44,7 @@ public class VersionController extends BaseController {
     private static final long CACHE_TTL_MS = 6 * 60 * 60 * 1000L;
 
     private static volatile String cachedLatest = null;
+    private static volatile String cachedLatestVersion = null;
     private static volatile long cachedAt = 0L;
     /** 上次检查是不是失败了(国内机连不上 GitHub 很常见),失败就别在界面上误导用户 */
     private static volatile boolean lastCheckFailed = false;
@@ -61,14 +57,16 @@ public class VersionController extends BaseController {
         data.put("commit", current);
         data.put("buildTime", System.getenv().getOrDefault("LIBRELAY_BUILD_TIME", System.getenv("TMS_BUILD_TIME")));
 
-        String latest = latestCommit();
+        latestCommit();
+        String latest = cachedLatestVersion;
         data.put("latest", latest);
         data.put("checkFailed", lastCheckFailed);
 
-        // 只有三个条件都满足才提示:查到了远程、本地是 CI 构建的、两者不一致
+        // Only offer a newer numeric release after its images have passed deployment checks.
         boolean updateAvailable = latest != null
                 && !"dev".equals(current)
-                && !latest.equalsIgnoreCase(current);
+                && !lastCheckFailed
+                && com.admin.common.utils.ProductVersion.newer(latest, PANEL_VERSION);
         data.put("updateAvailable", updateAvailable);
         return R.ok(data);
     }
@@ -118,9 +116,12 @@ public class VersionController extends BaseController {
                 throw new RuntimeException("没有构建成功的记录");
             }
             String sha = runs.getJSONObject(0).getString("head_sha");
-            if (sha == null || sha.length() < 7) {
+            if (sha == null || !sha.matches("[0-9a-fA-F]{40}")) {
                 throw new RuntimeException("响应里没有 head_sha");
             }
+            String numericVersion = remoteVersion(sha);
+            if (!com.admin.common.utils.ProductVersion.valid(numericVersion)) throw new RuntimeException("Invalid remote numeric version");
+            cachedLatestVersion = numericVersion;
             cachedLatest = sha.substring(0, 7);
             cachedAt = now;
             lastCheckFailed = false;
@@ -132,5 +133,17 @@ public class VersionController extends BaseController {
             lastCheckFailed = true;
             return cachedLatest;
         }
+    }
+
+    private String remoteVersion(String sha) throws Exception {
+        HttpURLConnection connection=(HttpURLConnection)new URL("https://raw.githubusercontent.com/"
+                + com.admin.common.utils.RepositoryConfig.repo() + "/" + sha + "/VERSION").openConnection();
+        connection.setConnectTimeout(5000);connection.setReadTimeout(5000);
+        try {
+            if(connection.getResponseCode()!=200)throw new RuntimeException("Version metadata unavailable");
+            try(var source=connection.getInputStream()) {
+                return new String(source.readAllBytes(),StandardCharsets.UTF_8).trim();
+            }
+        } finally {connection.disconnect();}
     }
 }

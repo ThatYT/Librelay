@@ -124,6 +124,9 @@ resolve_panel_commit() {
     }
   fi
   [[ "$PANEL_COMMIT" =~ ^[a-f0-9]{40}$ ]] || { echo "Invalid GitHub commit response." >&2; return 1; }
+  PANEL_VERSION=$(curl -fLsS --connect-timeout 10 --max-time 30 --retry 2     "https://raw.githubusercontent.com/${GITHUB_REPO}/${PANEL_COMMIT}/VERSION" 2>/dev/null) || PANEL_VERSION=""
+  [[ "$PANEL_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || PANEL_VERSION=""
+  return 0
 }
 
 check_source_resources() {
@@ -156,7 +159,7 @@ deploy_panel() {
   umask 077
   : > .librelay-last-deploy.log
   chmod 600 .librelay-last-deploy.log
-  echo "Deployment: $GITHUB_REPO @ ${PANEL_COMMIT:0:12} ($mode)"
+  echo "Deployment: $GITHUB_REPO v${PANEL_VERSION:-unversioned} ($mode)"
   echo "Progress log: $PWD/.librelay-last-deploy.log"
   if [ "$mode" = images ]; then
     if ! curl -fLsS --connect-timeout 10 --max-time 60 --retry 2 \
@@ -209,7 +212,7 @@ deploy_panel() {
     local service
     for service in backend frontend; do
       if ! COMPOSE_PARALLEL_LIMIT=1 run_deploy_logged $DOCKER_CMD --progress plain --project-directory "$PWD" --env-file .env -f "$candidate" \
-        build --build-arg "BUILD_COMMIT=$PANEL_COMMIT" "$service"; then
+        build --build-arg "BUILD_COMMIT=$PANEL_COMMIT" --build-arg "APP_VERSION=${PANEL_VERSION:-0.0.0}" "$service"; then
         echo "Source build failed; running deployment unchanged." >&2
         rm -rf "$staging"; return 1
       fi
@@ -240,7 +243,7 @@ deploy_panel() {
     fi
     rm -rf "$staging"; return 1
   fi
-  printf 'COMMIT=%s\nMODE=%s\n' "$PANEL_COMMIT" "$mode" > .librelay-deployment.new
+  printf 'VERSION=%s\nCOMMIT=%s\nMODE=%s\n' "$PANEL_VERSION" "$PANEL_COMMIT" "$mode" > .librelay-deployment.new
   mv .librelay-deployment.new .librelay-deployment
   rm -rf "$staging"
   echo "[3/3] Login API and database schema are ready. Deployment complete."
@@ -564,7 +567,13 @@ show_access_info() {
   local deployment_file=.librelay-deployment
   [ -f "$deployment_file" ] || deployment_file=.tms-deployment
   if [ -f "$deployment_file" ]; then
-    echo "Deployment commit: $(sed -n 's/^COMMIT=//p' "$deployment_file")"
+    local numeric_version
+    numeric_version=$(sed -n 's/^VERSION=//p' "$deployment_file")
+    if [[ "$numeric_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      echo "Panel version: $numeric_version"
+    else
+      echo "Panel version: unavailable (legacy deployment)"
+    fi
     echo "Deployment mode: $(sed -n 's/^MODE=//p' "$deployment_file")"
   fi
   local d

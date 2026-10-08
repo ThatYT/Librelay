@@ -26,6 +26,7 @@ curl() {
   done
   if [[ "$url" = *'/commits/'* ]]; then printf '{"sha":"%s"}\n' "$fixture_revision"; return; fi
   case "$url" in
+    */VERSION) cat "$repo_dir/VERSION" ;;
     */docker-compose-images.yml) cp "$repo_dir/docker-compose-images.yml" "$target" ;;
     */gost.sql) cp "$repo_dir/gost.sql" "$target" ;;
     https://codeload.github.com/*) cp "$workspace/source.tar.gz" "$target" ;;
@@ -60,7 +61,7 @@ fixture_compose() {
       printf 'build %s\n' "${*: -1}" >> calls
       [ "$LIBRELAY_PANEL_SOURCE" = 1 ]
       [ "$COMPOSE_PARALLEL_LIMIT" = 1 ]
-      [[ "$*" = *"BUILD_COMMIT=$fixture_revision"* ]]
+      [[ "$*" = *"BUILD_COMMIT=$fixture_revision"* && "$*" = *"APP_VERSION=$(cat "$repo_dir/VERSION")"* ]]
       [ "${FAIL_BUILD:-0}" = 0 ] ;;
     up)
       printf 'up\n' >> calls
@@ -93,6 +94,12 @@ assert_saved_data() { cmp .env expected.env; cmp gost.sql previous.sql; cmp Cadd
   grep -q "ghcr.io/example/springboot-backend:sha-$fixture_revision" docker-compose.yml
   grep -q "ghcr.io/example/vite-frontend:sha-$fixture_revision" docker-compose.yml
   grep -q '^MODE=images$' .librelay-deployment
+  grep -q "^VERSION=$(cat "$repo_dir/VERSION")$" .librelay-deployment
+  get_server_ip() { echo 192.0.2.1; }
+  current_domain() { :; }
+  info=$(show_access_info)
+  [[ "$info" = *"Panel version: $(cat "$repo_dir/VERSION")"* ]]
+  [[ "$info" != *"$fixture_revision"* ]]
   ! grep -q '^build ' calls
   [ "$(grep -c '^up$' calls)" = 1 ]
 )
@@ -142,6 +149,7 @@ for failure in pull revision; do (
 )
 # No tar/source build is downloaded by default; immutable resolution accepts only real SHAs.
 GITHUB_REF=main; resolve_panel_commit; [ "$PANEL_COMMIT" = "$fixture_revision" ]
+[ "$PANEL_VERSION" = "$(cat "$repo_dir/VERSION")" ]
 curl() { printf '{"sha":"bad; touch injected"}'; }
 if resolve_panel_commit; then echo 'Accepted malicious commit response'; exit 1; fi
 # The shell update path must not execute the removed destructive legacy SQL.

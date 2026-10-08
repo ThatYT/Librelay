@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { t } from "@/i18n";
+import { numericVersion } from "@/utils/version.mjs";
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@heroui/button";
@@ -57,7 +58,7 @@ export default function AdminLayout({
     return () => window.removeEventListener(SITE_CONFIG_UPDATED, onUpdated);
   }, []);
   // 版本 / 更新提示。只给管理员看 —— 车友看到"有新版本"也没法更新,徒增困惑。
-  // 后端拿构建时注入的 commit 跟 GitHub main 比,连不上 GitHub 时不提示(国内机常见)。
+  // Display numeric releases and offer only versions whose image deployment checks passed.
   const [versionInfo, setVersionInfo] = useState<any>(null);
   useEffect(() => {
     if (!isAdmin) return;
@@ -377,10 +378,7 @@ export default function AdminLayout({
                <h1 className="text-sm font-bold text-foreground overflow-hidden whitespace-nowrap">{appName}</h1>
                <div className="flex items-center gap-1.5">
                  <p className="text-xs text-default-500">
-                   v{versionInfo?.panelVersion || siteConfig.version}
-                   {versionInfo?.commit && versionInfo.commit !== 'dev' && (
-                     <span className="text-default-400">-{versionInfo.commit}</span>
-                   )}
+                   v{numericVersion(versionInfo?.panelVersion, siteConfig.version)}
                  </p>
                  {versionInfo?.updateAvailable && (
                    <button
@@ -581,13 +579,12 @@ export default function AdminLayout({
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-default-500">{t("m837bc9576721")}</span>
                     <span className="font-mono">
-                      v{versionInfo?.panelVersion || siteConfig.version}
-                      {versionInfo?.commit && versionInfo.commit !== 'dev' && `-${versionInfo.commit}`}
+                      v{numericVersion(versionInfo?.panelVersion, siteConfig.version)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-default-500">{t("mc2a497830ef7")}</span>
-                    <span className="font-mono text-warning">{versionInfo?.latest || '-'}</span>
+                    <span className="font-mono text-warning">{numericVersion(versionInfo?.latest)}</span>
                   </div>
 
                   <div>

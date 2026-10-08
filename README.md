@@ -17,6 +17,8 @@ Librelay 是基于 [Teminuosi/Tms](https://github.com/Teminuosi/Tms) 的多节�
 - 前端支持 **中文 / English**，主题仅提供 **浅色 / 深色**，手动选择会保存。
 - 安装、更新默认使用 GitHub CI 预构建镜像与节点二进制，VPS 无需本机编译。
 
+版本采用数字格式，如 **1.1.0**。根目录 `VERSION` 是统一版本来源，面板界面不再追加提交哈希。发布记录见 [GitHub Releases](https://github.com/ThatYT/Librelay/releases)。后续功能版本更新第二位，修复版本更新第三位；构建提交仅用于内部镜像匹配和回滚。手工 Docker 构建时传入 `--build-arg APP_VERSION=$(cat VERSION)`；安装器和 CI 会自动传入。
+
 ### 一键安装面板
 
 在面板 VPS 上以 **root** 执行。支持 Debian / Ubuntu / Raspbian、Fedora、CentOS / RHEL / Rocky / AlmaLinux。当前默认 MySQL 5.7 完整部署使用 **amd64 VPS**；节点二进制支持 amd64 和 arm64。如果没有 `curl`，先通过系统包管理器安装。
@@ -148,6 +150,8 @@ Librelay is a multi-node proxy management panel forked from [Teminuosi/Tms](http
 - Default panel port **TCP 2095**, backend API **TCP 6365**. The panel and proxy nodes can run on separate servers.
 - **Chinese / English** UI and **Light / Dark** themes, with saved manual selections.
 - Installation and updates use CI-built images and node binaries by default, without compiling on your VPS.
+
+Versions use numeric identifiers such as **1.1.0**. The root `VERSION` file is the single version source; the panel no longer appends commit hashes. See [GitHub Releases](https://github.com/ThatYT/Librelay/releases) for release history. Increment the minor number for features and the patch number for fixes; commit identifiers remain internal for matching images and rollback. Manual Docker builds should pass `--build-arg APP_VERSION=$(cat VERSION)`; the installer and CI supply it automatically.
 
 ### Install the panel
 

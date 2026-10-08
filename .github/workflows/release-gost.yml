@@ -26,9 +26,11 @@ jobs:
       - name: Build hybrid gost (amd64 + arm64)
         working-directory: go-gost
         run: |
+          release_version=$(cat ../VERSION)
+          [[ "$release_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
           mkdir -p ../dist
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=mod -trimpath -ldflags "-s -w" -o ../dist/gost-amd64 .
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -mod=mod -trimpath -ldflags "-s -w" -o ../dist/gost-arm64 .
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=mod -trimpath -ldflags "-s -w -X main.version=$release_version" -o ../dist/gost-amd64 .
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -mod=mod -trimpath -ldflags "-s -w -X main.version=$release_version" -o ../dist/gost-arm64 .
           cp ../install.sh ../dist/install.sh
           (cd ../dist && sha256sum gost-amd64 gost-arm64 > checksums.sha256)
           ls -la ../dist

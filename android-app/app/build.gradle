@@ -3,6 +3,12 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+def releaseVersion = new File(rootProject.projectDir.parentFile, 'VERSION').text.trim()
+if (!(releaseVersion ==~ /[0-9]+\.[0-9]+\.[0-9]+/)) throw new GradleException('Invalid numeric VERSION')
+def versionParts = releaseVersion.tokenize('.').collect { it.toInteger() }
+def releaseCode = versionParts[0] * 1000000L + versionParts[1] * 1000L + versionParts[2]
+if (versionParts[1] > 999 || versionParts[2] > 999 || releaseCode > 2100000000L) throw new GradleException('VERSION exceeds Android versionCode range')
+
 android {
     namespace 'com.librelay'
     compileSdk 34
@@ -11,8 +17,8 @@ android {
         applicationId "com.flux"
         minSdk 24
         targetSdk 34
-        versionCode 2
-        versionName "1.0.2"
+        versionCode releaseCode.toInteger()
+        versionName releaseVersion
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }

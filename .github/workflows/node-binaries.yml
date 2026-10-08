@@ -19,10 +19,13 @@ jobs:
       - name: Build version-matched Linux agents
         working-directory: go-gost
         run: |
+          release_version=$(cat ../VERSION)
+          [[ "$release_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
           mkdir -p ../dist
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=mod -trimpath -ldflags '-s -w' -o ../dist/gost-amd64 .
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -mod=mod -trimpath -ldflags '-s -w' -o ../dist/gost-arm64 .
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=mod -trimpath -ldflags "-s -w -X main.version=$release_version" -o ../dist/gost-amd64 .
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -mod=mod -trimpath -ldflags "-s -w -X main.version=$release_version" -o ../dist/gost-arm64 .
           ../dist/gost-amd64 -V
+          cp ../VERSION ../dist/VERSION
           cd ../dist
           sha256sum gost-amd64 gost-arm64 > checksums.sha256
       - name: Publish immutable commit release
@@ -34,9 +37,9 @@ jobs:
             echo "Node release already published: $release"
           else
             gh release create "$release" --target "$GITHUB_SHA" --prerelease \
-              --title "Node agent ${GITHUB_SHA:0:7}" \
+              --title "Librelay v$(cat VERSION) node binaries" \
               --notes "Linux node agents built from commit ${GITHUB_SHA}. The installer verifies checksums.sha256 before replacing an existing node executable." \
-              dist/gost-amd64 dist/gost-arm64 dist/checksums.sha256
+              dist/gost-amd64 dist/gost-arm64 dist/checksums.sha256 dist/VERSION
           fi
       - name: Verify installer downloads the published binary
         run: |
