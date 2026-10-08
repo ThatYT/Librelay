@@ -87,7 +87,7 @@ bash /tmp/librelay.sh update --install-dir /opt/tms
 
 升级后，**先更新远程节点代理，再编辑旧用户并保存统一设置**。迁移只增加字段；已有用量、凭据、端口和订阅地址保留，旧线路/隧道/转发套餐不再叠加。旧用户在保存前仍按原套餐运行，界面会提示迁移。修改限速或增加节点需要已有预留节点在线；失败时会报出节点，先前完成的收紧可能已生效，恢复节点后重试。
 
-账号流量耗尽后暂停该用户的服务。重置用量或增加额度后，只恢复因账号额度暂停的服务，手动停用的服务保持停用。新流量按上传+下载的实际字节合计，不叠加旧隧道倍率；保留的历史计费用量不重算。流量由节点批量上报，断连期间或上报间隔内可能超额，恢复连接后重新检查。
+账号流量耗尽后暂停该用户的服务。重置用量或增加额度后，只恢复因账号额度暂停的服务，手动停用的服务保持停用。管理员在用户管理中选择双向（上传＋下载）、单向仅下载或单向仅上传，并设置计费倍率（0–1000，最多 4 位小数；0 不扣流量）。账号计费用量＝选定方向流量 × 倍率，不叠加旧隧道倍率。旧账号默认双向 ×1，参数仅影响之后上报的流量；保留的历史计费用量不重算。普通用户界面不显示限速，管理员仍可设置账号限速。小数倍率的不足 1 字节部分会持久累计，重置用量时一起清零。流量由节点批量上报，断连期间或上报间隔内可能超额，恢复连接后重新检查。
 
 ### 端口与域名
 
@@ -219,7 +219,7 @@ Upload and download across all nodes and protocols share the account budget. Spe
 
 After upgrading, **update remote agents, then edit each legacy user and save the unified policy**. Additive migrations retain usage, credentials, ports, subscription URLs and legacy records. Legacy line/tunnel/forward plans stop applying once enabled; existing users keep their old behavior until that save, with a visible migration notice. Changing speed or adding a node requires the existing reserved nodes to be online. Errors identify the node; reductions already acknowledged can remain in effect until you retry.
 
-Exhausting the account quota pauses that user's services. Resetting usage or increasing the quota resumes quota-paused services while preserving manual pauses. New usage counts actual upload + download once without legacy tunnel multipliers; historical billed counters are preserved. Batched node reporting and disconnections can allow quota overshoot; enforcement retries after reconnect.
+Exhausting the account quota pauses that user's services. Resetting usage or increasing the quota resumes quota-paused services while preserving manual pauses. Administrators select both directions, download only, or upload only in User Management and set a multiplier (0–1000, up to 4 decimal places; 0 means no quota charge). Account billed usage equals selected traffic × multiplier, without legacy tunnel multipliers. Existing accounts default to both directions ×1; policy changes apply to future reports and retain historical billed counters. Ordinary users do not see speed caps; administrators can still configure them. Fractional bytes persist across reports and are cleared with usage resets. Batched node reporting and disconnections can allow quota overshoot; enforcement retries after reconnect.
 
 ### Ports and domains
 

@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { t } from "@/i18n";
+import { isAdmin } from "@/utils/auth";
 import { Card, CardBody } from "@heroui/card";
 import { Chip } from "@heroui/chip";
 import { Accordion, AccordionItem } from "@heroui/accordion";
@@ -333,11 +334,11 @@ export default function GuidePage() {
 
               <AccordionItem
                 key="q2"
-                aria-label={t("m426639299bcf")}
-                title={<span className="text-sm font-medium">{t("m71d84d167180")}</span>}
+                aria-label={isAdmin() ? t("m426639299bcf") : t("billing.userGuideTitle")}
+                title={<span className="text-sm font-medium">{isAdmin() ? t("m71d84d167180") : t("billing.userGuideTitle")}</span>}
               >
-                <p className="text-sm text-default-500 leading-relaxed pb-2">{t("limits.guide")}</p>
-                <p className="text-sm text-default-500 leading-relaxed pb-2">{t("limits.explain")}</p>
+                <p className="text-sm text-default-500 leading-relaxed pb-2">{isAdmin() ? t("limits.guide") : t("billing.userGuide")}</p>
+                {isAdmin() && <p className="text-sm text-default-500 leading-relaxed pb-2">{t("limits.explain")}</p>}
               </AccordionItem>
 
               <AccordionItem

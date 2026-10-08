@@ -13,7 +13,7 @@ import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
 
 class UserTrafficTest {
-    @Test void protocolTrafficUsesAccountPolicyAndIgnoresLegacyBillingMultipliers() {
+    @Test void protocolTrafficUsesAccountBillingWhileForwardCountersRemainRaw() {
         FlowController c=new FlowController();
         UserService users=mock(UserService.class); ForwardService forwards=mock(ForwardService.class);
         TunnelService tunnels=mock(TunnelService.class); UserLimitService limits=mock(UserLimitService.class);
@@ -28,8 +28,12 @@ class UserTrafficTest {
         assertEquals(1000L,stats.getD());assertEquals(2000L,stats.getU());
         ArgumentCaptor<UpdateWrapper<User>> update=ArgumentCaptor.forClass(UpdateWrapper.class);
         verify(users).update(isNull(),update.capture());
-        assertTrue(update.getValue().getSqlSet().contains("in_flow = in_flow + 1000"));
-        assertTrue(update.getValue().getSqlSet().contains("out_flow = out_flow + 2000"));
+        assertTrue(update.getValue().getSqlSet().contains("billing_mode"));
+        assertTrue(update.getValue().getSqlSet().contains("CAST(1000 AS DECIMAL(30,0)) * traffic_multiplier"));
+        ArgumentCaptor<UpdateWrapper<Forward>> raw=ArgumentCaptor.forClass(UpdateWrapper.class);
+        verify(forwards).update(isNull(),raw.capture());
+        assertTrue(raw.getValue().getSqlSet().contains("in_flow = in_flow + 1000"));
+        assertTrue(raw.getValue().getSqlSet().contains("out_flow = out_flow + 2000"));
         verify(limits).enforce(u);
     }
 }

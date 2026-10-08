@@ -224,6 +224,9 @@ public class FlowController extends BaseController {
      * 处理流量数据的核心逻辑
      */
     private String processFlowData(FlowDto flowDataList) {
+        if (flowDataList.getU() == null || flowDataList.getD() == null || flowDataList.getU() < 0 || flowDataList.getD() < 0) {
+            throw new IllegalArgumentException("Traffic deltas must be non-negative");
+        }
         String[] serviceIds = parseServiceName(flowDataList.getN());
         String forwardId = serviceIds[0];
         String userId = serviceIds[1];
@@ -236,13 +239,13 @@ public class FlowController extends BaseController {
 
         //  处理流量倍率及单双向计算
         User account = userService.getById(userId);
-        // Unified quotas count actual upload + download once, without legacy tunnel multipliers.
+        // Protocol counters remain raw. Unified account quotas use only the admin account billing policy.
         FlowDto flowStats = com.admin.service.UserLimitService.unified(account)
                 ? flowDataList : filterFlowData(flowDataList, forward, flowType);
 
         // 先更新所有流量统计 - 确保流量数据的一致性
         updateForwardFlow(forwardId, flowStats);
-        updateUserFlow(userId, flowStats);
+        updateUserFlow(userId, flowStats, com.admin.service.UserLimitService.unified(account));
         updateUserTunnelFlow(userTunnelId, flowStats);
 
         User owner = userService.getById(userId);
@@ -533,15 +536,18 @@ public class FlowController extends BaseController {
         }
     }
 
-    private void updateUserFlow(String userId, FlowDto flowStats) {
+    private void updateUserFlow(String userId, FlowDto flowStats, boolean unified) {
         // 对相同用户的流量更新进行同步，避免并发覆盖
         synchronized (getUserLock(userId)) {
             UpdateWrapper<User> updateWrapper = new UpdateWrapper<>();
             updateWrapper.eq("id", userId);
 
-            updateWrapper.setSql("in_flow = in_flow + " + flowStats.getD());
-            updateWrapper.setSql("out_flow = out_flow + " + flowStats.getU());
-
+            if (unified) {
+                com.admin.service.AccountTrafficBilling.addUsage(updateWrapper, flowStats);
+            } else {
+                updateWrapper.setSql("in_flow = in_flow + " + flowStats.getD());
+                updateWrapper.setSql("out_flow = out_flow + " + flowStats.getU());
+            }
             userService.update(null, updateWrapper);
         }
     }

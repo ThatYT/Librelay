@@ -1104,5 +1104,18 @@
   "error.userLimitNode": "Cannot apply user limits on node {{node}}: {{detail}}. Update the node agent and ensure it is online; then retry.",
   "error.userLimitSaved": "User settings saved; node synchronization is pending: {{detail}}",
   "error.userLimitLegacy": "Manage speed and traffic limits in User Management; line plans no longer apply to this user",
-  "limits.guide": "Add or edit the user in User Management to set the account speed, traffic quota and monthly reset day. Zero speed/quota means unlimited. Protocol, line and tunnel assignment only grants access. Update node agents and save each legacy user before its old plans stop applying."
+  "limits.guide": "Add or edit the user in User Management to set the account speed, traffic quota and monthly reset day. Zero speed/quota means unlimited. Protocol, line and tunnel assignment only grants access. Update node agents and save each legacy user before its old plans stop applying.",
+  "billing.mode": "Traffic billing mode",
+  "billing.both": "Both directions (upload + download)",
+  "billing.download": "One direction (download only)",
+  "billing.upload": "One direction (upload only)",
+  "billing.multiplier": "Billing multiplier",
+  "billing.help": "Billed usage = selected traffic direction(s) × multiplier. Supports 0–1000 with up to 4 decimal places; 0 means no quota charge. Applies to future reports only; historical usage is retained.",
+  "billing.invalid": "Choose a valid billing mode and a multiplier from 0 to 1000 with up to 4 decimal places.",
+  "billing.userGuideTitle": "Where can I check my traffic quota?",
+  "billing.userGuide": "Check your account quota, used traffic and expiry in My Subscriptions. Quotas are managed by the administrator; contact them if the quota is exhausted.",
+  "billing.userUsageInfo": "All subscriptions share your account traffic quota. Usage follows the billing policy set by the administrator.",
+  "error.billingMode": "Invalid traffic billing mode",
+  "error.billingMultiplier": "Traffic multiplier must be between 0 and 1000",
+  "error.billingPrecision": "Traffic multiplier supports up to 4 decimal places"
 }

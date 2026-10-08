@@ -1104,5 +1104,18 @@
   "error.userLimitNode": "无法在节点 {{node}} 应用用户限制：{{detail}}。请更新节点代理、确认节点在线，然后重试。",
   "error.userLimitSaved": "用户设置已保存，节点同步待完成：{{detail}}",
   "error.userLimitLegacy": "请在用户管理中设置限速与流量；此用户已不使用线路套餐。",
-  "limits.guide": "在用户管理中新增或编辑用户，统一填写账号总限速、总流量和每月重置日。速度/流量填 0 表示不限制。分配协议、线路或隧道只授予访问权限。旧用户需更新节点代理，再保存用户设置，旧套餐才会停止叠加。"
+  "limits.guide": "在用户管理中新增或编辑用户，统一填写账号总限速、总流量和每月重置日。速度/流量填 0 表示不限制。分配协议、线路或隧道只授予访问权限。旧用户需更新节点代理，再保存用户设置，旧套餐才会停止叠加。",
+  "billing.mode": "流量计费方式",
+  "billing.both": "双向（上传＋下载）",
+  "billing.download": "单向（仅下载）",
+  "billing.upload": "单向（仅上传）",
+  "billing.multiplier": "计费倍率",
+  "billing.help": "计费用量＝选定方向的流量 × 倍率。倍率支持 0–1000，最多 4 位小数；0 表示不扣流量。仅影响之后的流量上报，历史用量不重算。",
+  "billing.invalid": "请选择有效计费方式；倍率须为 0–1000，最多 4 位小数。",
+  "billing.userGuideTitle": "如何查看流量额度？",
+  "billing.userGuide": "在“我的订阅”中查看账号流量额度、已用流量和到期时间。额度由管理员设置，耗尽后请联系管理员。",
+  "billing.userUsageInfo": "账号下的所有订阅共用流量额度，用量按管理员设置的计费方式统计。",
+  "error.billingMode": "流量计费方式无效",
+  "error.billingMultiplier": "计费倍率须为 0–1000",
+  "error.billingPrecision": "计费倍率最多支持 4 位小数"
 }

@@ -53,6 +53,7 @@ import {
   deleteLine,
 } from '@/api';
 import { copyTextToClipboard } from '@/utils/clipboard';
+import { isValidBillingPolicy } from "@/utils/billing.mjs";
 import { SubQrToggle } from '@/components/sub-qr';
 import { SearchIcon, EditIcon, DeleteIcon, UserIcon, SettingsIcon } from '@/components/icons';
 import { parseDate } from "@internationalized/date";
@@ -122,6 +123,8 @@ export default function UserPage() {
     status: 1,
     unifiedLimits: true,
     speedMbps: 0,
+    billingMode: "both",
+    trafficMultiplier: 1,
     flow: 0,
     num: 99999,
     expTime: null,
@@ -278,6 +281,8 @@ export default function UserPage() {
       status: 1,
       unifiedLimits: true,
       speedMbps: 0,
+      billingMode: "both",
+      trafficMultiplier: 1,
       flow: 0,
       num: 99999,
       expTime: null,
@@ -296,6 +301,8 @@ export default function UserPage() {
       status: user.status,
       unifiedLimits: true,
       speedMbps: user.speedMbps ?? 0,
+      billingMode: user.billingMode ?? "both",
+      trafficMultiplier: user.trafficMultiplier ?? 1,
       flow: user.flow,
       num: user.num,
       expTime: user.expTime ? new Date(user.expTime) : null,
@@ -336,6 +343,9 @@ export default function UserPage() {
     if (![userForm.flow, userForm.speedMbps ?? 0].every(v => Number.isSafeInteger(v) && v >= 0) ||
         (userForm.speedMbps ?? 0) > 1000000 || userForm.flow > 1000000) {
       toast.error(t("limits.invalid")); return;
+    }
+    if (!isValidBillingPolicy(userForm.billingMode, userForm.trafficMultiplier)) {
+      toast.error(t("billing.invalid")); return;
     }
     setUserFormLoading(true);
     try {
@@ -627,6 +637,10 @@ export default function UserPage() {
                       <span>{t("limits.speedShort")}</span>
                       <span>{user.unifiedLimits ? (user.speedMbps ? `${user.speedMbps} Mbps` : t("limits.unlimited")) : t("limits.legacy")}</span>
                     </div>
+                    <div className="flex justify-between text-sm">
+                      <span>{t("billing.mode")}</span>
+                      <span>{t(`billing.${user.billingMode ?? "both"}`)} ×{user.trafficMultiplier ?? 1}</span>
+                    </div>
                     {/* 流量信息 */}
                     <div className="space-y-1.5">
                       <div className="flex justify-between text-sm">
@@ -801,6 +815,21 @@ export default function UserPage() {
               </Select>
             </div>
             <p className="text-xs text-default-500">{t("limits.explain")}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Select disallowEmptySelection label={t("billing.mode")} selectedKeys={[userForm.billingMode ?? "both"]}
+                onSelectionChange={keys => {
+                  const value = Array.from(keys)[0];
+                  if (value) setUserForm(p => ({...p, billingMode: String(value) as "both" | "upload" | "download"}));
+                }}>
+                <SelectItem key="both">{t("billing.both")}</SelectItem>
+                <SelectItem key="download">{t("billing.download")}</SelectItem>
+                <SelectItem key="upload">{t("billing.upload")}</SelectItem>
+              </Select>
+              <Input label={t("billing.multiplier")} type="number" min="0" max="1000" step="0.0001"
+                value={Number.isFinite(userForm.trafficMultiplier ?? 1) ? String(userForm.trafficMultiplier ?? 1) : ""}
+                onChange={e => setUserForm(p => ({...p, trafficMultiplier: e.target.value === "" ? NaN : Number(e.target.value)}))} />
+            </div>
+            <p className="text-sm text-default-500">{t("billing.help")}</p>
             {isEdit && !users.find(u => u.id === userForm.id)?.unifiedLimits &&
               <p className="text-sm text-warning">{t("limits.migrate")}</p>}
 

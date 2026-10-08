@@ -38,4 +38,11 @@ public class UserDto {
     @Min(value = 0, message = "Speed must be non-negative")
     @javax.validation.constraints.Max(value = 1000000, message = "Speed must not exceed 1000000 Mbps")
     private Integer speedMbps;
+
+    @javax.validation.constraints.Pattern(regexp = "both|upload|download", message = "Invalid traffic billing mode")
+    private String billingMode = "both";
+    @javax.validation.constraints.DecimalMin(value = "0", message = "Traffic multiplier must be between 0 and 1000")
+    @javax.validation.constraints.DecimalMax(value = "1000", message = "Traffic multiplier must be between 0 and 1000")
+    @javax.validation.constraints.Digits(integer = 4, fraction = 4, message = "Traffic multiplier supports up to 4 decimal places")
+    private java.math.BigDecimal trafficMultiplier = java.math.BigDecimal.ONE;
 } 

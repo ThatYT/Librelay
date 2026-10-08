@@ -13,6 +13,8 @@ export interface User {
   status: number; // 1-正常, 0-禁用
   unifiedLimits?: boolean;
   speedMbps?: number;
+  billingMode?: "both" | "upload" | "download";
+  trafficMultiplier?: number;
   limitNodes?: string;
   flow: number; // Account quota in GiB; zero means unlimited
   num: number; // 转发数量
@@ -26,6 +28,8 @@ export interface User {
 export interface UserForm {
   unifiedLimits?: boolean;
   speedMbps?: number;
+  billingMode?: "both" | "upload" | "download";
+  trafficMultiplier?: number;
   id?: number;
   name?: string;
   user: string;

@@ -69,6 +69,10 @@ public class User extends BaseEntity {
     /** Opt-in replacement for legacy line/tunnel/forward plans. */
     private Boolean unifiedLimits;
     private Integer speedMbps;
+    private String billingMode;
+    private java.math.BigDecimal trafficMultiplier;
+    private java.math.BigDecimal billingDownloadRemainder;
+    private java.math.BigDecimal billingUploadRemainder;
     /** Durable node reservations; never silently reclaim an offline node's budget. */
     private String limitNodes;
 

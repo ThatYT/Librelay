@@ -242,18 +242,25 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             User previous = this.getById(userUpdateDto.getId());
             if (Boolean.TRUE.equals(previous.getUnifiedLimits()) && !Boolean.TRUE.equals(updateUser.getUnifiedLimits())) {
                 updateUser.setUnifiedLimits(true); // A legacy client cannot silently restore layered limits.
-                if (updateUser.getSpeedMbps() == null) updateUser.setSpeedMbps(previous.getSpeedMbps());
             }
+            if (updateUser.getSpeedMbps() == null) updateUser.setSpeedMbps(previous.getSpeedMbps());
+            boolean speedChanged = !Objects.equals(updateUser.getUnifiedLimits(), previous.getUnifiedLimits())
+                    || !Objects.equals(updateUser.getSpeedMbps(), previous.getSpeedMbps());
+            boolean enforcementChanged = speedChanged || !Objects.equals(updateUser.getFlow(), previous.getFlow())
+                    || !Objects.equals(updateUser.getStatus(), previous.getStatus())
+                    || !Objects.equals(updateUser.getExpTime(), previous.getExpTime());
+            if (updateUser.getBillingMode() == null) updateUser.setBillingMode(previous.getBillingMode());
+            if (updateUser.getTrafficMultiplier() == null) updateUser.setTrafficMultiplier(previous.getTrafficMultiplier());
             updateUser.setInFlow(previous.getInFlow());
             updateUser.setOutFlow(previous.getOutFlow());
-            try { userLimits.stage(updateUser, previous); }
+            try { if (speedChanged) userLimits.stage(updateUser, previous); }
             catch (IllegalStateException ex) { return R.err(ex.getMessage()); }
             // Only settings are written. Flow reports can arrive during node updates.
             updateUser.setInFlow(null);
             updateUser.setOutFlow(null);
             boolean result = this.updateById(updateUser);
             if (result) {
-                try { userLimits.apply(this.getById(updateUser.getId())); }
+                try { if (enforcementChanged) userLimits.apply(this.getById(updateUser.getId())); }
                 catch (IllegalStateException ex) { return R.err("User settings saved; node synchronization is pending: " + ex.getMessage()); }
             }
         
@@ -380,7 +387,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             user.setInFlow(0L);
             user.setOutFlow(0L);
             this.update(null, new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<User>()
-                    .eq("id", user.getId()).set("in_flow", 0L).set("out_flow", 0L));
+                    .eq("id", user.getId()).set("in_flow", 0L).set("out_flow", 0L)
+                    .set("billing_download_remainder", 0).set("billing_upload_remainder", 0));
             try { userLimits.enforce(user); }
             catch (IllegalStateException ex) { return R.err("Traffic reset; resume is pending: " + ex.getMessage()); }
         }else { // 清零隧道流量
@@ -470,6 +478,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         user.setRoleId(USER_ROLE_ID);
         user.setInFlow(0L); user.setOutFlow(0L);
         if (Boolean.TRUE.equals(user.getUnifiedLimits()) && user.getSpeedMbps() == null) user.setSpeedMbps(0);
+        if (user.getBillingMode() == null) user.setBillingMode("both");
+        if (user.getTrafficMultiplier() == null) user.setTrafficMultiplier(java.math.BigDecimal.ONE);
         
         // 设置时间戳
         long currentTime = System.currentTimeMillis();
@@ -744,7 +754,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         userInfo.setUser(user.getUser());
         userInfo.setStatus(user.getStatus());
         userInfo.setUnifiedLimits(user.getUnifiedLimits());
-        userInfo.setSpeedMbps(user.getSpeedMbps());
         userInfo.setFlow(user.getFlow());
         userInfo.setInFlow(user.getInFlow());
         userInfo.setOutFlow(user.getOutFlow());

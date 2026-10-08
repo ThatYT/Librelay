@@ -14,8 +14,7 @@ import { copyTextToClipboard } from "@/utils/clipboard";
 import { SubQrToggle } from "@/components/sub-qr";
 
 /**
- * 我的订阅(车友视角)· 一条订阅 = 一个套餐。
- * 每条线路各自带流量配额、到期、状态——不存在"账号总流量"这种混淆概念。
+ * 我的订阅：统一账号额度与订阅线路；普通用户不显示管理员的限速配置。
  * 车友只管复制链接导客户端,内部的机器/端口/转发对他隐藏。
  */
 export default function MySubPage() {
@@ -81,8 +80,7 @@ export default function MySubPage() {
         <Card><CardBody className="space-y-2">
           <h2 className="font-semibold">{t("limits.account")}</h2>
           <p>{fmtGB(accountUsed)} / {account.flow > 0 ? `${account.flow} GiB` : t("limits.unlimited")}</p>
-          <p>{t("limits.speedShort")}: {account.speedMbps > 0 ? `${account.speedMbps} Mbps` : t("limits.unlimited")}</p>
-          <p className="text-xs text-default-500">{t("limits.explain")}</p>
+          <p className="text-xs text-default-500">{t("billing.userUsageInfo")}</p>
         </CardBody></Card>
       )}
 

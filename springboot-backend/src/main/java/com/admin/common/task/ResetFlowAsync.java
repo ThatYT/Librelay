@@ -155,7 +155,7 @@ public class ResetFlowAsync {
             for (User user : usersToReset) {
                 UpdateWrapper<User> updateWrapper = new UpdateWrapper<>();
                 updateWrapper.eq("id", user.getId())
-                           .setSql("in_flow = 0, out_flow = 0"); // 使用SQL原子操作，只更新流量字段
+                           .setSql("in_flow = 0, out_flow = 0, billing_download_remainder = 0, billing_upload_remainder = 0"); // 使用SQL原子操作，只更新流量字段
                 
                 boolean success = userService.update(null, updateWrapper);
                 if (success) {
