@@ -76,4 +76,3 @@ networks:
   gost-network:
     name: gost-network
     driver: bridge
-
