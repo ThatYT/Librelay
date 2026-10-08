@@ -103,4 +103,12 @@ for command in librelay tms; do
   output=$("$LIBRELAY_COMMAND_DIR/$command")
   [ "$output" = "$workspace"$'\n''menu' ]
 done
+# Existing deployment/update info must not claim that the account still uses defaults.
+output=$(print_access_box 192.0.2.1 8080)
+[[ "$output" = *'http://192.0.2.1:8080'* ]]
+if [[ "$output" = *admin_user* || "$output" = *'Change the default password'* ]]; then
+  echo 'Existing deployment output advertised initial credentials'; exit 1
+fi
+output=$(print_access_box 192.0.2.1 2095 initial)
+[[ "$output" = *'Username :  admin_user'* && "$output" = *'Password :  admin_user'* ]]
 printf 'Installer regression checks passed\n'

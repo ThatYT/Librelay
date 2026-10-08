@@ -454,19 +454,21 @@ delete_self() {
   rm -f "$SCRIPT_PATH" && echo "✅ Temporary installer removed" || echo "❌ Failed to remove temporary installer"
 }
 
-# Print a separate access/account box after installation logs.
+# Initial credentials are shown only immediately after a fresh installation.
 print_access_box() {
-  local ip="$1" fport="$2"
+  local ip="$1" fport="$2" initial_install="${3:-}"
   echo ""
   echo "╔══════════════════════════════════════════════════════╗"
   echo "║              Librelay Panel                           ║"
   echo "╚══════════════════════════════════════════════════════╝"
   echo ""
   echo "    Panel URL :  http://${ip}:${fport}"
-  echo "    Username :  admin_user"
-  echo "    Password :  admin_user"
-  echo ""
-  echo "    ⚠️  Change the default password immediately after signing in"
+  if [ "$initial_install" = initial ]; then
+    echo "    Username :  admin_user"
+    echo "    Password :  admin_user"
+    echo ""
+    echo "    ⚠️  Change the default password immediately after signing in"
+  fi
   echo ""
   echo "  ──────────────────────────────────────────────────────"
   echo "    Management : run librelay (update/uninstall/purge/status)"
@@ -556,7 +558,7 @@ get_frontend_port() {
   echo "$fport"
 }
 
-# Show panel access details and the default account.
+# Show access details for an existing deployment without claiming default credentials.
 show_access_info() {
   print_access_box "$(get_server_ip)" "$(get_frontend_port)"
   local deployment_file=.librelay-deployment
@@ -815,7 +817,7 @@ EOF
 
   # Print access information after all installation output.
   echo "Librelay installed successfully"
-  print_access_box "${PUBLIC_IP:-SERVER_IP}" "$FRONTEND_PORT"
+  print_access_box "${PUBLIC_IP:-SERVER_IP}" "$FRONTEND_PORT" initial
   echo "Commands: librelay | librelay status | librelay info | librelay update | librelay domain example.com"
   [ -z "$INSTALL_DOMAIN" ] || setup_domain "$INSTALL_DOMAIN" "${INSTALL_HTTPS_PORT:-}"
 
