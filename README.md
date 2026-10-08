@@ -107,6 +107,8 @@ bash <(curl -Ls "https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_REF}/
 > [!NOTE]
 > 节点默认下载 GitHub CI 为所选仓库分支提交构建的 Linux amd64 / arm64 二进制，替换前校验 SHA-256；无需在 VPS 上安装 Go 或编译依赖。刚推送新提交时，请等待「Node binaries」workflow 发布完成再装节点。网络受限时仍需保证 GitHub API 和 Release 文件可以访问。
 
+面板、节点和源码部署管理脚本的提示、菜单、错误及注释均使用 English；前端界面仍支持中文 / English。
+
 #### 面板安装 / 更新资源优化
 
 面板默认从 GHCR 拉取 `sha-完整提交SHA` 镜像，前后端使用同一提交并校验镜像版本，不使用可能不同步的 `latest`。请等待 GitHub 的 **Build and publish panel images** 成功后运行安装/更新。下载失败时保留当前运行的服务，不会自动改为本机源码编译；私有 fork 的镜像需要先 `docker login ghcr.io`。

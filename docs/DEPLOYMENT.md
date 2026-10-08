@@ -68,6 +68,8 @@ An existing frontend port such as 6366 stays 6366. To change it, verify the new 
 
 Normal install/update paths never remove the MySQL volume. Existing explicit destructive management commands such as `purge` remain destructive and are not part of this upgrade procedure.
 
+The panel installer, node installer and source-deployment manager use English prompts, menus, diagnostics and comments. External shell tools run with the C locale. Frontend Chinese/English language support is independent.
+
 ## Panel deployment resources
 
 Wait for **Build and publish panel images** to finish for the selected commit. Images are published for amd64/arm64 under `ghcr.io/<lowercase repository owner>/springboot-backend:sha-<full SHA>` and `vite-frontend:sha-<full SHA>`. Existing public packages support anonymous pulls; private packages require registry login. The bundled MySQL 5.7 image is native amd64 only, so standard full-panel installation uses an amd64 host; dual-architecture frontend/backend images alone do not make the database ARM-native. No automatic database-version upgrade is attempted. Pending CI or network failures never trigger implicit local compilation.

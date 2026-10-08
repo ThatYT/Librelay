@@ -1,15 +1,15 @@
 #!/bin/bash
 set -e
 
-# 解决 macOS 下 tr 可能出现的非法字节序列问题
+# Use a stable locale to avoid invalid byte sequences in tr on macOS.
 export LANG=en_US.UTF-8
 export LC_ALL=C
 
 
 
-# IPv6:默认关闭。自动改 Docker daemon.json + 内部 IPv6 网络在部分机器上会导致 mysql 启动失败(容器 unhealthy),
-# 而面板根本不需要 Docker 内部 IPv6(容器间走 IPv4 即可;公网 IPv6 访问靠端口映射,与内部网络无关)。
-# 确实需要 Docker 内部 IPv6 的,安装时加 TMS_IPV6=1 开启。
+# Docker IPv6 is disabled by default; changing daemon settings can break MySQL startup.
+# Container communication uses IPv4; public IPv6 access does not require an IPv6 Docker network.
+# Set TMS_IPV6=1 only when Docker network IPv6 is needed.
 TMS_IPV6="${TMS_IPV6:-0}"
 
 # The only repository default. Override for another fork without editing download URLs.
@@ -186,21 +186,21 @@ deploy_panel() {
   echo "[3/3] Login API and database schema are ready. Deployment complete."
 }
 
-# 全局下载地址配置
-# 【必须用 raw main,别用 releases/latest】:
-# 节点的 gost 是按 gost-vN 单独发版的,一发版 GitHub 的 "latest release" 就会指向它,
-# 而那个 release 里没有 compose 和 gost.sql —— 于是这里会下到 9 字节的 "Not Found",
-# 把 docker-compose.yml 覆盖成垃圾、面板直接起不来(踩过)。
-# raw main 永远是仓库当前内容,不受发版影响。
+# Repository download URLs.
+# Use raw repository files, not releases/latest:
+# A node-agent release can become the latest GitHub release.
+# Such a release may not contain Compose or initialization SQL.
+# Avoid overwriting valid configuration with a Not Found response.
+# Raw branch URLs are independent of release ordering.
 DOCKER_COMPOSEV4_URL="https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_REF}/docker-compose-v4.yml"
 DOCKER_COMPOSEV6_URL="https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_REF}/docker-compose-v6.yml"
 GOST_SQL_URL="https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_REF}/gost.sql"
-# 管理脚本自身的 raw 地址(curl|bash 场景下 tms 命令的兜底下载源)
+# Raw manager URL used when the running installer cannot be copied.
 PANEL_INSTALL_RAW_URL="https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_REF}/panel_install.sh"
 
-# 根据IPv6支持情况选择docker-compose URL
+# Choose the legacy Compose URL based on the IPv6 setting.
 get_docker_compose_url() {
-  # 默认 IPv4(最稳);仅在 TMS_IPV6=1 时用 IPv6 版 compose
+  # Default to IPv4; use IPv6 Compose only with TMS_IPV6=1.
   if [ "$TMS_IPV6" = "1" ]; then
     echo "$DOCKER_COMPOSEV6_URL"
   else
@@ -208,27 +208,27 @@ get_docker_compose_url() {
   fi
 }
 
-# 检查 docker-compose 或 docker compose 命令
+# Check Docker and its Compose plugin.
 check_docker() {
-  # 全自动一键:没装 Docker 就用官方脚本自动装
+  # Install Docker automatically if it is missing.
   if ! command -v docker &> /dev/null; then
-    echo "🔧 未检测到 Docker，正在自动安装..."
+    echo "🔧 Docker not found. Installing Docker..."
     curl -fsSL https://get.docker.com | sh || true
 
-    # 【为什么要兜底】get.docker.com 不认 AlmaLinux / Rocky 这些 RHEL 衍生版,
-    # 直接报 Unsupported distribution 就退出 —— 有用户的 AlmaLinux 就是这么装不上的。
-    # 这些系统本身完全能跑 Docker,官方也提供 CentOS 源,只是那个脚本没把它们列进白名单。
+    # The official Docker installer may reject Rocky/AlmaLinux and related distributions.
+    # Try the official CentOS package repository when that happens.
+    # These distributions can run Docker even when absent from the installer allowlist.
     if ! command -v docker &> /dev/null && command -v dnf &> /dev/null; then
-      echo "🔧 官方脚本不认这个系统,改用 dnf + Docker 官方 CentOS 源..."
+      echo "🔧 The official installer does not support this distribution. Trying dnf with the official Docker CentOS repository..."
       dnf -y install dnf-plugins-core &> /dev/null || true
-      # config-manager 的子命令新旧 dnf 写法不同,两种都试一遍
+      # Support both old and new dnf config-manager syntax.
       dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo &> /dev/null || dnf config-manager addrepo --from-repofile=https://download.docker.com/linux/centos/docker-ce.repo &> /dev/null || true
       dnf -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin || true
     fi
 
-    # 再兜一层:老的 CentOS/RHEL 只有 yum
+    # Fallback for older CentOS/RHEL installations with yum.
     if ! command -v docker &> /dev/null && command -v yum &> /dev/null; then
-      echo "🔧 再试一次:yum + Docker 官方 CentOS 源..."
+      echo "🔧 Trying yum with the official Docker CentOS repository..."
       yum -y install yum-utils &> /dev/null || true
       yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo &> /dev/null || true
       yum -y install docker-ce docker-ce-cli containerd.io docker-compose-plugin || true
@@ -265,114 +265,115 @@ check_docker() {
     echo "--source requires the Docker Buildx plugin. Use default images or install docker-buildx-plugin." >&2
     exit 1
   fi
-  echo "检测到 Docker 命令：$DOCKER_CMD"
+  echo "Docker Compose command: $DOCKER_CMD"
 }
 
-# 检测系统是否支持 IPv6
+# Detect IPv6 support.
 check_ipv6_support() {
-  echo "🔍 检测 IPv6 支持..."
+  echo "🔍 Checking IPv6 support..."
 
-  # 检查是否有 IPv6 地址（排除 link-local 地址）
+  # Exclude link-local IPv6 addresses.
   if ip -6 addr show | grep -v "scope link" | grep -q "inet6"; then
-    echo "✅ 检测到系统支持 IPv6"
+    echo "✅ IPv6 support detected"
     return 0
   elif ifconfig 2>/dev/null | grep -v "fe80:" | grep -q "inet6"; then
-    echo "✅ 检测到系统支持 IPv6"
+    echo "✅ IPv6 support detected"
     return 0
   else
-    echo "⚠️ 未检测到 IPv6 支持"
+    echo "⚠️ IPv6 support not detected"
     return 1
   fi
 }
 
 
 
-# 配置 Docker 启用 IPv6
+# Enable IPv6 for Docker.
 configure_docker_ipv6() {
-  echo "🔧 配置 Docker IPv6 支持..."
+  echo "🔧 Configuring Docker IPv6 support..."
 
-  # 检查操作系统类型
+  # Detect the operating system.
   OS_TYPE=$(uname -s)
 
   if [[ "$OS_TYPE" == "Darwin" ]]; then
-    # macOS 上 Docker Desktop 已默认支持 IPv6
-    echo "✅ macOS Docker Desktop 默认支持 IPv6"
+    # Docker Desktop on macOS supports IPv6 by default.
+    echo "✅ Docker Desktop on macOS supports IPv6 by default"
     return 0
   fi
 
-  # Docker daemon 配置文件路径
+  # Docker daemon configuration path.
   DOCKER_CONFIG="/etc/docker/daemon.json"
 
-  # 检查是否需要 sudo
+  # Determine whether sudo is needed.
   if [[ $EUID -ne 0 ]]; then
     SUDO_CMD="sudo"
   else
     SUDO_CMD=""
   fi
 
-  # 检查 Docker 配置文件
+  # Check existing Docker configuration.
   if [ -f "$DOCKER_CONFIG" ]; then
-    # 检查是否已经配置了 IPv6
+    # Skip IPv6 configuration if already enabled.
     if grep -q '"ipv6"' "$DOCKER_CONFIG"; then
-      echo "✅ Docker 已配置 IPv6 支持"
+      echo "✅ Docker IPv6 support is already configured"
     else
-      echo "📝 更新 Docker 配置以启用 IPv6..."
-      # 备份原配置
+      echo "📝 Updating Docker configuration to enable IPv6..."
+      # Back up the original configuration.
       $SUDO_CMD cp "$DOCKER_CONFIG" "${DOCKER_CONFIG}.backup"
 
-      # 使用 jq 或 sed 添加 IPv6 配置
+      # Add IPv6 settings using jq or sed.
       if command -v jq &> /dev/null; then
         $SUDO_CMD jq '. + {"ipv6": true, "fixed-cidr-v6": "fd00::/80"}' "$DOCKER_CONFIG" > /tmp/daemon.json && $SUDO_CMD mv /tmp/daemon.json "$DOCKER_CONFIG"
       else
-        # 如果没有 jq，使用 sed
+        # Use sed when jq is unavailable.
         $SUDO_CMD sed -i 's/^{$/{\n  "ipv6": true,\n  "fixed-cidr-v6": "fd00::\/80",/' "$DOCKER_CONFIG"
       fi
 
-      echo "🔄 重启 Docker 服务..."
+      echo "🔄 Restarting Docker..."
       if command -v systemctl &> /dev/null; then
         $SUDO_CMD systemctl restart docker
       elif command -v service &> /dev/null; then
         $SUDO_CMD service docker restart
       else
-        echo "⚠️ 请手动重启 Docker 服务"
+        echo "⚠️ Please restart Docker manually"
       fi
       sleep 5
     fi
   else
-    # 创建新的配置文件
-    echo "📝 创建 Docker 配置文件..."
+    # Create a new configuration file.
+    echo "📝 Creating Docker configuration..."
     $SUDO_CMD mkdir -p /etc/docker
     echo '{
   "ipv6": true,
   "fixed-cidr-v6": "fd00::/80"
 }' | $SUDO_CMD tee "$DOCKER_CONFIG" > /dev/null
 
-    echo "🔄 重启 Docker 服务..."
+    echo "🔄 Restarting Docker..."
     if command -v systemctl &> /dev/null; then
       $SUDO_CMD systemctl restart docker
     elif command -v service &> /dev/null; then
       $SUDO_CMD service docker restart
     else
-      echo "⚠️ 请手动重启 Docker 服务"
+      echo "⚠️ Please restart Docker manually"
     fi
     sleep 5
   fi
 }
 
-# 显示菜单
+# Display the management menu.
 show_menu() {
   echo "==============================================="
-  echo "          TMS 面板管理菜单"
+  echo "          TMS Panel Management"
   echo "==============================================="
-  echo "  1. 安装面板"
-  echo "  2. 更新面板"
-  echo "  3. 卸载面板"
-  echo "  4. 彻底清理(卸载并清空容器/镜像/卷/命令)"
-  echo "  5. 查看运行状态"
-  echo "  6. 查看访问信息(地址/账号)"
-  echo "  7. 导出数据库备份"
-  echo "  8. 配置域名 + HTTPS"
-  echo "  0. 退出"
+  echo "  1. Install panel"
+  echo "  2. Update panel"
+  echo "  3. Uninstall panel"
+  echo "  4. Purge panel (remove containers/images/volumes/commands)"
+  echo "  5. Show status"
+  echo "  6. Show access information (URL/account)"
+  echo "  7. Export database backup"
+  echo "  8. Configure domain + HTTPS"
+  echo "  9. Restore database backup"
+  echo "  0. Exit"
   echo "==============================================="
 }
 
@@ -380,20 +381,20 @@ generate_random() {
   LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c16
 }
 
-# 删除脚本自身(仅删一次性下载的安装脚本;常驻的 tms 管理脚本不自删)
+# Remove only temporary installers; retain persistent management scripts.
 delete_self() {
   SCRIPT_PATH="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
-  # 常驻管理命令 tms 走的就是 /usr/local/bin 下这两个,保留不删,否则 tms 会失效
+  # Keep both management scripts under /usr/local/bin so tms remains usable.
   case "$SCRIPT_PATH" in
     /usr/local/bin/tms-panel.sh|/usr/local/bin/tms) return 0 ;;
   esac
   echo ""
-  echo "🗑️ 操作已完成，正在清理临时安装脚本..."
+  echo "🗑️ Operation complete. Removing the temporary installer..."
   sleep 1
-  rm -f "$SCRIPT_PATH" && echo "✅ 临时脚本已删除" || echo "❌ 删除临时脚本失败"
+  rm -f "$SCRIPT_PATH" && echo "✅ Temporary installer removed" || echo "❌ Failed to remove temporary installer"
 }
 
-# 收尾信息框:装完最重要的就是「地址/账号/密码」,单独框出来别被上面的日志淹掉
+# Print a separate access/account box after installation logs.
 print_access_box() {
   local ip="$1" fport="$2"
   echo ""
@@ -401,26 +402,26 @@ print_access_box() {
   echo "║              TMS Panel                                ║"
   echo "╚══════════════════════════════════════════════════════╝"
   echo ""
-  echo "    访问地址 :  http://${ip}:${fport}"
-  echo "    账    号 :  admin_user"
-  echo "    密    码 :  admin_user"
+  echo "    Panel URL :  http://${ip}:${fport}"
+  echo "    Username :  admin_user"
+  echo "    Password :  admin_user"
   echo ""
-  echo "    ⚠️  登录后请立即修改默认密码"
+  echo "    ⚠️  Change the default password immediately after signing in"
   echo ""
   echo "  ──────────────────────────────────────────────────────"
-  echo "    管理面板 :  输入  tms  (更新/卸载/彻底清理/查看状态)"
-  echo "    项目地址 :  https://github.com/${GITHUB_REPO}"
+  echo "    Management : run tms (update/uninstall/purge/status)"
+  echo "    Repository :  https://github.com/${GITHUB_REPO}"
   echo "  ──────────────────────────────────────────────────────"
   echo ""
 }
 
-# 安装常驻管理命令 tms(类似 x-ui:装完后随时输 tms 打开管理菜单)
+# Install the persistent tms management command.
 install_tms_command() {
-  echo "🔗 安装 tms 管理命令..."
+  echo "🔗 Installing the tms management command..."
   local self panel_dir
   panel_dir="$(pwd)"
   self="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
-  # 把当前脚本持久化为管理脚本;拿不到自身(curl|bash)则现下载一份
+  # Copy this installer when possible; otherwise download it.
   if [ -f "$self" ] && [ -s "$self" ]; then
     cp -f "$self" /usr/local/bin/tms-panel.sh 2>/dev/null || true
   fi
@@ -428,42 +429,42 @@ install_tms_command() {
     curl -fLsS "$PANEL_INSTALL_RAW_URL" -o /usr/local/bin/tms-panel.sh 2>/dev/null || true
   fi
   chmod +x /usr/local/bin/tms-panel.sh 2>/dev/null || true
-  # tms 启动器:cd 回面板目录再进管理菜单(compose 操作需要工作目录)
+  # The launcher enters the saved installation directory for Compose commands.
   cat > /usr/local/bin/tms <<EOF
 #!/bin/bash
-# TMS 面板管理命令(类似 x-ui)。直接输 tms 打开管理菜单。
+# TMS panel management. Run tms without arguments to open the menu.
 export GITHUB_REPO="$GITHUB_REPO"
 export GITHUB_REF="$GITHUB_REF"
 TMS_DIR="$panel_dir"
 [ -d "\$TMS_DIR" ] && cd "\$TMS_DIR"
-# 参数要全部透传:tms domain a.com 有两个参数,只传 \$1 会把域名丢掉
-# (这个坑让「配置域名」整个功能形同虚设过一阵子)
+# Forward all arguments: tms domain needs both the command and hostname.
+# Passing only the first argument would discard the domain.
 if [ \$# -eq 0 ]; then exec bash /usr/local/bin/tms-panel.sh menu; fi
 exec bash /usr/local/bin/tms-panel.sh "\$@"
 EOF
   chmod +x /usr/local/bin/tms 2>/dev/null || true
-  echo "✅ 管理命令已就绪:以后输入  tms  即可打开管理菜单(更新/卸载/彻底清理/查看状态)"
+  echo "✅ Management command ready: run tms for update/uninstall/purge/status"
 }
 
-# 查看运行状态
+# Display container status.
 show_status() {
-  echo "📊 TMS 面板容器状态:"
+  echo "📊 TMS panel container status:"
   docker ps -a --filter "name=gost-mysql" --filter "name=springboot-backend" --filter "name=vite-frontend" \
     --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || docker ps -a
 }
 
-# 取本机公网 IP(拿不到就回退成占位串,调用方自己判断)
+# Return the public IP or a placeholder; callers validate the result.
 get_server_ip() {
   curl -s --max-time 8 https://api.ipify.org 2>/dev/null \
     || curl -s --max-time 8 https://ipinfo.io/ip 2>/dev/null \
-    || echo '你的服务器IP'
+    || echo 'SERVER_IP'
 }
 
-# 查域名的 A 记录(IPv4)。
-# 【为什么不用 getent hosts】它按 getaddrinfo 的顺序返回,域名同时有 AAAA 记录时
-# 头一条可能是 IPv6,拿去和公网 IPv4 比必然「对不上」,给人一个假警报;
-# 而且精简系统的 nsswitch.conf 里 hosts 少了 dns 时它直接返回空 = 假「解析不到」。
-# 改用 ahostsv4(只要 IPv4),再依次回退 dig / host / nslookup。
+# Resolve the domain A record (IPv4).
+# getent hosts may return an AAAA record first when both address families exist.
+# That would create a false mismatch against the public IPv4 address.
+# Some minimal systems also have incomplete DNS NSS configuration.
+# Use ahostsv4 first, then dig, host and nslookup.
 resolve_a_record() {
   local d="$1" ip=""
   ip="$(getent ahostsv4 "$d" 2>/dev/null | awk '{print $1}' | head -n1)"
@@ -474,13 +475,13 @@ resolve_a_record() {
     ip="$(host -t A "$d" 2>/dev/null | awk '/has address/{print $4; exit}')"
   fi
   if [ -z "$ip" ] && command -v nslookup >/dev/null 2>&1; then
-    # 等 Name: 出现后再取 Address: —— 前面那段是 DNS 服务器自己的地址,
-    # 虽然它那行用的是制表符、多半匹配不上,但加个守卫更稳
+    # Read Address only after Name, excluding the DNS server address.
+    # This guard avoids accidentally returning the resolver IP.
     ip="$(nslookup -type=A "$d" 2>/dev/null | awk '/^Name:/{f=1} f && /^Address: /{print $2; exit}')"
   fi
   echo "$ip"
 }
-# 取面板前端端口(.env 里的,默认 2095)
+# Read the public frontend port from .env; default to 2095.
 get_frontend_port() {
   local fport=""
   [ -f ".env" ] && fport="$(grep '^FRONTEND_PORT=' .env | cut -d'=' -f2)"
@@ -488,87 +489,87 @@ get_frontend_port() {
   echo "$fport"
 }
 
-# 查看访问信息(地址 / 默认账号)
+# Show panel access details and the default account.
 show_access_info() {
   print_access_box "$(get_server_ip)" "$(get_frontend_port)"
   if [ -f .tms-deployment ]; then
-    echo "部署提交: $(sed -n 's/^COMMIT=//p' .tms-deployment)"
-    echo "部署模式: $(sed -n 's/^MODE=//p' .tms-deployment)"
+    echo "Deployment commit: $(sed -n 's/^COMMIT=//p' .tms-deployment)"
+    echo "Deployment mode: $(sed -n 's/^MODE=//p' .tms-deployment)"
   fi
   local d
   d="$(current_domain)"
-  [ -n "$d" ] && echo "🌐 已配置域名,也可以用: $(current_https_url)"
+  [ -n "$d" ] && echo "🌐 Configured domain URL: $(current_https_url)"
   return 0
 }
 
-# 彻底清理 / 完整卸载:容器、镜像、数据卷、网络、配置、管理命令 全部删除,不依赖任何文件
-# 当前目录的 docker-compose.yml 是不是 TMS 自己的。
-# purge 里的 `down -v --rmi all` 和 `rm .env` 杀伤力很大,在别人的项目目录里
-# 跑一下能把人家的容器、数据卷、镜像连同 .env 一锅端 —— 认准了再动手。
+# Purge all panel containers, images, volumes, networks, configuration and commands.
+# Check whether the current Compose file belongs to TMS.
+# down -v and removing .env are destructive in an unrelated directory.
+# Verify ownership before removing files or volumes.
 is_tms_compose() {
   [ -f docker-compose.yml ] && grep -q "teminuosi\|gost-mysql" docker-compose.yml
 }
 
 purge_panel() {
-  echo "🧨 彻底清理 TMS 面板(删除所有容器/镜像/数据卷/网络/配置和 tms 管理命令)..."
+  echo "🧨 Purging TMS (removing containers/images/data volumes/networks/configuration and management commands)..."
 
-  # 用 curl 一键跑 purge 时,当前目录多半不是面板安装目录 —— 那样容器能清掉,
-  # 但 docker-compose.yml / .env / gost.sql 这些会原地留下,下次安装还会被复用。
-  # 安装目录当时写进了 /usr/local/bin/tms 的 TMS_DIR,这里读回来切过去。
+  # A downloaded purge command may run outside the install directory.
+  # Find the saved directory so configuration is removed there as well.
+  # Read TMS_DIR from the installed launcher.
   if ! is_tms_compose && [ -f /usr/local/bin/tms ]; then
     recorded_dir="$(grep -m1 '^TMS_DIR=' /usr/local/bin/tms 2>/dev/null | cut -d'"' -f2)"
     if [ -n "$recorded_dir" ] && [ -d "$recorded_dir" ]; then
-      cd "$recorded_dir" 2>/dev/null && echo "📁 已切到记录的面板目录: $recorded_dir"
+      cd "$recorded_dir" 2>/dev/null && echo "📁 Using the saved panel directory: $recorded_dir"
     fi
   fi
 
   if [ -f docker-compose.yml ] && ! is_tms_compose; then
-    echo "⚠️  当前目录的 docker-compose.yml 不是 TMS 的,已跳过 compose 清理和配置文件删除,"
-    echo "    只按名字清 TMS 自己的容器/镜像。要清面板请先 cd 到面板安装目录。"
+    echo "⚠️  The current docker-compose.yml does not belong to TMS. Skipping Compose cleanup and configuration removal."
+    echo "    Only named TMS containers/images will be removed. Enter the panel install directory to purge its files."
   fi
   if command -v docker &> /dev/null; then
-    # 有 compose 就先规范地 down 一把(确认是 TMS 的才动)
+    # Use Compose cleanup only for a verified TMS deployment.
     if is_tms_compose; then
       docker compose down -v --rmi all --remove-orphans 2>/dev/null \
         || docker-compose down -v --rmi all --remove-orphans 2>/dev/null || true
     fi
-    # 不依赖任何文件,按名字强制删干净。
-    # caddy 也要一起清:它连着 gost-network,不删的话后面 network rm 一定失败
+    # Fallback: remove known TMS containers by name.
+    # Remove Caddy too, since it is attached to gost-network.
     docker rm -f gost-mysql springboot-backend vite-frontend tms-caddy 2>/dev/null || true
-    # 卷名会被 compose 加上项目名前缀(项目名 = 安装目录名),写死名字删不掉
-    # xxx_mysql_data 这种。上面的 compose down -v 能处理,但 compose 文件丢了就只剩这里,
-    # 所以按后缀匹配再兜一次 —— 否则数据卷留着,重装时会拿到上一次的旧数据库。
+    # Compose may prefix volume names with its project name.
+    # Also match suffixes when the Compose file has been lost.
+    # Leaving a MySQL volume would cause a fresh install to reuse the old database.
     docker volume rm mysql_data backend_logs tms_caddy_data tms_caddy_config 2>/dev/null || true
     docker volume ls -q 2>/dev/null       | grep -E '(^|_)(mysql_data|backend_logs|tms_caddy_data|tms_caddy_config)$'       | xargs -r docker volume rm 2>/dev/null || true
     docker network rm gost-network 2>/dev/null || true
     docker rmi -f ghcr.io/teminuosi/springboot-backend:latest ghcr.io/teminuosi/vite-frontend:latest mysql:5.7 2>/dev/null || true
-    # 只清悬空镜像(不动其他应用),回收磁盘
+    # Reclaim only dangling images; leave other applications alone.
     docker image prune -f 2>/dev/null || true
   fi
-  # 删配置文件 —— 只在确认是 TMS 目录时删。.env 这名字太常见,
-  # 在别人的项目目录里跑一下就把人家的环境变量文件删了
+  # Remove configuration only in a verified panel directory.
+  # An unrelated project may also have a file named .env.
   if is_tms_compose || [ ! -f docker-compose.yml ]; then
     rm -f docker-compose.yml docker-compose-v4.yml docker-compose-v6.yml gost.sql .env temp_migration.sql 2>/dev/null || true
   fi
-  # 删管理命令自身
+  # Remove persistent management commands.
   rm -f /usr/local/bin/tms /usr/local/bin/tms-panel.sh 2>/dev/null || true
   rm -rf /etc/tms 2>/dev/null || true
-  echo "✅ 已彻底清理完成,系统恢复到未安装状态。"
-  echo "ℹ️  这只清了【面板】。转发机上的 gost / sing-box 节点程序不在此列,"
-  echo "    要卸载节点请到对应机器上单独执行节点卸载(见 README)。"
+  echo "✅ Purge complete. TMS is no longer installed."
+  echo "ℹ️  Only the panel was removed. Node agents (gost / sing-box) were retained."
+  echo "    To uninstall a node, run the node uninstaller on that machine (see README)."
 }
 
 
 
-# 获取用户输入的配置参数
-# 端口被占就往后找一个空闲的。
+# Read installation settings.
+# Port helpers can search nearby free ports.
 #
 # Panel defaults to 2095; backend defaults to 6365. Check both on the panel host.
-# 但装过两次 TMS、或机器上跑着别的服务时照样会撞。撞了的表现是容器起不来
-# 或者反复重启,日志里只有 "address already in use" 一行,不看仔细很难发现。
+# Repeated installations or other local services can cause port conflicts.
+# A conflicting port may cause failed startup or repeated container restarts.
 #
-# 整行匹配「:端口 + 空白/行尾」而不是按 ss 输出的第几列取 —— 不同版本 ss 的
-# 列数不一样,按列取会悄悄失效,而失效表现是「误判端口空闲」,比报错更难查。
+# Match the full address/port suffix instead of relying on ss column positions.
+# The ss output layout varies between versions.
 # Match a full port, so 12095 cannot be mistaken for 2095.
 port_in_use() {
   local port="$1"
@@ -584,9 +585,9 @@ port_in_use() {
 }
 
 pick_free_port() {
-  # 三个变量必须分开声明:挤在一个 local 里时算术展开拿不到值,
-  # limit 会是空字符串,while 直接报 integer expression expected 并退出 ——
-  # 表现是端口检测【静默失效】,永远返回默认端口(实测踩到)
+  # Declare these locals separately so arithmetic can read the previous variable.
+  # A combined declaration can expand start before it has a value.
+  # That would silently break automatic free-port selection.
   local start="$1"
   local p="$start"
   local limit=$((start + 100))
@@ -659,31 +660,31 @@ backend_api_ready() {
 
 wait_backend_ready() {
   local attempt state health
-  echo "🔍 检查后端登录 API 和数据库就绪状态..."
+  echo "🔍 Checking backend login API and database readiness..."
   for attempt in {1..180}; do
     state=$(docker inspect -f '{{.State.Status}}' springboot-backend 2>/dev/null) || state=not_found
     health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}not_configured{{end}}' springboot-backend 2>/dev/null) || health=unknown
     if [ "$state" = running ] && backend_api_ready; then
-      echo "✅ 后端登录 API 和数据库检查通过"
+      echo "✅ Backend login API and database are ready"
       return 0
     fi
     case "$state" in
       exited|dead|not_found)
-        echo "❌ 后端容器状态：$state。检查：docker logs springboot-backend --tail 80" >&2
+        echo "❌ Backend container state: $state. Check: docker logs springboot-backend --tail 80" >&2
         return 1 ;;
     esac
     if [ $((attempt % 15)) = 1 ]; then
-      echo "⏳ 等待后端就绪... ($attempt/180) 容器=$state 健康检查=$health"
+      echo "⏳ Waiting for backend readiness... ($attempt/180) container=$state health=$health"
     fi
     sleep 1
   done
-  echo "❌ 后端就绪超时。检查：docker logs springboot-backend --tail 80" >&2
+  echo "❌ Backend readiness timed out. Check: docker logs springboot-backend --tail 80" >&2
   return 1
 }
 
-# 安装功能
+# Install the panel.
 install_panel() {
-  echo "🚀 开始安装面板..."
+  echo "🚀 Starting panel installation..."
   acquire_install_lock || return 1
   if [ -f .env ]; then
     echo "Existing installation found. .env and database preserved. Use: tms update"
@@ -713,28 +714,28 @@ EOF
   install_tms_command
   deploy_panel || return 1
 
-  # 自动写入「面板后端地址」(转发机对接要用),省得登录后再手动到网站配置里填
-  echo "检测公网IP并配置面板后端地址..."
+  # Save the detected backend address for generated node commands.
+  echo "Detecting the public IP and configuring the backend address..."
   PUBLIC_IP=$(curl -s --max-time 8 https://api.ipify.org || curl -s --max-time 8 https://ipinfo.io/ip || echo "")
   if [[ "$PUBLIC_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
     for i in $(seq 1 30); do
       if docker exec gost-mysql mysqladmin ping -h localhost --silent >/dev/null 2>&1; then
         if docker exec gost-mysql mysql -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" \
              -e "INSERT IGNORE INTO vite_config (name, value, time) VALUES ('ip', '${PUBLIC_IP}:${BACKEND_PORT}', $(date +%s)000);" >/dev/null 2>&1; then
-          echo "      ✔ 后端地址已设为 ${PUBLIC_IP}:${BACKEND_PORT}"
+          echo "      ✔ Backend address set to ${PUBLIC_IP}:${BACKEND_PORT}"
         fi
         break
       fi
       sleep 2
     done
   else
-    echo "      ⚠ 未获取到公网IP,登录后请到「网站配置」手动填(格式 IP:${BACKEND_PORT})"
+    echo "      ⚠ Could not detect the public IP. Set the backend address in Website Settings after login (IP:${BACKEND_PORT})"
   fi
 
-  # 安装常驻管理命令 tms
+  # Install the persistent tms command.
   install_tms_command >/dev/null 2>&1
 
-  # 收尾信息框:安装过程刷屏很正常,最后必须让人一眼看到地址/账号/密码
+  # Print access information after all installation output.
   echo "TMS installed successfully"
   print_access_box "${PUBLIC_IP:-SERVER_IP}" "$FRONTEND_PORT"
   echo "Commands: tms | tms status | tms info | tms update | tms domain example.com"
@@ -761,7 +762,7 @@ update_panel() {
     fi
     rm -f "$manager_candidate"
   fi
-  echo "🔄 开始更新面板..."
+  echo "🔄 Starting panel update..."
   acquire_install_lock || return 1
   check_docker
   [ -f .env ] || { echo "Missing .env; restore it before updating." >&2; return 1; }
@@ -775,39 +776,39 @@ update_panel() {
   # Additive database migrations run in the backend before the readiness checks.
   deploy_panel || return 1
   install_tms_command
-  echo "✅ 更新完成"
+  echo "✅ Update complete"
   show_access_info
 }
 
-# 导出数据库备份
+# Export a database backup.
 export_migration_sql() {
-  echo "📄 开始导出数据库备份..."
+  echo "📄 Starting database backup export..."
 
-  # 获取数据库配置信息
-  echo "🔍 获取数据库配置信息..."
+  # Read database configuration.
+  echo "🔍 Reading database configuration..."
 
-  # 先检查后端容器是否在运行
+  # Check whether the backend container is running.
   if ! docker ps --format "{{.Names}}" | grep -q "^springboot-backend$"; then
-    echo "❌ 后端容器未运行，尝试从 .env 文件读取配置..."
+    echo "❌ Backend container is not running. Reading configuration from .env..."
 
-    # 从 .env 文件读取配置
+    # Read configuration from .env.
     if [[ -f ".env" ]]; then
       DB_NAME=$(grep "^DB_NAME=" .env | cut -d'=' -f2 2>/dev/null)
       DB_PASSWORD=$(grep "^DB_PASSWORD=" .env | cut -d'=' -f2 2>/dev/null)
       DB_USER=$(grep "^DB_USER=" .env | cut -d'=' -f2 2>/dev/null)
 
       if [[ -n "$DB_NAME" && -n "$DB_PASSWORD" && -n "$DB_USER" ]]; then
-        echo "✅ 从 .env 文件读取数据库配置成功"
+        echo "✅ Database configuration loaded from .env"
       else
-        echo "❌ .env 文件中的数据库配置不完整"
+        echo "❌ Database configuration in .env is incomplete"
         return 1
       fi
     else
-      echo "❌ 未找到 .env 文件"
+      echo "❌ .env file not found"
       return 1
     fi
   else
-    # 从容器环境变量获取数据库信息
+    # Read database settings from the container environment.
     DB_INFO=$(docker exec springboot-backend env | grep "^DB_" 2>/dev/null || echo "")
 
     if [[ -n "$DB_INFO" ]]; then
@@ -815,9 +816,9 @@ export_migration_sql() {
       DB_PASSWORD=$(echo "$DB_INFO" | grep "^DB_PASSWORD=" | cut -d'=' -f2)
       DB_USER=$(echo "$DB_INFO" | grep "^DB_USER=" | cut -d'=' -f2)
 
-      echo "✅ 从容器环境变量读取数据库配置成功"
+      echo "✅ Database configuration loaded from the container environment"
     else
-      echo "❌ 无法从容器获取数据库配置，尝试从 .env 文件读取..."
+      echo "❌ Could not read container configuration. Trying .env..."
 
       if [[ -f ".env" ]]; then
         DB_NAME=$(grep "^DB_NAME=" .env | cut -d'=' -f2 2>/dev/null)
@@ -825,74 +826,74 @@ export_migration_sql() {
         DB_USER=$(grep "^DB_USER=" .env | cut -d'=' -f2 2>/dev/null)
 
         if [[ -n "$DB_NAME" && -n "$DB_PASSWORD" && -n "$DB_USER" ]]; then
-          echo "✅ 从 .env 文件读取数据库配置成功"
+          echo "✅ Database configuration loaded from .env"
         else
-          echo "❌ .env 文件中的数据库配置不完整"
+          echo "❌ Database configuration in .env is incomplete"
           return 1
         fi
       else
-        echo "❌ 未找到 .env 文件"
+        echo "❌ .env file not found"
         return 1
       fi
     fi
   fi
 
-  # 检查必要的数据库配置
+  # Validate the required database settings.
   if [[ -z "$DB_PASSWORD" || -z "$DB_USER" || -z "$DB_NAME" ]]; then
-    echo "❌ 数据库配置不完整（缺少必要参数）"
+    echo "❌ Database configuration is incomplete (required parameters are missing)"
     return 1
   fi
 
-  echo "📋 数据库配置："
-  echo "   数据库名: $DB_NAME"
-  echo "   用户名: $DB_USER"
+  echo "📋 Database configuration:"
+  echo "   Database: $DB_NAME"
+  echo "   Username: $DB_USER"
 
-  # 检查数据库容器是否运行
+  # Check whether MySQL is running.
   if ! docker ps --format "{{.Names}}" | grep -q "^gost-mysql$"; then
-    echo "❌ 数据库容器未运行，无法导出数据"
-    echo "🔍 当前运行的容器："
+    echo "❌ Database container is not running; export cannot proceed"
+    echo "🔍 Running containers:"
     docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
     return 1
   fi
 
-  # 生成数据库备份文件
+  # Generate the database backup filename.
   SQL_FILE="database_backup_$(date +%Y%m%d_%H%M%S).sql"
-  echo "📝 导出数据库备份: $SQL_FILE"
+  echo "📝 Exporting database backup: $SQL_FILE"
 
-  # 【--default-character-set=utf8mb4 不能省】面板库建的时候就是 utf8mb4
-  # (docker-compose 里 --character-set-server=utf8mb4,gost.sql 里每张表也是),
-  # 而 mysqldump 不指定时默认按 utf8 连接 —— 那是【3 字节】的 utf8,
-  # 4 字节字符会被静默换成 ?。节点名写成「🇭🇰香港01」的人不少,
-  # 搬完机器名字就没了,而且中文是 3 字节、完好无损,所以极难被发现。
-  # 实测过:F09F87ADF09F87B0(🇭🇰)不加这个参数导出来就是 ??。
-  # 使用 mysqldump 导出数据库
-  echo "⏳ 正在导出数据库..."
+  # Keep --default-character-set=utf8mb4 when exporting.
+  # The panel schema and MySQL server use utf8mb4.
+  # A three-byte utf8 connection can silently corrupt four-byte characters.
+  # Emoji in node names would be replaced with question marks.
+  # Ordinary three-byte text may still look correct, hiding the corruption.
+  # Use the full character set to preserve all node names.
+  # Export using mysqldump.
+  echo "⏳ Exporting database..."
   if docker exec gost-mysql mysqldump --default-character-set=utf8mb4 -u "$DB_USER" -p"$DB_PASSWORD" --single-transaction --routines --triggers "$DB_NAME" > "$SQL_FILE" 2>/dev/null; then
-    echo "✅ 数据库导出成功"
+    echo "✅ Database export complete"
   else
-    echo "⚠️ 使用用户密码失败，尝试root密码..."
+    echo "⚠️ Database user authentication failed. Trying the root account..."
     if docker exec gost-mysql mysqldump --default-character-set=utf8mb4 -u root -p"$DB_PASSWORD" --single-transaction --routines --triggers "$DB_NAME" > "$SQL_FILE" 2>/dev/null; then
-      echo "✅ 数据库导出成功"
+      echo "✅ Database export complete"
     else
-      echo "❌ 数据库导出失败"
+      echo "❌ Database export failed"
       rm -f "$SQL_FILE"
       return 1
     fi
   fi
 
-  # 检查文件大小 + 完整性
+  # Check file size and the completion marker.
   if [[ -f "$SQL_FILE" ]] && [[ -s "$SQL_FILE" ]]; then
     if ! _verify_sql_dump "$SQL_FILE"; then
       rm -f "$SQL_FILE"
       return 1
     fi
     FILE_SIZE=$(du -h "$SQL_FILE" | cut -f1)
-    echo "📁 文件位置: $(pwd)/$SQL_FILE"
-    echo "📊 文件大小: $FILE_SIZE"
-    echo "🔒 已校验完整(结尾有 mysqldump 结束标记)"
-    echo "➡️  搬到新机器:装好面板后跑  tms restore $SQL_FILE"
+    echo "📁 File: $(pwd)/$SQL_FILE"
+    echo "📊 Size: $FILE_SIZE"
+    echo "🔒 Backup verified (mysqldump completion marker found)"
+    echo "➡️  Migration: install the panel on the new server, then run  tms restore $SQL_FILE"
   else
-    echo "❌ 导出的文件为空或不存在"
+    echo "❌ Exported file is empty or missing"
     rm -f "$SQL_FILE"
     return 1
   fi
@@ -900,19 +901,19 @@ export_migration_sql() {
 
 
 # ============================================================
-# 域名 + HTTPS(Caddy 自动申请/续期 Let's Encrypt 证书)
+# Domain and HTTPS management using Caddy certificates.
 #
-# 刻意【不写进 docker-compose.yml】,而是独立跑一个 caddy 容器:
-#   - 改 compose 里的 YAML 靠 shell 很脆,而且 tms update 会重写它
-#   - 独立容器生命周期自己管,面板重启期间 caddy 还在,少一次 502
-#   - 它加入 gost-network,直接用容器名 frontend:80 访问前端
+# Keep Caddy outside the generated Compose file:
+# Updates replace Compose files, so embedding Caddy there would be fragile.
+# An independent Caddy container can stay running during panel restarts.
+# It joins gost-network and proxies to frontend:80.
 # ============================================================
 
 CADDY_CONTAINER="tms-caddy"
 CADDY_FILE="/etc/tms/Caddyfile"
 
-# 当前配的域名(没配返回空)。
-# 不能直接取第一行 —— 生成的 Caddyfile 第一行是注释,要找第一个「非注释且带 {」的站点块。
+# Read the configured domain, or return an empty string.
+# Skip comments/global settings and locate the first site block.
 current_caddy_site() {
   [ -f "$CADDY_FILE" ] || return 0
   grep -m1 -E '^[^#[:space:]][^{]*\{' "$CADDY_FILE" 2>/dev/null | sed 's/[[:space:]]*{.*//;s~^https://~~' | tr -d ' '
@@ -979,26 +980,26 @@ show_domain_status() {
   local d
   d="$(current_domain)"
   if [ -z "$d" ]; then
-    echo "ℹ️  当前未配置域名,面板走 http://IP:$(get_frontend_port)"
-    echo "   配置方法: tms domain 你的域名.com"
+    echo "ℹ️  No domain configured. Panel URL: http://IP:$(get_frontend_port)"
+    echo "   Configure a domain: tms domain panel.example.com"
     return 0
   fi
-  echo "🌐 当前域名: $d"
+  echo "🌐 Current domain: $d"
   if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$CADDY_CONTAINER"; then
-    echo "   Caddy 状态: ✅ 运行中"
-    echo "   访问地址:   $(current_https_url)"
+    echo "   Caddy status: ✅ running"
+    echo "   Panel URL:   $(current_https_url)"
   else
-    echo "   Caddy 状态: ❌ 未运行(试试 tms domain $d 重新配置)"
+    echo "   Caddy status: ❌ not running (try tms domain $d to configure it again)"
   fi
 }
 
-# 关掉域名,回到 IP:端口访问
+# Disable domain access and return to the HTTP IP/port URL.
 domain_off() {
-  echo "🧹 关闭域名访问..."
+  echo "🧹 Disabling domain access..."
   docker rm -f "$CADDY_CONTAINER" 2>/dev/null || true
   rm -f "$CADDY_FILE" 2>/dev/null || true
-  echo "✅ 已关闭。面板回到 http://$(get_server_ip):$(get_frontend_port)"
-  echo "ℹ️  证书数据还留在 docker 卷 tms_caddy_data 里,下次开同一域名不用重新申请。"
+  echo "✅ Domain access disabled. Panel URL: http://$(get_server_ip):$(get_frontend_port)"
+  echo "ℹ️  Certificates remain in the tms_caddy_data volume for reuse with the same domain."
 }
 
 setup_domain() {
@@ -1017,19 +1018,20 @@ setup_domain() {
       return 0
     fi
   fi
-  if [ "$domain" = "off" ] || [ "$domain" = "关闭" ]; then
+  # Retain the previous non-English off alias for CLI compatibility.
+  if [ "$domain" = "off" ] || [ "$domain" = $'\345\205\263\351\227\255' ]; then
     domain_off
     return 0
   fi
 
-  # 基本格式校验:必须像个域名,别把 http:// 或 IP 填进来
+  # Validate a hostname without a URL scheme or port.
   if ! echo "$domain" | grep -qE '^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$'; then
-    echo "❌ 域名格式不对: $domain"
-    echo "   只填域名本身,别带 http:// 和端口。例: tms domain panel.example.com"
+    echo "❌ Invalid domain: $domain"
+    echo "   Enter only the hostname, without a scheme or port. Example: tms domain panel.example.com"
     return 1
   fi
   if echo "$domain" | grep -qE '^[0-9.]+$'; then
-    echo "❌ 这是个 IP 不是域名。Let's Encrypt 不给 IP 发证书。"
+    echo "❌ An IP address was supplied. This command requires a domain name."
     return 1
   fi
 
@@ -1050,39 +1052,39 @@ setup_domain() {
   url=$(https_url "$domain" "$https_port")
 
   if ! command -v docker &>/dev/null; then
-    echo "❌ 没装 docker,先装面板"
+    echo "❌ Docker is not installed. Install the panel first."
     return 1
   fi
   if ! docker ps --format '{{.Names}}' | grep -qx "vite-frontend"; then
-    echo "❌ 面板没在运行(找不到 vite-frontend 容器),先把面板起来再配域名"
+    echo "❌ Panel is not running (vite-frontend container not found). Start the panel before configuring a domain."
     return 1
   fi
 
-  echo "🌐 开始为面板配置域名: $domain"
+  echo "🌐 Configuring panel domain: $domain"
   echo ""
 
-  # ---- 1. 解析检查(不阻断,只警告:有人用 CDN 或者刚改完还没生效) ----
-  echo "[1/5] 检查域名解析..."
+  # DNS checks are advisory because CDN addresses and propagation may differ.
+  echo "[1/5] Checking domain DNS..."
   local server_ip resolved
   server_ip="$(get_server_ip)"
   resolved="$(resolve_a_record "$domain")"
   if [ -z "$resolved" ]; then
-    echo "   ⚠️  解析不到 $domain,证书大概率申请不下来。"
-    echo "      先去域名后台加一条 A 记录指向 $server_ip,等生效再来。"
-    echo "      刚改完 DNS 的话等几分钟很正常;确认已经生效了就选 y 继续。"
-    read -p "      仍然继续? (y/N): " go
-    [[ "$go" == "y" || "$go" == "Y" ]] || { echo "已取消"; return 1; }
+    echo "   ⚠️  Could not resolve $domain; certificate issuance may fail."
+    echo "      Add a DNS A record pointing to $server_ip and wait for DNS propagation."
+    echo "      DNS changes may take a few minutes. Enter y to continue once propagation is complete."
+    read -p "      Continue anyway? (y/N): " go
+    [[ "$go" == "y" || "$go" == "Y" ]] || { echo "Cancelled"; return 1; }
   elif [ "$resolved" != "$server_ip" ]; then
-    echo "   ⚠️  $domain 解析到 $resolved,本机是 $server_ip,对不上。"
-    echo "      套了 CDN(比如 Cloudflare 橙云)的话这是正常的,但证书要 CDN 那边发。"
-    read -p "      仍然继续? (y/N): " go
-    [[ "$go" == "y" || "$go" == "Y" ]] || { echo "已取消"; return 1; }
+    echo "   ⚠️  $domain resolves to $resolved; this server is $server_ip. The addresses do not match."
+    echo "      A CDN (such as the Cloudflare proxy) may explain this difference. Check its certificate configuration."
+    read -p "      Continue anyway? (y/N): " go
+    [[ "$go" == "y" || "$go" == "Y" ]] || { echo "Cancelled"; return 1; }
   else
-    echo "   ✔ 解析正确 → $resolved"
+    echo "   ✔ DNS matches -> $resolved"
   fi
 
   # Panel-host conflicts only. Do not ignore ports owned by other Docker containers.
-  echo "[2/5] 检查 80 / $https_port 端口..."
+  echo "[2/5] Checking ports 80 / $https_port ..."
   owned_ports=$(docker port "$CADDY_CONTAINER" 2>/dev/null | awk '{p=$NF; sub(/^.*:/,"",p); print p}') || owned_ports=""
   local p
   for p in 80 "$https_port"; do
@@ -1092,7 +1094,7 @@ setup_domain() {
     fi
   done
 
-  echo "[3/5] 写入并验证配置..."
+  echo "[3/5] Writing and validating configuration..."
   mkdir -p "$(dirname "$CADDY_FILE")"
   candidate="$CADDY_FILE.new"
   backup="$CADDY_FILE.previous"
@@ -1106,7 +1108,7 @@ setup_domain() {
   [ ! -f "$CADDY_FILE" ] || cp -p "$CADDY_FILE" "$backup"
   docker rm -f "$CADDY_CONTAINER" 2>/dev/null || true
   mv "$candidate" "$CADDY_FILE"
-  echo "[4/5] 启动 Caddy: $url"
+  echo "[4/5] Starting Caddy: $url"
   if ! start_caddy "$https_port"; then
     echo "Caddy startup failed. Restoring the previous configuration." >&2
     if [ -f "$backup" ]; then
@@ -1119,10 +1121,10 @@ setup_domain() {
     return 1
   fi
   rm -f "$backup"
-  echo "   ✔ 容器已启动"
+  echo "   ✔ Container started"
 
-  # ---- 5. 等证书 ----
-  echo "[5/5] 等 Let's Encrypt 签发证书(最多 60 秒)..."
+  # Wait for the certificate.
+  echo "[5/5] Waiting for certificate issuance (up to 60 seconds)..."
   local ok=0 i
   for i in $(seq 1 30); do
     sleep 2
@@ -1130,9 +1132,9 @@ setup_domain() {
       ok=1
       break
     fi
-    # 容器要是挂了就别干等
+    # Stop waiting if the Caddy container exits.
     if ! docker ps --format '{{.Names}}' | grep -qx "$CADDY_CONTAINER"; then
-      echo "   ❌ Caddy 容器退出了"
+      echo "   ❌ Caddy container exited"
       docker logs --tail 30 "$CADDY_CONTAINER" 2>&1 | sed 's/^/      /'
       return 1
     fi
@@ -1143,57 +1145,57 @@ setup_domain() {
   echo ""
   echo "==============================================="
   if [ "$ok" = "1" ]; then
-    echo "  ✅ 域名配置完成"
+    echo "  ✅ Domain configuration complete"
     echo "==============================================="
-    echo "  访问地址: $url"
+    echo "  Panel URL: $url"
   else
-    echo "  ⚠️  证书还没下来"
+    echo "  ⚠️  Certificate is not ready yet"
     echo "==============================================="
-    echo "  Caddy 已在运行,证书可能还在申请(慢的话要几分钟)。"
-    echo "  看进度: docker logs -f $CADDY_CONTAINER"
-    echo "  常见原因:80 端口不通、域名没解析到本机、被云厂商安全组挡了。"
+    echo "  Caddy is running. Certificate issuance may still be in progress and can take a few minutes."
+    echo "  Follow progress: docker logs -f $CADDY_CONTAINER"
+    echo "  Check port 80 connectivity, DNS records and cloud firewall/security group rules."
   fi
-  echo "  原来的 http://$server_ip:$(get_frontend_port) 仍然可用(留作备用入口)"
+  echo "  The existing http://$server_ip:$(get_frontend_port) remains available as a fallback URL"
   echo ""
-  echo "  ⚠️  订阅链接会跟着变成 $url/...,"
-  echo "     已经发出去的旧订阅(IP 版)要让车友重新拉一次。"
+  echo "  ⚠️  Subscription URLs will use $url/...,"
+  echo "     Ask users to refresh any existing IP-based subscription URLs."
   echo "==============================================="
 }
 
-# 卸载功能(交互确认后走彻底清理,保证卸干净)
+# Confirm removal, then use the panel purge routine.
 uninstall_panel() {
-  echo "🗑️ 开始卸载面板..."
-  read -p "确认卸载吗？将停止并删除所有容器、镜像、数据卷和配置 (y/N): " confirm
+  echo "🗑️ Starting panel removal..."
+  read -p "Uninstall? All TMS containers, images, data volumes and configuration will be removed (y/N): " confirm
   if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-    echo "❌ 取消卸载"
+    echo "❌ Uninstall cancelled"
     return 0
   fi
   purge_panel
-  echo "✅ 卸载完成"
+  echo "✅ Uninstall complete"
 }
 
-# ============ 备份自检 + 恢复(迁移到新机器)============
-# 背景:面板机 VPS 到期要换机器。原来只有 export 能把库导出来,导出来之后【灌不回去】,
-# 而且 export 只检查"文件非空" —— 被打断的半截 dump 照样算成功。
+# Backup integrity and migration restore helpers.
+# Server migration requires both a usable export and a safe restore.
+# A nonempty file alone does not prove an export completed.
 
-# 备份完整性自检。
-# 【为什么非查不可】mysqldump 正常结束会在文件末尾写一行 "-- Dump completed on ...";
-# 中途被 OOM 杀掉、磁盘写满、容器重启,文件照样存在而且非空 —— 只看大小是查不出来的。
-# 用户会拿这个文件去迁移:他照常退掉旧机器,等 restore 才发现数据回不来,那时已经没退路了。
-# 所以给一个坏备份比不给备份更糟,这一步不能省。
+# Verify backup completeness.
+# A successful mysqldump ends with a Dump completed marker.
+# OOM, disk exhaustion or a restart can leave a nonempty partial dump.
+# Verify the backup before decommissioning the old server.
+# Never report a partial backup as migration-ready.
 _verify_sql_dump() {
   local f="$1"
-  [[ -s "$f" ]] || { echo "❌ 备份文件为空"; return 1; }
+  [[ -s "$f" ]] || { echo "❌ Backup file is empty"; return 1; }
   if ! tail -c 2000 "$f" | grep -q -- "-- Dump completed"; then
-    echo "❌ 备份不完整:文件末尾没有 mysqldump 的结束标记"
-    echo "   多半是导出中途被打断(磁盘满 / 内存不够 / 容器被重启)"
-    echo "   这个文件【不能用来迁移】。腾出空间后重新导出一次。"
+    echo "❌ Backup is incomplete: mysqldump completion marker is missing"
+    echo "   The export may have been interrupted by a full disk, insufficient memory or a container restart."
+    echo "   Do not use this file for migration. Resolve the resource issue and export again."
     return 1
   fi
   return 0
 }
 
-# 读数据库配置(优先容器环境变量,退到 .env),和 export 一个口径
+# Prefer container database settings, falling back to .env.
 _load_db_cfg() {
   if docker ps --format "{{.Names}}" | grep -q "^springboot-backend$"; then
     local info
@@ -1210,157 +1212,157 @@ _load_db_cfg() {
   [[ -n "$DB_NAME" && -n "$DB_USER" && -n "$DB_PASSWORD" ]]
 }
 
-# 先定下用哪个账号,【不能】像 export 那样用 `A || B` 重试。
-# 恢复是把 .sql 从 stdin 灌进去的:第一次尝试会把 stdin 读走一部分,
-# 回退到 root 再跑就只剩半截数据 —— 那是一次静默的数据损坏,比直接失败危险得多。
+# Choose one working account before consuming restore input.
+# A failed restore may already have consumed part of stdin.
+# Retrying another account on the same stream could silently restore only the tail.
 _pick_mysql_user() {
   if docker exec gost-mysql mysql -u "$DB_USER" -p"$DB_PASSWORD" -e "SELECT 1" >/dev/null 2>&1; then
     MYSQL_AS="$DB_USER"
   elif docker exec gost-mysql mysql -u root -p"$DB_PASSWORD" -e "SELECT 1" >/dev/null 2>&1; then
     MYSQL_AS="root"
   else
-    echo "❌ 连不上数据库(业务账号和 root 都不行),密码可能对不上"
+    echo "❌ Cannot connect to the database with either the application or root account. Check the credentials."
     return 1
   fi
   return 0
 }
 
-# 跑一条 SQL(不要回显)。调用前必须先 _load_db_cfg + _pick_mysql_user。
+# Execute SQL without printing it; load configuration and select the account first.
 _sql_exec() {
   docker exec gost-mysql mysql --default-character-set=utf8mb4 \
     -u "$MYSQL_AS" -p"$DB_PASSWORD" "$DB_NAME" -e "$1" 2>/dev/null
 }
-# 取单个值(-N 去表头 -B 用制表符);顺手去掉 \r,否则和字符串比较会永远不相等
+# Read one scalar value and remove carriage returns for reliable comparison.
 _sql_scalar() {
   docker exec gost-mysql mysql --default-character-set=utf8mb4 \
     -u "$MYSQL_AS" -p"$DB_PASSWORD" "$DB_NAME" -N -B -e "$1" 2>/dev/null | tr -d '\r' | head -1
 }
 
-# 恢复备份 —— 全脚本唯一一个会毁数据的操作,守卫都在这里。
+# Restore can overwrite data; require the guards below.
 restore_migration_sql() {
   local file="$1" force="$2"
 
   if [[ -z "$file" ]]; then
-    echo "用法: tms restore <备份文件.sql> [--force]"
-    echo "  备份文件用 tms export 生成。--force 才允许覆盖已有数据的库。"
+    echo "Usage: tms restore <backup.sql> [--force]"
+    echo "  Create the backup with tms export. --force is required to overwrite an existing database."
     return 1
   fi
-  [[ -f "$file" ]] || { echo "❌ 找不到文件: $file"; return 1; }
+  [[ -f "$file" ]] || { echo "❌ File not found: $file"; return 1; }
 
-  echo "🔍 先校验备份文件完整性..."
+  echo "🔍 Verifying backup integrity..."
   _verify_sql_dump "$file" || return 1
-  echo "✅ 备份文件完整"
+  echo "✅ Backup integrity verified"
 
   if ! docker ps --format "{{.Names}}" | grep -q "^gost-mysql$"; then
-    echo "❌ 数据库容器没在跑。先在这台机器上装好面板(tms install)再恢复。"
+    echo "❌ Database container is not running. Install the panel on this server (tms install) before restoring."
     return 1
   fi
-  _load_db_cfg || { echo "❌ 读不到数据库配置(容器和 .env 都没有)"; return 1; }
+  _load_db_cfg || { echo "❌ Database configuration could not be read from either the container or .env"; return 1; }
   _pick_mysql_user || return 1
-  echo "📋 目标库: $DB_NAME (用 $MYSQL_AS 连接)"
+  echo "📋 Target database: $DB_NAME (using $MYSQL_AS to connect)"
 
-  # 守卫一:目标库非空时不许直接覆盖。
-  # 新机器刚装完面板,库里是有初始表的 —— 所以这条一定会触发,必须让用户自己确认。
+  # Guard: refuse to overwrite a nonempty database without --force.
+  # A fresh installation has initial tables too; explicit confirmation is required.
   local cnt
   cnt=$(docker exec gost-mysql mysql -u "$MYSQL_AS" -p"$DB_PASSWORD" -N -B \
         -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME'" 2>/dev/null | tr -d '\r')
   if [[ "${cnt:-0}" -gt 0 && "$force" != "--force" ]]; then
     echo ""
-    echo "⚠️  目标库 $DB_NAME 里已经有 $cnt 张表,恢复会【覆盖】它们。"
-    echo "   新机器刚装完面板本来就有初始表,这是正常的 —— 确认这台机器上"
-    echo "   没有你还要的数据,再加 --force 重跑:"
+    echo "⚠️  Target database $DB_NAME already contains $cnt tables. Restoring will OVERWRITE them."
+    echo "   A fresh installation normally contains initial tables. Confirm that this server"
+    echo "   has no data you need to keep, then rerun with --force:"
     echo ""
     echo "     tms restore $file --force"
     echo ""
     return 1
   fi
 
-  # 守卫二:动手前先把现状导出来。万一备份文件其实对不上(版本不同、导错库),
-  # 至少还能退回去。这一步失败不阻断 —— 空库本来就没什么可备的。
+  # Guard: export the current database before restoring another backup.
+  # A failed safety export is tolerated for an empty database.
   if [[ "${cnt:-0}" -gt 0 ]]; then
     local safety="before_restore_$(date +%Y%m%d_%H%M%S).sql"
-    echo "💾 先把当前数据存一份到 $safety(出问题能退回去)..."
+    echo "💾 Saving current data to $safety(for recovery if needed)..."
     if docker exec gost-mysql mysqldump --default-character-set=utf8mb4 -u "$MYSQL_AS" -p"$DB_PASSWORD" \
          --single-transaction --routines --triggers "$DB_NAME" > "$safety" 2>/dev/null \
        && _verify_sql_dump "$safety" >/dev/null 2>&1; then
-      echo "✅ 已存:$(pwd)/$safety"
+      echo "✅ Saved:$(pwd)/$safety"
     else
       rm -f "$safety"
-      echo "⚠️  当前数据没存成(库可能是空的),继续恢复"
+      echo "⚠️  Could not save current data (the database may be empty). Continuing restore."
     fi
   fi
 
-  # 备份里带着【上一台机器的】面板地址。这台机器装好时 install 已经探测过自己的公网 IP
-  # 写进了 vite_config.ip,恢复会把它盖掉 —— 而那个值决定「安装命令」里 -a 后面跟什么。
-  # 盖掉之后新装的节点会去连旧机器。先把这台机器自己的值记下来,恢复完对比。
+  # The backup contains the previous server address in vite_config.ip.
+  # Restoring it replaces the address detected on this server.
+  # Remember the current address so the mismatch can be reported afterward.
   local addr_new
   addr_new=$(_sql_scalar "SELECT value FROM vite_config WHERE name='ip' LIMIT 1")
 
-  # 停后端再灌:边写边被后端读会读到半截数据,起来后行为难以预料
-  echo "⏸  暂停后端..."
+  # Stop the backend before importing to avoid reads of partially restored data.
+  echo "⏸  Stopping backend..."
   docker stop springboot-backend >/dev/null 2>&1 || true
 
-  echo "⏳ 正在恢复..."
+  echo "⏳ Restoring..."
   local rc=0
   docker exec -i gost-mysql mysql --default-character-set=utf8mb4 -u "$MYSQL_AS" -p"$DB_PASSWORD" "$DB_NAME" < "$file" 2>/dev/null || rc=$?
 
-  # 节点的「在线」必须重新挣回来。
-  # node.status 只有两个人写:WebSocketServer 的 afterConnectionEstablished 写 1、
-  # afterConnectionClosed 写 0。备份是在旧面板【连接正常时】导的,所以库里全是 1;
-  # 而这台新面板从来没有过那些连接,也就【永远不会】把它改回 0 ——
-  # 结果是界面一直显示「在线」,其实一个节点都没连上来。
-  # 粉丝反馈的原话:「转发机显示在线(节点也正常)但是不显示设备信息」——
-  # 设备信息(CPU/内存/开机时间/流量)全靠那条 WS 实时推,所以才会只有存库的字段有值。
-  # 假在线比离线糟得多:它把问题藏住了,人家根本想不到往连接上查。
+  # Nodes must reconnect before being marked online.
+  # WebSocket connection callbacks normally set node.status to 1 or 0.
+  # The old server backup can contain status=1 for connected nodes.
+  # The new server has never seen those connections, so no disconnect event resets them.
+  # Without resetting status, the UI would incorrectly show those nodes online.
+  # An apparently online node may have no current device information.
+  # CPU, memory, uptime and traffic updates require an active WebSocket.
+  # Mark nodes offline until a real connection is established.
   if [[ $rc -eq 0 ]]; then
     _sql_exec "UPDATE node SET status=0;" >/dev/null 2>&1 || true
   fi
 
-  echo "▶️  重启后端..."
+  echo "▶️  Restarting backend..."
   docker start springboot-backend >/dev/null 2>&1 || true
 
   if [[ $rc -ne 0 ]]; then
-    echo "❌ 恢复失败(mysql 退出码 $rc)"
-    echo "   库可能停在中间状态。上面那份 before_restore_*.sql 可以退回去:"
+    echo "❌ Restore failed (mysql exit code $rc)"
+    echo "   The database may be partially restored. Recover using the before_restore_*.sql backup above:"
     echo "     tms restore before_restore_xxx.sql --force"
     return 1
   fi
 
   echo ""
-  echo "✅ 恢复完成"
-  echo "   已把所有节点的在线状态重置为离线 —— 它们真正连上这台面板后会自动变回在线。"
-  echo "   ⏳ 等一两分钟看面板:如果一直不变绿,就是节点连不上这台机器(往下看第 1 条)。"
+  echo "✅ Restore complete"
+  echo "   All nodes are marked offline until they reconnect to this panel."
+  echo "   ⏳ Allow a minute or two for reconnection. If nodes stay offline, see item 1 below."
 
-  # 面板地址:恢复把这台机器自己探测到的值覆盖成了备份里的旧值。
-  # 这个值决定「安装命令」里 -a 后面跟什么 —— 不改的话新装的节点会去连旧机器。
+  # Restoring can replace this server address with the old panel address.
+  # Generated installation commands use that address, so report any mismatch.
   local addr_now
   addr_now=$(_sql_scalar "SELECT value FROM vite_config WHERE name='ip' LIMIT 1")
   if [[ -n "$addr_new" && -n "$addr_now" && "$addr_new" != "$addr_now" ]]; then
     echo ""
-    echo "⚠️  面板地址被备份里的旧值覆盖了:"
-    echo "      这台机器装好时探测到的:$addr_new"
-    echo "      备份里带过来的(当前生效):$addr_now"
-    echo "   「安装命令」里的面板地址用的就是当前这个值。"
-    echo "   · 沿用同一个域名(DNS 已指到这台)→ 不用动"
-    echo "   · 换地址了 → 去面板「网站配置」把它改成 $addr_new 或你的新域名,"
-    echo "     否则【新装的节点会去连旧机器】,装完永远不上线。"
+    echo "⚠️  The backup replaced the panel address with its previous value:"
+    echo "      Detected on this server during installation:$addr_new"
+    echo "      Restored from backup (currently active):$addr_now"
+    echo "   Generated node installation commands use the currently active address."
+    echo "   · Keeping the same domain with DNS pointing here: no change needed"
+    echo "   · Using a new address: change Website Settings to $addr_new or your new domain,"
+    echo "     otherwise newly installed nodes will connect to the old server and remain offline here."
   fi
 
   echo ""
-  echo "⚠️  换机器还有两件事必须做:"
-  echo "   1. 已有节点连的还是旧地址。沿用同一个域名(把 DNS 指到这台)它们会自己连回来;"
-  echo "      换了地址就得去每台转发机上改面板地址。另外别忘了这台机器的防火墙/安全组"
-  echo "      要放行面板端口 —— 新 VPS 的安全组是全新的,节点连不上多半卡在这。"
-  echo "   2. 车友手上的订阅链接前半段就是旧面板地址,【会全部失效】。"
-  echo "      沿用同一个域名最省事(tms domain 你的域名);否则要重新发订阅给所有人。"
+  echo "⚠️  When migrating servers, also check:"
+  echo "   1. Existing nodes still use the old address. Keeping the same domain and updating DNS lets them reconnect;"
+  echo "      otherwise update the panel address on each node. Also check this server's firewall/security group"
+  echo "      allows the panel API port. New VPS firewall rules may prevent node connections."
+  echo "   2. Users' subscription URLs contain the old panel address and may stop working."
+  echo "      Keep the same domain (tms domain panel.example.com), or distribute new subscription URLs."
   return 0
 }
 
-# 主逻辑：默认一令到底直接安装；传参数才做别的
-#   ./panel_install.sh            直接安装（默认，无需选择）
-#   ./panel_install.sh update     更新
-#   ./panel_install.sh uninstall  卸载
-#   ./panel_install.sh menu       交互式菜单
+# Default to installation; arguments select management actions.
+# ./panel_install.sh            Install without opening the menu.
+# ./panel_install.sh update     Update.
+# ./panel_install.sh uninstall  Uninstall.
+# ./panel_install.sh menu       Interactive menu.
 main() {
   local command=install
   local args=()
@@ -1417,28 +1419,28 @@ main() {
     uninstall) uninstall_panel ;;
     purge)     purge_panel ;;
     export)    export_migration_sql ;;
-    # 迁移到新机器:旧机 tms export → 拷走 .sql → 新机装好面板后 tms restore
-    # 【不 delete_self】恢复可能要因为守卫提示再跑一次(加 --force),把脚本删了就得重下
+    # Migration: export on the old server, copy the SQL, then restore on the new server.
+    # Keep the script available for a guarded restore retry with --force.
     restore)   restore_migration_sql "$2" "$3" ;;
     status)    show_status ;;
     info)      show_access_info ;;
     domain)    setup_domain "${2:-}" "${INSTALL_HTTPS_PORT:-${3:-}}" ;;
     menu)      menu_loop ;;
     *)
-      # 打错命令不能默认去装面板 —— `tms uninstal`(少个 l)、`tms purge2` 这类
-      # 手滑会变成一次重装,把正在跑的面板覆盖掉。无参数仍走安装(见上面的 :-install)。
-      echo "❌ 未知命令: $1"
-      echo "可用命令: install / update / uninstall / purge / export / status / info / domain / menu"
+      # Reject unknown commands instead of silently starting an installation.
+      # A typo must not overwrite a running panel; no arguments still means install.
+      echo "❌ Unknown command: $1"
+      echo "Available commands: install / update / uninstall / purge / export / restore / status / info / domain / menu"
       exit 1
       ;;
   esac
 }
 
-# 交互式菜单(tms 命令默认进入这里;也可 ./panel_install.sh menu)
+# Interactive menu used by the persistent tms launcher.
 menu_loop() {
   while true; do
     show_menu
-    read -p "请输入选项: " choice
+    read -p "Select an option: " choice
 
     case $choice in
       1) install_panel; break ;;
@@ -1448,19 +1450,19 @@ menu_loop() {
       5) show_status ;;
       6) show_access_info ;;
       7) export_migration_sql ;;
-      8) read -rp "备份文件路径: " _f; restore_migration_sql "$_f" ;;
+      9) read -rp "Backup file path: " _f; restore_migration_sql "$_f" ;;
       8)
         show_domain_status
         echo ""
-        read -p "输入域名(直接回车取消,输 off 关闭域名): " d
+        read -p "Domain (Enter to cancel, off to disable): " d
         [ -n "$d" ] && setup_domain "$d"
         ;;
-      0) echo "👋 退出"; break ;;
-      *) echo "❌ 无效选项，请重新输入" ;;
+      0) echo "👋 Exit"; break ;;
+      *) echo "❌ Invalid option. Try again." ;;
     esac
     echo ""
   done
 }
 
-# 执行主函数
+# Execute the entry point.
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi

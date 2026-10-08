@@ -65,4 +65,23 @@ curl() { printf '%s\n' '{"code":500}'; }
 if wait_backend_ready >/dev/null 2>&1; then echo 'Accepted unready backend'; exit 1; fi
 docker() { echo exited; }
 if wait_backend_ready >/dev/null 2>&1; then echo 'Accepted exited backend'; exit 1; fi
+# Domain and restore must have distinct menu routes; neither fixture touches Docker/data.
+show_domain_status() { :; }
+setup_domain() { printf 'domain:%s\n' "$1" >> menu-calls; }
+restore_migration_sql() { printf 'restore:%s\n' "$1" >> menu-calls; }
+menu_loop <<'MENU' > menu-output
+8
+panel.example.com
+9
+/path/to/backup.sql
+0
+MENU
+[ "$(cat menu-calls)" = 'domain:panel.example.com'$'\n''restore:/path/to/backup.sql' ]
+grep -q 'Configure domain + HTTPS' menu-output
+grep -q 'Restore database backup' menu-output
+# Both the advertised node exit and its legacy option must exit without running services.
+for option in 4 5; do
+  output=$(source "$repo_dir/install.sh"; SERVER_ADDR=""; SECRET=""; main <<< "$option")
+  [[ "$output" = *'Node Management'* && "$output" = *'Exiting installer'* ]]
+done
 printf 'Installer regression checks passed\n'

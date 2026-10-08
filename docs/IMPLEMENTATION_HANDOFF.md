@@ -249,3 +249,9 @@ Focused backend tests cover custom/automatic ports for every protocol, all-proto
 - `tests/panel_deploy_test.sh`: image default, custom ports and secret/Caddy/SQL preservation, unavailable images, revision mismatch, failed builds, readiness rollback and sequential source build. Existing installer fixtures still cover private env/readable SQL. CI MySQL regression verifies legacy fields/data survive additive migration.
 
 Default update downloads images and does not run local compilers. Pending CI, registry/network failures or private image permissions return a clear failure while retaining the old running deployment. No database downgrade/rollback is attempted. Source mode remains explicit on each command; no implicit compile or automatic swap creation occurs.
+
+## English installer follow-up
+
+`panel_install.sh`, `install.sh` and `tms-hybrid.sh` now use English terminal text and comments throughout installation, update, status, domain/HTTPS, backup, restore and removal flows. Generated management launcher comments are English too. Shell diagnostics use the C locale; commands, repository variables, ports and database handling are retained. The previous non-English domain-off alias is retained through a portable escaped literal.
+
+The panel menu now routes 8 to domain setup and 9 to restore, fixing duplicated option 8. The node installer routes its advertised exit option 4 to exit and keeps 5 as a compatibility alias, removing the undefined block_protocol call. Installer regression fixtures exercise both routes and both exit options; deployment fixtures use the translated backup section marker.

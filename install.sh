@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Use English diagnostics from external tools as well as installer prompts.
+export LC_ALL=C
+
 if [ -z "${GITHUB_REPO:-}" ] && [ -r /etc/gost/repository.conf ]; then
   GITHUB_REPO=$(sed -n 's/^GITHUB_REPO=//p' /etc/gost/repository.conf | head -1)
   GITHUB_REF=$(sed -n 's/^GITHUB_REF=//p' /etc/gost/repository.conf | head -1)
@@ -99,7 +102,7 @@ download_agent() {
   return "$result"
 }
 
-# 获取系统架构
+# Detect the system architecture.
 get_architecture() {
     ARCH=$(uname -m)
     case $ARCH in
@@ -117,44 +120,44 @@ get_architecture() {
 }
 
 INSTALL_DIR="/etc/gost"
-FORCE_CN=0                                       # -c 强制走国内 GitHub 镜像(国内机器 ipinfo 常超时/失败)
-GH_MIRROR="${GH_MIRROR:-https://ghfast.top/}"    # 国内 GitHub 加速镜像,可用环境变量覆盖
+FORCE_CN=0                                       # -c Force the GitHub mirror when direct access or country detection fails
+GH_MIRROR="${GH_MIRROR:-https://ghfast.top/}"    # GitHub download mirror; overridable through the environment
 
 
 
-# 显示菜单
+# Display the node management menu.
 show_menu() {
   echo "==============================================="
-  echo "              管理脚本"
+  echo "              Node Management"
   echo "==============================================="
-  echo "请选择操作："
-  echo "1. 安装"
-  echo "2. 更新"  
-  echo "3. 卸载"
-  echo "4. 退出"
+  echo "Select an action:"
+  echo "1. Install"
+  echo "2. Update"
+  echo "3. Uninstall"
+  echo "4. Exit"
   echo "==============================================="
 }
 
-# 删除脚本自身
+# Remove the temporary installer.
 delete_self() {
   echo ""
-  echo "🗑️ 操作已完成，正在清理脚本文件..."
+  echo "🗑️ Operation complete. Removing the installer..."
   SCRIPT_PATH="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
   sleep 1
-  rm -f "$SCRIPT_PATH" && echo "✅ 脚本文件已删除" || echo "❌ 删除脚本文件失败"
+  rm -f "$SCRIPT_PATH" && echo "✅ Installer removed" || echo "❌ Failed to remove installer"
 }
 
-# 检查并安装 tcpkill
+# Check/install tcpkill.
 check_and_install_tcpkill() {
-  # 检查 tcpkill 是否已安装
+  # Skip if tcpkill is already installed.
   if command -v tcpkill &> /dev/null; then
     return 0
   fi
   
-  # 检测操作系统类型
+  # Detect the operating system.
   OS_TYPE=$(uname -s)
   
-  # 检查是否需要 sudo
+  # Determine whether sudo is needed.
   if [[ $EUID -ne 0 ]]; then
     SUDO_CMD="sudo"
   else
@@ -168,7 +171,7 @@ check_and_install_tcpkill() {
     return 0
   fi
   
-  # 检测 Linux 发行版并安装对应的包
+  # Install the distribution-specific package.
   if [ -f /etc/os-release ]; then
     . /etc/os-release
     DISTRO=$ID
@@ -213,32 +216,32 @@ check_and_install_tcpkill() {
 }
 
 
-# 获取用户输入的配置参数
+# Read node configuration.
 get_config_params() {
   if [[ -z "$SERVER_ADDR" || -z "$SECRET" ]]; then
-    echo "请输入配置参数："
+    echo "Enter configuration:"
     
     if [[ -z "$SERVER_ADDR" ]]; then
-      read -p "服务器地址: " SERVER_ADDR
+      read -p "Panel server address: " SERVER_ADDR
     fi
     
     if [[ -z "$SECRET" ]]; then
-      read -p "密钥: " SECRET
+      read -p "Node secret: " SECRET
     fi
     
     if [[ -z "$SERVER_ADDR" || -z "$SECRET" ]]; then
-      echo "❌ 参数不完整，操作取消。"
+      echo "❌ Required parameters are missing. Operation cancelled."
       exit 1
     fi
   fi
 }
 
-# 安装功能
+# Install the node agent.
 install_gost() {
-  echo "🚀 开始安装 GOST..."
+  echo "🚀 Installing GOST..."
   get_config_params
 
-    # 检查并安装 tcpkill
+    # Check/install tcpkill.
   check_and_install_tcpkill
   
 
@@ -250,12 +253,12 @@ install_gost() {
   mv "$INSTALL_DIR/gost.new" "$INSTALL_DIR/gost"
   chmod +x "$INSTALL_DIR/gost"
 
-  # 打印版本
-  echo "🔎 gost 版本：$($INSTALL_DIR/gost -V)"
+  # Print the agent version.
+  echo "🔎 gost version: $($INSTALL_DIR/gost -V)"
 
-  # 写入 config.json (安装时总是创建新的)
+  # Create a new config.json for installation.
   CONFIG_FILE="$INSTALL_DIR/config.json"
-  echo "📄 创建新配置: config.json"
+  echo "📄 Creating configuration: config.json"
   umask 077
   if [ -f "$CONFIG_FILE" ]; then
     jq --arg addr "$SERVER_ADDR" --arg secret "$SECRET" '.addr=$addr | .secret=$secret' "$CONFIG_FILE" > "$CONFIG_FILE.new" || return 1
@@ -267,21 +270,21 @@ install_gost() {
   printf '%s\n' "GITHUB_REPO=$GITHUB_REPO" "GITHUB_REF=$GITHUB_REF" > "$INSTALL_DIR/repository.conf"
 
 
-  # 写入 gost.json
+  # Write gost.json when absent.
   GOST_CONFIG="$INSTALL_DIR/gost.json"
   if [[ -f "$GOST_CONFIG" ]]; then
-    echo "⏭️ 跳过配置文件: gost.json (已存在)"
+    echo "⏭️ Keeping existing configuration: gost.json (already exists)"
   else
-    echo "📄 创建新配置: gost.json"
+    echo "📄 Creating configuration: gost.json"
     cat > "$GOST_CONFIG" <<EOF
 {}
 EOF
   fi
 
-  # 加强权限
+  # Restrict configuration permissions.
   chmod 600 "$INSTALL_DIR"/*.json
 
-  # 创建 systemd 服务
+  # Create the systemd unit.
   SERVICE_FILE="/etc/systemd/system/gost.service"
   cat > "$SERVICE_FILE" <<EOF
 [Unit]
@@ -297,133 +300,133 @@ Restart=on-failure
 WantedBy=multi-user.target
 EOF
 
-  # 启动服务
+  # Start the service.
   systemctl daemon-reload
   systemctl enable gost
   systemctl start gost
 
-  # 检查状态
-  echo "🔄 检查服务状态..."
+  # Check service status.
+  echo "🔄 Checking service status..."
   if systemctl is-active --quiet gost; then
-    echo "✅ 安装完成，gost服务已启动并设置为开机启动。"
-    echo "📁 配置目录: $INSTALL_DIR"
-    echo "🔧 服务状态: $(systemctl is-active gost)"
+    echo "✅ Installation complete. gost is running and enabled at boot."
+    echo "📁 Configuration directory: $INSTALL_DIR"
+    echo "🔧 Service status: $(systemctl is-active gost)"
   else
-    echo "❌ gost服务启动失败，请执行以下命令查看日志："
+    echo "❌ gost failed to start. View logs with:"
     echo "journalctl -u gost -f"
     return 1
   fi
 }
 
-# 更新功能
+# Update the node agent.
 update_gost() {
-  echo "🔄 开始更新 GOST..."
+  echo "🔄 Updating GOST..."
   
   if [[ ! -d "$INSTALL_DIR" ]]; then
-    echo "❌ GOST 未安装，请先选择安装。"
+    echo "❌ GOST is not installed. Install it first."
     return 1
   fi
   
-  echo "📥 下载当前仓库对应版本的节点代理..."
+  echo "📥 Downloading the matching node agent from this repository..."
   
-  # 检查并安装 tcpkill
+  # Check/install tcpkill.
   check_and_install_tcpkill
   
-  # 先下载新版本
-  echo "⬇️ 下载最新版本..."
+  # Download before stopping the existing service.
+  echo "⬇️ Downloading the latest version..."
   download_agent "$INSTALL_DIR/gost.new" || { echo "Node build/download failed; old executable retained." >&2; return 1; }
   if [[ ! -f "$INSTALL_DIR/gost.new" || ! -s "$INSTALL_DIR/gost.new" ]]; then
-    echo "❌ 下载失败。"
+    echo "❌ Download failed."
     return 1
   fi
 
-  # 停止服务
+  # Stop the service.
   if systemctl list-units --full -all | grep -Fq "gost.service"; then
-    echo "🛑 停止 gost 服务..."
+    echo "🛑 Stopping gost..."
     systemctl stop gost
   fi
 
-  # 替换文件
+  # Replace the executable.
   mv "$INSTALL_DIR/gost.new" "$INSTALL_DIR/gost"
   chmod +x "$INSTALL_DIR/gost"
   
-  # 打印版本
-  echo "🔎 新版本：$($INSTALL_DIR/gost -V)"
+  # Print the new version.
+  echo "🔎 New version: $($INSTALL_DIR/gost -V)"
 
-  # 重启服务
-  echo "🔄 重启服务..."
+  # Restart the service.
+  echo "🔄 Restarting service..."
   systemctl start gost || return 1
   
-  echo "✅ 更新完成，服务已重新启动。"
+  echo "✅ Update complete. Service restarted."
 }
 
-# 卸载功能
+# Uninstall the node agent.
 uninstall_gost() {
-  echo "🗑️ 开始卸载 GOST..."
+  echo "🗑️ Removing GOST..."
   
-  read -p "确认卸载 GOST 吗？此操作将删除所有相关文件 (y/N): " confirm
+  read -p "Remove GOST? This will delete all related files (y/N): " confirm
   if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-    echo "❌ 取消卸载"
+    echo "❌ Uninstall cancelled"
     return 0
   fi
 
-  # 停止并禁用服务
+  # Stop and disable the service.
   if systemctl list-units --full -all | grep -Fq "gost.service"; then
-    echo "🛑 停止并禁用服务..."
+    echo "🛑 Stopping and disabling service..."
     systemctl stop gost 2>/dev/null
     systemctl disable gost 2>/dev/null
   fi
 
-  # 协议功能会在本机装 sing-box(服务文件在 /etc/systemd/system,不在安装目录里),
-  # 不一起清掉的话:二进制被删、服务还注册着 → systemd 会一直重启失败刷日志
+  # Protocol management may also install a sing-box systemd unit.
+  # Remove the unit with the binary to avoid repeated failed restart attempts.
   if systemctl list-units --full -all | grep -Fq "sing-box.service"; then
-    echo "🛑 停止并禁用 sing-box 服务..."
+    echo "🛑 Stopping and disabling sing-box..."
     systemctl stop sing-box 2>/dev/null
     systemctl disable sing-box 2>/dev/null
   fi
 
-  # 删除服务文件
+  # Remove the unit file.
   if [[ -f "/etc/systemd/system/gost.service" ]]; then
     rm -f "/etc/systemd/system/gost.service"
-    echo "🧹 删除服务文件"
+    echo "🧹 Removing service file"
   fi
   if [[ -f "/etc/systemd/system/sing-box.service" ]]; then
     rm -f "/etc/systemd/system/sing-box.service"
-    echo "🧹 删除 sing-box 服务文件"
+    echo "🧹 Removing sing-box service file"
   fi
-  # sing-box 的 systemd 覆盖配置(排查重启限流时可能加过)
+  # Remove sing-box systemd drop-in overrides.
   rm -rf /etc/systemd/system/sing-box.service.d 2>/dev/null
 
-  # target 的 .wants 里残留的软链接。正常情况 systemctl disable 会删掉,
-  # 但服务本身已经异常、或当初是手工 enable 的话就会留下来 ——
-  # 结果是 systemctl list-units --all 里一直挂着一条 not-found,看着像没卸干净
+  # Remove leftover target .wants symlinks.
+  # Broken or manually enabled units may leave links after disable.
+  # Those links otherwise appear as not-found units.
   find /etc/systemd /run/systemd \( -name 'gost.service' -o -name 'sing-box.service' \) -delete 2>/dev/null
 
-  # 删除安装目录(gost 二进制、sing-box 二进制、配置、自签证书都在这里)
+  # Remove the node directory, including binaries, configuration and certificates.
   if [[ -d "$INSTALL_DIR" ]]; then
     rm -rf "$INSTALL_DIR"
-    echo "🧹 删除安装目录: $INSTALL_DIR"
+    echo "🧹 Removing installation directory: $INSTALL_DIR"
   fi
 
-  # 重载 systemd 并清掉 failed 记录
+  # Reload systemd and clear failed states.
   systemctl daemon-reload
   systemctl reset-failed 2>/dev/null
 
-  echo "✅ 卸载完成(gost + sing-box + 配置 + 证书 已全部清除)"
+  echo "✅ Uninstall complete (gost, sing-box, configuration and certificates removed)"
 }
 
-# 主逻辑
+# Entry point.
 main() {
-  # 如果提供了命令行参数，直接执行安装
+  # Install directly when address and secret are supplied.
   if [[ -n "$SERVER_ADDR" && -n "$SECRET" ]]; then
     install_gost
     exit $?
   fi
 
-  # 显示交互式菜单
+  # Otherwise show the interactive menu.
   while true; do
     show_menu
-    read -p "请输入选项 (1-5): " choice
+    read -p "Select an option (1-4): " choice
     
     case $choice in
       1)
@@ -438,16 +441,12 @@ main() {
         uninstall_gost
             exit 0
         ;;
-      4)
-        block_protocol
-            exit 0
-        ;;
-      5)
-        echo "👋 退出脚本"
+      4|5)
+        echo "👋 Exiting installer"
             exit 0
         ;;
       *)
-        echo "❌ 无效选项，请输入 1-5"
+        echo "❌ Invalid option. Enter 1-4."
         echo ""
         ;;
     esac

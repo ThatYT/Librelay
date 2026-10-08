@@ -145,7 +145,7 @@ GITHUB_REF=main; resolve_panel_commit; [ "$PANEL_COMMIT" = "$fixture_revision" ]
 curl() { printf '{"sha":"bad; touch injected"}'; }
 if resolve_panel_commit; then echo 'Accepted malicious commit response'; exit 1; fi
 # The shell update path must not execute the removed destructive legacy SQL.
-if sed -n '/^update_panel()/,/^# 导出数据库备份/p' "$repo_dir/panel_install.sh" | grep -q 'DROP COLUMN\|temp_migration.sql'; then
+if sed -n '/^update_panel()/,/^# Export a database backup\./p' "$repo_dir/panel_install.sh" | grep -q 'DROP COLUMN\|temp_migration.sql'; then
   echo 'Destructive legacy migration still present'; exit 1
 fi
 # CLI mode remains explicit, and resource mode is never enabled for status/domain.
