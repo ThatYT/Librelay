@@ -44,6 +44,9 @@ public class InboundUser implements Serializable {
     /** 订阅链接 token */
     private String subToken;
 
+    /** Pending node synchronization; null means acknowledged. */
+    private String pendingAction;
+
     private Integer status;
 
     private Long createdTime;

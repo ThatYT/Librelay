@@ -22,6 +22,25 @@ import java.util.Map;
 @CrossOrigin
 @RequestMapping("/api/v1/user")
 public class UserController extends BaseController {
+    @javax.annotation.Resource
+    private com.admin.service.UserProtocolAccessService protocolAccess;
+
+    @RequireRole
+    @PostMapping("/protocol-access")
+    public R protocolAccess(@RequestBody Map<String, Long> params) {
+        Long userId = params.get("userId");
+        if (userId == null) userId = com.admin.common.utils.JwtUtil.getUserIdFromToken().longValue();
+        return protocolAccess.get(userId);
+    }
+
+    @RequireRole
+    @PostMapping("/protocol-access/save")
+    public R saveProtocolAccess(@Validated @RequestBody UserProtocolAccessDto dto) {
+        Long userId = dto.getUserId();
+        if (userId == null) userId = com.admin.common.utils.JwtUtil.getUserIdFromToken().longValue();
+        return protocolAccess.save(userId, dto);
+    }
+
 
     @LogAnnotation
     @PostMapping("/login")

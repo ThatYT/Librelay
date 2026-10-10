@@ -475,6 +475,7 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
         iu.setGostForwardId(forward.getId());
         iu.setStatus(1);
         iu.setCreatedTime(System.currentTimeMillis());
+        iu.setPendingAction("grant");
         inboundUserMapper.insert(iu);
 
         // 6. 重推 sing-box 配置(users 里加上这个 uuid)
@@ -482,6 +483,9 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
         if (push.getCode() != 0) {
             return push;
         }
+
+        inboundUserMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<InboundUser>()
+                .eq("id", iu.getId()).set("pending_action", null));
 
         // 7. 出客户端链接(地址=该转发的公网口,被限速)+ 该用户的订阅 token
         String link = buildClientLink(in, iu, node, forward);
@@ -1264,30 +1268,24 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
     @Override
     public R unassignUser(Long inboundUserId) {
         InboundUser iu = inboundUserMapper.selectById(inboundUserId);
-        if (iu == null) {
-            return R.err("记录不存在");
+        if (iu == null) return R.err("Assignment does not exist");
+        Inbound in = getById(iu.getInboundId());
+        if (in == null) return R.err("Protocol does not exist; cannot confirm node revocation");
+        if (iu.getPendingAction() == null || !iu.getPendingAction().startsWith("revoke")) {
+            iu.setPendingAction(Integer.valueOf(0).equals(iu.getStatus()) ? "revoke-paused" : "revoke-active");
+            iu.setStatus(0);
+            inboundUserMapper.updateById(iu);
         }
-        if (iu.getGostForwardId() != null) {
-            forwardService.deleteForward(iu.getGostForwardId());
+        R pushed = pushNodeSingbox(in.getNodeId());
+        if (pushed.getCode() != 0) return pushed;
+        if (iu.getGostForwardId() != null && forwardService.getById(iu.getGostForwardId()) != null) {
+            R deleted = forwardService.deleteForward(iu.getGostForwardId());
+            if (deleted.getCode() != 0) return deleted;
         }
-        inboundUserMapper.deleteById(inboundUserId);
-        Inbound in = this.getById(iu.getInboundId());
-        if (in != null) {
-            pushNodeSingbox(in.getNodeId());
-        }
+        inboundUserMapper.deleteById(iu.getId());
         return R.ok();
     }
 
-    /**
-     * 停用 / 恢复某个车友的一条线路(机器 × 落地)。
-     *
-     * 停用不删数据:该线路的转发停掉、订阅里不再出现,流量和到期原样留着,
-     * 想恢复就恢复。车主临时不想给某人用某台机器时用这个 —— 比删掉再重新
-     * 分配安全得多,重分配会换掉 UUID 和端口,等于让对方重新导一次订阅。
-     *
-     * 注意和「账号总闸」的区别:User.status 一关是这个人所有线路一起停,
-     * 这里只动一条。
-     */
     /**
      * 改一条线路的额度 / 到期 / 限速 —— 也就是「续费」。
      *
@@ -1467,30 +1465,14 @@ public class InboundServiceImpl extends ServiceImpl<InboundMapper, Inbound> impl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public R deleteLine(Long userId, Long nodeId, Long landingId) {
-        if (userId == null || nodeId == null) {
-            return R.err("参数不全");
+        if (userId == null || nodeId == null) return R.err("Missing user or node ID");
+        List<InboundUser> rows = lineInboundUsers(userId, nodeId, landingId);
+        if (rows.isEmpty()) return R.err("Line does not exist");
+        for (InboundUser row : rows) {
+            R result = unassignUser(row.getId());
+            if (result.getCode() != 0) return result;
         }
-        List<InboundUser> ius = lineInboundUsers(userId, nodeId, landingId);
-        if (ius.isEmpty()) {
-            return R.err("线路不存在");
-        }
-        for (InboundUser iu : ius) {
-            if (iu.getGostForwardId() != null) {
-                try {
-                    forwardService.deleteForward(iu.getGostForwardId());
-                } catch (Exception e) {
-                    // 转发可能早就被手工删了。这里不能中断:剩下的分配记录不清掉的话,
-                    // 线路会半死不活地卡在订阅里。
-                    log.warn("删除转发[" + iu.getGostForwardId() + "]失败(继续清理): " + e.getMessage());
-                }
-            }
-            inboundUserMapper.deleteById(iu.getId());
-        }
-        InboundLine line = getLine(userId, nodeId, landingId);
-        if (line != null) {
-            inboundLineMapper.deleteById(line.getId());
-        }
-        pushNodeSingbox(nodeId);
+        // Retain the line token, so later grants do not invalidate saved subscription URLs.
         return R.ok();
     }
 

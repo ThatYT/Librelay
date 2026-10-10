@@ -40,10 +40,16 @@ class DatabaseBootstrapMysqlTest {
                 statement.executeUpdate("ALTER TABLE node DROP COLUMN port_sta");
                 statement.executeUpdate("ALTER TABLE user DROP COLUMN unified_limits, DROP COLUMN speed_mbps, DROP COLUMN limit_nodes, DROP COLUMN billing_mode, DROP COLUMN traffic_multiplier, DROP COLUMN billing_download_remainder, DROP COLUMN billing_upload_remainder");
                 statement.executeUpdate("ALTER TABLE forward DROP COLUMN quota_paused");
+                statement.executeUpdate("INSERT INTO inbound_user (inbound_id,user_id,uuid,sub_token,status,created_time) VALUES (1,1,'legacy-uuid','legacy-token',1,1)");
+                statement.executeUpdate("ALTER TABLE inbound_user DROP COLUMN pending_action");
                 SchemaMigration migration = new SchemaMigration();
                 org.springframework.test.util.ReflectionTestUtils.setField(migration, "dataSource",
                         new org.springframework.jdbc.datasource.DriverManagerDataSource(System.getenv("LIBRELAY_SCHEMA_TEST_URL"), "root", ""));
                 migration.run(null); migration.run(null);
+                assertEquals("legacy-uuid", scalar(statement, "SELECT uuid FROM inbound_user WHERE user_id=1"));
+                assertEquals("legacy-token", scalar(statement, "SELECT sub_token FROM inbound_user WHERE user_id=1"));
+                assertEquals("1", scalar(statement, "SELECT status FROM inbound_user WHERE user_id=1"));
+                assertEquals("1", scalar(statement, "SELECT COUNT(*) FROM inbound_user WHERE pending_action IS NULL"));
                 assertEquals("legacy-name", scalar(statement, "SELECT name FROM user WHERE id=1"));
                 assertEquals("1234", scalar(statement, "SELECT port FROM node WHERE id=7"));
                 assertEquals("192.0.2.7", scalar(statement, "SELECT server_ip FROM node WHERE id=7"));

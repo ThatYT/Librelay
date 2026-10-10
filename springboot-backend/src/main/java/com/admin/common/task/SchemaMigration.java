@@ -33,6 +33,7 @@ public class SchemaMigration implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        addColumnIfMissing("inbound_user", "pending_action", "ALTER TABLE `inbound_user` ADD COLUMN `pending_action` VARCHAR(24) NULL");
         // Retain old columns/data; the installer no longer runs destructive legacy SQL.
         addColumnIfMissing("node", "server_ip", "ALTER TABLE `node` ADD COLUMN `server_ip` VARCHAR(100) NULL");
         addColumnIfMissing("node", "version", "ALTER TABLE `node` ADD COLUMN `version` VARCHAR(100) NULL");

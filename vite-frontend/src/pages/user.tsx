@@ -1,3 +1,4 @@
+import UserProtocolAccess from "@/components/user-protocol-access";
 import { getSubscriptionUrl } from "@/api/network";
 import { useTranslation } from "react-i18next";
 import { t } from "@/i18n";
@@ -49,8 +50,8 @@ import {
   updateUserTunnel,
   resetUserFlow,
   getUserLines,
+  getMyLines,
   setLineStatus,
-  deleteLine,
 } from '@/api';
 import { copyTextToClipboard } from '@/utils/clipboard';
 import { isValidBillingPolicy } from "@/utils/billing.mjs";
@@ -103,6 +104,7 @@ const calculateUserTotalUsedFlow = (user: User): number => {
 
 export default function UserPage() {
   useTranslation();
+  const [accessUser, setAccessUser] = useState<{ id: number | null; name: string } | null>(null);
   // 状态管理
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
@@ -179,9 +181,9 @@ export default function UserPage() {
   // 贴错了客户端里是空的。
   const clashUrl = (token: string) => getSubscriptionUrl('clash', token);
 
-  const handleShowSub = async (user: User) => {
+  const handleShowSub = async (user: { id: number | null; user: string }) => {
     try {
-      const res = await getUserLines(user.id);
+      const res = await (user.id == null ? getMyLines() : getUserLines(user.id));
       // 后端返回结构从数组改成了 {lines, allSubToken},两种都认(版本不同步也不炸)
       const d: any = res.code === 0 ? res.data : null;
       const lines = Array.isArray(d) ? d : (d?.lines || []);
@@ -535,6 +537,8 @@ export default function UserPage() {
   return (
 
       <div className="px-3 lg:px-6 py-8">
+      {accessUser && <UserProtocolAccess userId={accessUser.id} name={accessUser.name}
+        onClose={() => setAccessUser(null)} onSaved={() => { if (subUserId) reloadSubLines(subUserId); }} />}
       {/* 页面头部 */}
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex items-center gap-3">
@@ -566,6 +570,8 @@ export default function UserPage() {
             </Button>
           </div>
 
+          <Button variant="flat" onPress={() => handleShowSub({ id: null, user: t("access.myself") })}>{t("access.mySubscriptions")}</Button>
+          <Button variant="flat" onPress={() => setAccessUser({ id: null, name: t("access.myself") })}>{t("access.myself")}</Button>
           <Button
               variant="flat"
               color="primary"
@@ -690,6 +696,8 @@ export default function UserPage() {
                   </div>
 
                   <div className="space-y-1.5 mt-3">
+                    <Button size="sm" color="primary" variant="flat" className="w-full"
+                      onPress={() => setAccessUser({ id: user.id, name: user.user })}>{t("access.title")}</Button>
                     {/* 第一行：编辑和重置 */}
                     <div className="flex gap-1.5">
                       <Button
@@ -1242,6 +1250,7 @@ export default function UserPage() {
                     <Button
                       size="sm"
                       variant="flat"
+                      isDisabled={subUserId == null}
                       color={ln.lineStatus === 0 ? 'success' : 'warning'}
                       onPress={async () => {
                         if (subUserId == null) return;
@@ -1258,22 +1267,7 @@ export default function UserPage() {
                     >
                       {ln.lineStatus === 0 ? t("me0534b8a4e46") : t("m4e6fd0e28c55")}
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="light"
-                      color="danger"
-                      onPress={async () => {
-                        if (subUserId == null) return;
-                        if (!confirm(t("m674ec9cb198a", {v0: ln.nodeName, v1: ln.protocolCount}))) return;
-                        const res = await deleteLine(subUserId, ln.nodeId, ln.landingId ?? null);
-                        if (res.code === 0) {
-                          toast.success(t("m40dbe1145b15"));
-                          await reloadSubLines(subUserId);
-                        } else {
-                          toast.error(res.msg || t("mc228558cf257"));
-                        }
-                      }}
-                    > {t("m2f9daa828907")} </Button>
+
                   </div>
                 </div>
               );

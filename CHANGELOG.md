@@ -1,5 +1,25 @@
 # Librelay releases / 版本记录
 
+## 1.2.0
+
+English:
+
+- Assign protocols from User Management, grouped by node and direct/relay destination.
+- Select individual protocols or all existing protocols in a group; new protocols require explicit assignment.
+- Preserve unchanged credentials, ports, subscription URLs and account limits/billing settings.
+- Persist pending grants/revocations across restarts; show per-protocol failures and retry by saving again.
+- Reject stale edits before applying changes. Remove assignment controls from Protocols and Relay.
+- Automatically add nullable `inbound_user.pending_action` without replacing existing data.
+
+中文：
+
+- 在用户管理中分配协议，按节点及直连/中转出口分组。
+- 支持单个协议或整组选中现有协议；新建协议需要显式分配。
+- 未变更的凭据、端口、订阅地址及账号限制/计费保持不变。
+- 待同步授权/撤销会跨重启保留，显示逐协议失败原因；再次保存即可重试。
+- 保存前检测过期的权限列表；协议管理和中转页面不再提供分配入口。
+- 自动新增可空字段 `inbound_user.pending_action`，保留原有数据。
+
 ## 1.1.0
 
 English:

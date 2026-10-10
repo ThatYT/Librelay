@@ -380,6 +380,7 @@ CREATE TABLE IF NOT EXISTS `inbound` (
 --    客户端最终连的是那条 forward 的公网端口(被限速),落地到本入站。
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `inbound_user` (
+  `pending_action` varchar(24) DEFAULT NULL,
   `id`              int(10)      NOT NULL AUTO_INCREMENT,
   `inbound_id`      int(10)      NOT NULL,
   `user_id`         int(10)      NOT NULL COMMENT '关联 user 表(子账号)',

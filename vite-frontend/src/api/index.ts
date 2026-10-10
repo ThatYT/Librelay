@@ -141,3 +141,17 @@ export const updateConfig = (name: string, value: string) => Network.post("/conf
 export const checkCaptcha = () => Network.post("/captcha/check");
 export const generateCaptcha = () => Network.post(`/captcha/generate`);
 export const verifyCaptcha = (data: { captchaId: string; trackData: string }) => Network.post("/captcha/verify", data);
+
+export interface ProtocolAccessEntry {
+  id: number; nodeId: number; nodeName: string; landingId: number | null;
+  landingName: string | null; protocol: string; security: string; remark: string;
+  listenPort: number; enabled: boolean; selected: boolean; paused: boolean;
+  pending: "grant" | "revoke" | null;
+}
+export interface ProtocolAccessSnapshot {
+  protocols: ProtocolAccessEntry[]; revision: string;
+  outcomes?: { inboundId: number; nodeId: number; action: string; success: boolean; error: string | null }[];
+}
+export const getUserProtocolAccess = (userId: number | null) => Network.post("/user/protocol-access", { userId });
+export const saveUserProtocolAccess = (userId: number | null, inboundIds: number[], revision: string) =>
+  Network.post("/user/protocol-access/save", { userId, inboundIds, revision });

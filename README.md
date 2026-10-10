@@ -17,7 +17,7 @@ Librelay 是基于 [Teminuosi/Tms](https://github.com/Teminuosi/Tms) 的多节�
 - 前端支持 **中文 / English**，主题仅提供 **浅色 / 深色**，手动选择会保存。
 - 安装、更新默认使用 GitHub CI 预构建镜像与节点二进制，VPS 无需本机编译。
 
-版本采用数字格式，如 **1.1.0**。根目录 `VERSION` 是统一版本来源，面板界面不再追加提交哈希。发布记录见 [GitHub Releases](https://github.com/ThatYT/Librelay/releases)。后续功能版本更新第二位，修复版本更新第三位；构建提交仅用于内部镜像匹配和回滚。手工 Docker 构建时传入 `--build-arg APP_VERSION=$(cat VERSION)`；安装器和 CI 会自动传入。
+版本采用数字格式，如 **1.2.0**。根目录 `VERSION` 是统一版本来源，面板界面不再追加提交哈希。发布记录见 [GitHub Releases](https://github.com/ThatYT/Librelay/releases)。后续功能版本更新第二位，修复版本更新第三位；构建提交仅用于内部镜像匹配和回滚。手工 Docker 构建时传入 `--build-arg APP_VERSION=$(cat VERSION)`；安装器和 CI 会自动传入。
 
 ### 一键安装面板
 
@@ -82,6 +82,16 @@ bash /tmp/librelay.sh update --install-dir /opt/tms
 面板地址支持 `https://panel.example.com:2095`，节点 WebSocket 使用 WSS，流量和配置上报使用 HTTPS。安装时未写协议的 `host:port` 会先检测 HTTPS，再检查兼容的 HTTP；显式 URL 保留原协议，TLS 证书正常校验。遇到连接失败，请在网站配置中填写完整公开面板 URL，重新生成节点安装命令后执行。
 
 ### 用户限速与流量
+
+在「用户管理 → 管理协议权限」选择该用户可以使用的协议，按节点及直连/中转出口分组。整组选中仅包含现有协议；后续新建协议不会自动分配。管理员通过「我的协议权限」管理自己的权限，订阅链接仍在用户卡片中查看。
+
+保存仅应用差异，保持未变更的凭据、端口、订阅地址和账号计费设置。失败操作显示逐协议错误与待同步状态，跨面板重启保留；恢复节点连接后再次点击「保存 / 重试」。目前重试需要管理员操作。撤销同步成功前，节点仍可能接受旧凭据。权限列表已被其他操作修改时，请重新加载再保存。
+
+升级会自动添加可空字段 `inbound_user.pending_action`，保留旧数据和权限。更新面板，不删除数据库或卷：
+
+```bash
+librelay update
+```
 
 在「用户管理 → 新增/编辑」设置账号总限速（Mbps）、账号总流量（GiB）和每月重置日。速度和流量填 `0` 表示不限制，重置日 `0` 表示不自动重置。协议、线路和隧道分配只控制访问权限。
 
@@ -151,7 +161,7 @@ Librelay is a multi-node proxy management panel forked from [Teminuosi/Tms](http
 - **Chinese / English** UI and **Light / Dark** themes, with saved manual selections.
 - Installation and updates use CI-built images and node binaries by default, without compiling on your VPS.
 
-Versions use numeric identifiers such as **1.1.0**. The root `VERSION` file is the single version source; the panel no longer appends commit hashes. See [GitHub Releases](https://github.com/ThatYT/Librelay/releases) for release history. Increment the minor number for features and the patch number for fixes; commit identifiers remain internal for matching images and rollback. Manual Docker builds should pass `--build-arg APP_VERSION=$(cat VERSION)`; the installer and CI supply it automatically.
+Versions use numeric identifiers such as **1.2.0**. The root `VERSION` file is the single version source; the panel no longer appends commit hashes. See [GitHub Releases](https://github.com/ThatYT/Librelay/releases) for release history. Increment the minor number for features and the patch number for fixes; commit identifiers remain internal for matching images and rollback. Manual Docker builds should pass `--build-arg APP_VERSION=$(cat VERSION)`; the installer and CI supply it automatically.
 
 ### Install the panel
 
@@ -218,6 +228,16 @@ Node installation/update prepares sing-box synchronously, validates its configur
 ### Per-user speed and traffic limits
 
 Use **User Management → Add/Edit** to set the account speed (Mbps), traffic quota (GiB), and monthly reset day. `0` means unlimited for speed/quota and no automatic reset for the reset day. Assigning protocols, lines or tunnels grants access without creating another plan.
+
+Assign protocols in **User Management → Manage protocol access**, grouped by node and direct/relay destination. Group selection includes existing protocols only; new protocols require explicit assignment. Administrators use **My protocol access** for their own access. Subscription URLs remain on user cards.
+
+Saving applies differences and preserves unchanged credentials, ports, subscription URLs and account billing settings. Per-protocol failures and pending states survive panel restarts. Restore node connectivity and click **Save / retry**; retries currently require an administrator action. Pending revocations may still allow connections until node synchronization succeeds. Reload before saving if another operation changed the access list.
+
+Upgrade automatically adds nullable `inbound_user.pending_action`, retaining old rows and permissions. Update without deleting database volumes:
+
+```bash
+librelay update
+```
 
 Upload and download across all nodes and protocols share the account budget. Speed is evenly reserved across the user's assigned nodes: 100 Mbps across two nodes gives each node a shared 50 Mbps budget for all its protocols. Idle/offline reservations are not borrowed; deleting a line does not reclaim its node's reservation, since an offline agent might still be serving traffic. The token bucket caps sustained throughput with a small burst allowance.
 

@@ -83,6 +83,7 @@ function isTokenExpired(response: ApiResponse) {
  * 这里只放宽超时,不改变任何业务逻辑;真正减少往返次数的优化在后端做。
  */
 const SLOW_PATHS = [
+  '/user/protocol-access/save',
   '/inbound/assign-all',
   '/inbound/assign-self',
   '/inbound/assign',

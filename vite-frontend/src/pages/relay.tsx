@@ -1,4 +1,3 @@
-import { getSubscriptionUrl } from "@/api/network";
 import ProtocolPortButton from "@/components/protocol-port-button";
 import { useTranslation } from "react-i18next";
 import { t } from "@/i18n";
@@ -17,15 +16,10 @@ import {
   oneClickRelay,
   testLanding,
   deleteInboundsByNode,
-  assignAllToUser,
-  assignSelf,
   getNodeList,
-  getAllUsers,
   getLandingList,
 } from "@/api";
-import { copyTextToClipboard } from "@/utils/clipboard";
 import { SNI_PRESETS, DEFAULT_SNI, cleanSni } from "@/config/sni";
-import { SubQr } from "@/components/sub-qr";
 
 /**
  * 中转(前置机协议 + 落地出口)· 机器卡模式。
@@ -36,7 +30,6 @@ export default function RelayPage() {
   useTranslation();
   const [inbounds, setInbounds] = useState<any[]>([]);
   const [nodes, setNodes] = useState<any[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
   const [landings, setLandings] = useState<any[]>([]);
 
   const [buildOpen, setBuildOpen] = useState(false);
@@ -45,50 +38,16 @@ export default function RelayPage() {
   const [testLoading, setTestLoading] = useState(false);
   const [testResult, setTestResult] = useState<any>(null); // {ok, exitIp, latencyMs, skipped, msg}
 
-  const [assignOpen, setAssignOpen] = useState(false);
-  const [assignForm, setAssignForm] = useState<any>({ nodeId: null, nodeName: "", protocolCount: 0, userId: null, speedId: null, expDate: null, flowGb: null });
-  const [assignLoading, setAssignLoading] = useState(false);
-
-  // 「我自己用」:一键把这条中转开给当前管理员自己,完事直接弹订阅链接
-  const [selfLoading, setSelfLoading] = useState<string | null>(null);
-  const [selfSubUrl, setSelfSubUrl] = useState<string>("");
-  // 中转这边更容易混:同一台前置机可能有好几条落地,弹出来的链接域名部分还都一样
-  const [selfLineName, setSelfLineName] = useState<string>("");
-  const [selfOpen, setSelfOpen] = useState(false);
-
-  const handleAssignSelf = async (nodeId: number, landingId: any, lineName?: string) => {
-    const key = `${nodeId}-${landingId}`;
-    setSelfLoading(key);
-    setSelfLineName(lineName || "");
-    try {
-      const res = await assignSelf({ nodeId, relay: true, landingId });
-      if (res.code === 0 && res.data?.subToken) {
-        setSelfSubUrl(getSubscriptionUrl('sub', res.data.subToken));
-        setSelfOpen(true);
-        loadAll();
-      } else {
-        toast.error(res.msg || t("m9829a0a5cba2"));
-      }
-    } catch (e) {
-      toast.error(t("m9829a0a5cba2"));
-    }
-    setSelfLoading(null);
-  };
-
   const loadAll = async () => {
     try {
-      const [ib, nd, us, ld] = await Promise.all([
+      const [ib, nd, ld] = await Promise.all([
         getInboundList(),
         getNodeList(),
-        getAllUsers(),
         getLandingList(),
       ]);
       if (ib.code === 0) setInbounds(ib.data || []);
       if (nd.code === 0) setNodes(nd.data || []);
-      if (us.code === 0) {
-        const d: any = us.data;
-        setUsers(Array.isArray(d) ? d : (d && d.records ? d.records : []));
-      }
+
       if (ld.code === 0) setLandings(ld.data || []);
     } catch (e) {
       toast.error(t("md1d044826a45"));
@@ -141,40 +100,6 @@ export default function RelayPage() {
       toast.error(t("m0088b5d170f1"));
     }
     setBuildLoading(false);
-  };
-
-  const openNodeAssign = (n: any, landingId: any, landingName: string, count: number) => {
-    setAssignForm({ nodeId: n.id, nodeName: n.name, landingId, landingName, protocolCount: count, userId: null, speedId: null, expDate: null, flowGb: null });
-    setAssignOpen(true);
-  };
-
-  const handleNodeAssign = async () => {
-    if (!assignForm.userId) return toast.error(t("m7374d152f5df"));
-    setAssignLoading(true);
-    try {
-      const payload: any = { userId: assignForm.userId, nodeId: assignForm.nodeId, relay: true, landingId: assignForm.landingId };
-      // 到期直接选日期(当天 23:59:59 截止),续费就是把日期往后改
-      const res = await assignAllToUser(payload);
-      if (res.code === 0) {
-        {
-          const a = res.data?.assigned ?? 0, u = res.data?.updated ?? 0;
-          toast.success(
-            a > 0
-              ? t("mb88758ee45b7", {v0: a}) + (u ? t("m3fbaab52e683", {v0: u}) : "") + t("md74db74e74b0")
-              : u > 0
-              ? t("m456e434f4184", {v0: u})
-              : t("m92a4055d2428")
-          );
-        }
-        setAssignOpen(false);
-        loadAll();
-      } else {
-        toast.error(res.msg || t("mdfb321848f1c"));
-      }
-    } catch (e) {
-      toast.error(t("mdfb321848f1c"));
-    }
-    setAssignLoading(false);
   };
 
   const handleClearNode = async (nodeId: number, nodeName: string, landingId: any, landingName: string) => {
@@ -241,15 +166,6 @@ export default function RelayPage() {
                   ))}
                 </div>
                 <div className="flex gap-2">
-                  <Button size="sm" color="primary" className="flex-1" onPress={() => openNodeAssign(n, ln.landingId, landingName, ln.inbounds.length)}> {t("m85a2fcf44174")} </Button>
-                  {/* 自己用不必先建车友:一键开给当前管理员,不限速不限量不到期 */}
-                  <Button
-                    size="sm"
-                    color="success"
-                    variant="flat"
-                    isLoading={selfLoading === `${n.id}-${ln.landingId}`}
-                    onPress={() => handleAssignSelf(n.id, ln.landingId, `${n.name} → ${landingName}`)}
-                  > {t("md829a000a45d")} </Button>
                   <Button size="sm" color="danger" variant="flat" onPress={() => handleClearNode(n.id, n.name, ln.landingId, landingName)}> {t("m23157042bc53")} </Button>
                 </div>
               </CardBody>
@@ -262,63 +178,6 @@ export default function RelayPage() {
       )}
 
       {/* 「我自己用」结果:直接把订阅链接给出来 */}
-      <Modal isOpen={selfOpen} onClose={() => setSelfOpen(false)} size="2xl">
-        <ModalContent>
-          <ModalHeader className="flex flex-col gap-1">
-            <span>{t("m0fef0d16ef37")}</span>
-            {selfLineName && (
-              <span className="text-sm font-normal text-default-500"> {t("m1cb0f0b6bed8")}<b className="text-foreground">{selfLineName}</b>
-              </span>
-            )}
-          </ModalHeader>
-          <ModalBody className="space-y-2">
-            <div className="text-sm text-default-500"> {t("m92049eb764e2")} </div>
-            <div className="text-xs text-default-400 bg-default-100 rounded-lg px-3 py-2"> {t("mf099339a235f")}<b>{t("m43a5d453764d")}</b>{t("m45f5bf587a81")} <b> token</b>{t("m933064c18429")} </div>
-            <Input
-              readOnly
-              value={selfSubUrl}
-              onClick={(e: any) => { if (e.target?.select) e.target.select(); }}
-            />
-            <SubQr url={selfSubUrl} />
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="light" onPress={() => setSelfOpen(false)}>{t("m3fd47edce45b")}</Button>
-            <Button
-              color="primary"
-              onPress={async () => {
-                (await copyTextToClipboard(selfSubUrl))
-                  ? toast.success(t("md5a519052f09"))
-                  : toast.error(t("md9c9f3be73c7"));
-              }}
-            > {t("m1541c2076c07")} </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-      {/* 分配用户(复用协议管理的整机分配) */}
-      <Modal isOpen={assignOpen} onClose={() => setAssignOpen(false)}>
-        <ModalContent>
-          <ModalHeader>{t("mf37844b9eacd")}{assignForm.nodeName} → {assignForm.landingName}」</ModalHeader>
-          <ModalBody className="space-y-3">
-            <div className="text-sm text-default-500"> {t("m5134ee4c2f8d")} <b>{assignForm.protocolCount} {t("m1aff127bb6b4")}</b> {t("mc38eeac5ceb3")} {assignForm.landingName}{t("m4722d7569c20")} </div>
-            <Select
-              label={t("m403b76dc52e3")}
-              placeholder={t("me362bd1193d5")}
-              selectedKeys={assignForm.userId ? [String(assignForm.userId)] : []}
-              onSelectionChange={(k) => setAssignForm({ ...assignForm, userId: Number(Array.from(k)[0]) })}
-            >
-              {users.map((u) => (<SelectItem key={u.id}>{u.user}</SelectItem>))}
-            </Select>
-            <p className="text-sm text-default-500">{t("limits.assign")}</p>
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="light" onPress={() => setAssignOpen(false)}>{t("m3fd47edce45b")}</Button>
-            <Button color="primary" isLoading={assignLoading} onPress={handleNodeAssign}>{t("mfc135337a267")}</Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-      {/* 搭中转:选前置机 + 内联填落地 + 测试 + 搭建 */}
       <Modal isOpen={buildOpen} onClose={() => setBuildOpen(false)} size="2xl">
         <ModalContent>
           <ModalHeader>{t("m52f22a5734e6")}</ModalHeader>
