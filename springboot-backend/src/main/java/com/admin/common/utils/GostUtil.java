@@ -18,9 +18,9 @@ public class GostUtil {
 
 
 
-    private static GostDto ensureSocksChain(Long nodeId, String name, String gateway) {
+    static JSONObject buildSocksChain(String name, String gateway) {
         JSONObject connector = new JSONObject(); connector.put("type", "socks5");
-        JSONObject connectorMetadata = new JSONObject(); connectorMetadata.put("notls", true); connector.put("metadata", connectorMetadata);
+        JSONObject connectorMetadata = new JSONObject(); connectorMetadata.put("notls", true); connectorMetadata.put("relay", "udp"); connector.put("metadata", connectorMetadata);
         JSONObject dialer = new JSONObject(); dialer.put("type", "tcp");
         JSONObject node = new JSONObject(); node.put("name", "gateway"); node.put("addr", gateway);
         node.put("connector", connector); node.put("dialer", dialer);
@@ -28,6 +28,11 @@ public class GostUtil {
         JSONObject hop = new JSONObject(); hop.put("name", "gateway-hop"); hop.put("nodes", nodes);
         JSONArray hops = new JSONArray(); hops.add(hop);
         JSONObject chain = new JSONObject(); chain.put("name", name + "_chains"); chain.put("hops", hops);
+        return chain;
+    }
+
+    private static GostDto ensureSocksChain(Long nodeId, String name, String gateway) {
+        JSONObject chain = buildSocksChain(name, gateway);
         JSONObject update = new JSONObject(); update.put("chain", chain.getString("name")); update.put("data", chain);
         GostDto result = WebSocketServer.send_msg(nodeId, update, "UpdateChains");
         if (result == null || !"OK".equals(result.getMsg()))

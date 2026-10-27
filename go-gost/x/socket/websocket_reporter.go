@@ -637,7 +637,9 @@ func (w *WebSocketReporter) routeCommand(cmd CommandMessage) {
 		kp, err = w.handleGenerateRealityKeypair(cmd.Data)
 		response.Type = "GenerateRealityKeypairResponse"
 		response.Data = kp
-	// 中转:测试落地(经本前置机用 socks 拨号,回显出口 IP)
+	case "TestWarp":
+		response.Data, err = w.handleTestWarp(cmd.Data)
+		response.Type = "TestWarpResponse"
 	case "TestOutbound":
 		var testResult map[string]interface{}
 		testResult, err = w.handleTestOutbound(cmd.Data)
@@ -650,8 +652,10 @@ func (w *WebSocketReporter) routeCommand(cmd CommandMessage) {
 	}
 
 	// An acknowledged policy must be durable before the panel allocates another node.
-	if persistErr := saveConfig(); err == nil && persistErr != nil {
-		err = fmt.Errorf("persist node configuration: %w", persistErr)
+	if cmd.Type != "TestWarp" {
+		if persistErr := saveConfig(); err == nil && persistErr != nil {
+			err = fmt.Errorf("persist node configuration: %w", persistErr)
+		}
 	}
 	if err != nil {
 		response.Success = false

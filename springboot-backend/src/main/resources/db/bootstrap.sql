@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS `node` (
   `status` int(10) NOT NULL,
   PRIMARY KEY (`id`),
   `domain` varchar(255) DEFAULT NULL,
+  `warp_routing` text DEFAULT NULL,
   `cert_mode` int NOT NULL DEFAULT 0,
   `cert_path` varchar(500) DEFAULT NULL,
   `key_path` varchar(500) DEFAULT NULL

@@ -11,6 +11,7 @@ import java.util.Map;
 /** Injectable boundary for commands executed on proxy nodes, never the panel host. */
 @Component
 public class NodeCommandClient {
+    @javax.annotation.Resource private com.admin.mapper.NodeMapper nodes;
     public GostDto send(Long nodeId, JSONObject request, String type) {
         return WebSocketServer.send_msg(nodeId, request, type);
     }
@@ -19,6 +20,11 @@ public class NodeCommandClient {
     }
     public GostDto configure(Long nodeId, List<Inbound> inbounds,
             Map<Long, List<InboundUser>> users, Map<Long, String> landings) {
-        return SingboxUtil.SetSingboxConfig(nodeId, inbounds, users, landings, null);
+        com.admin.entity.Node node = nodes.selectById(nodeId);
+        if (node == null) throw new IllegalArgumentException("Node does not exist");
+        com.admin.common.dto.WarpRoutingPolicy policy = com.admin.common.dto.WarpRoutingPolicy.fromStored(node.getWarpRouting());
+        JSONObject payload = new JSONObject();
+        payload.put("config", SingboxUtil.buildNodeConfig(inbounds, users, landings, policy));
+        return send(nodeId, payload, "SetSingboxConfig");
     }
 }

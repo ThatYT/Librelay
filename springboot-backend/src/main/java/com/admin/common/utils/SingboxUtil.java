@@ -1,6 +1,7 @@
 package com.admin.common.utils;
 
 import com.admin.common.dto.GostDto;
+import com.admin.common.dto.WarpRoutingPolicy;
 import com.admin.entity.Inbound;
 import com.admin.entity.InboundUser;
 import com.alibaba.fastjson.JSON;
@@ -103,6 +104,13 @@ public class SingboxUtil {
     public static JSONObject buildNodeConfig(List<Inbound> inbounds,
                                              Map<Long, List<InboundUser>> usersByInbound,
                                              Map<Long, String> landingOutbounds) {
+        return buildNodeConfig(inbounds, usersByInbound, landingOutbounds, null);
+    }
+
+    public static JSONObject buildNodeConfig(List<Inbound> inbounds,
+                                             Map<Long, List<InboundUser>> usersByInbound,
+                                             Map<Long, String> landingOutbounds, WarpRoutingPolicy warp) {
+        if (warp != null) warp = warp.normalized();
         JSONObject log = new JSONObject();
         log.put("level", "warn");
 
@@ -115,6 +123,13 @@ public class SingboxUtil {
         direct.put("type", "direct");
         direct.put("tag", "direct");
         outbounds.add(direct);
+        if (warp != null && Boolean.TRUE.equals(warp.getEnabled())) {
+            JSONObject outbound = new JSONObject();
+            outbound.put("type", "socks"); outbound.put("tag", "warp-google");
+            outbound.put("server", "127.0.0.1"); outbound.put("server_port", warp.getPort());
+            outbound.put("version", "5"); outbound.put("network", "tcp");
+            outbounds.add(outbound);
+        }
 
         if (inbounds != null) {
             for (Inbound in : inbounds) {
@@ -135,6 +150,15 @@ public class SingboxUtil {
                     gateway.put("listen", "127.0.0.1"); gateway.put("listen_port", in.getEgressPort());
                     inboundArr.add(gateway);
                     routingTag = gatewayTag;
+                    // Drop named UDP before the meter can resolve away its hostname.
+                    // Authentication has already completed; accepted traffic still uses its meter.
+                    if (warp != null && Boolean.TRUE.equals(warp.getEnabled())) {
+                        JSONObject rejectUdp = new JSONObject();
+                        rejectUdp.put("inbound", java.util.Collections.singletonList(in.getTag()));
+                        rejectUdp.put("domain_suffix", warp.getDomains());
+                        rejectUdp.put("network", "udp"); rejectUdp.put("action", "reject");
+                        routeRules.add(rejectUdp);
+                    }
                     if (users != null) for (InboundUser user : users) {
                         if (user.getEgressPort() == null || user.getUuid() == null) continue;
                         String tag = "meter-" + user.getId();
@@ -151,6 +175,20 @@ public class SingboxUtil {
                     JSONObject reject = new JSONObject();
                     reject.put("inbound", java.util.Collections.singletonList(in.getTag()));
                     reject.put("action", "reject"); routeRules.add(reject);
+                }
+
+                // Public users reach this gateway only AFTER their per-user GOST meter.
+                // Legacy public GOST forwarding has already accounted for their traffic.
+                if (warp != null && Boolean.TRUE.equals(warp.getEnabled())) {
+                    for (String network : List.of("udp", "tcp")) {
+                        JSONObject rule = new JSONObject();
+                        rule.put("inbound", java.util.Collections.singletonList(routingTag));
+                        rule.put("domain_suffix", warp.getDomains());
+                        rule.put("network", network);
+                        if ("udp".equals(network)) rule.put("action", "reject");
+                        else { rule.put("action", "route"); rule.put("outbound", "warp-google"); }
+                        routeRules.add(rule);
+                    }
                 }
 
                 // 中转:该入站有落地 → 加落地出站(去重)+ 路由(该入站 tag → 落地出站)
@@ -530,8 +568,15 @@ public class SingboxUtil {
 
     /** Hysteria2 客户端链接 */
     public static String buildHysteria2Link(String password, String serverIp, Integer port, String sni, String remark) {
-        return "hysteria2://" + password + "@" + serverIp + ":" + port
-                + "?sni=" + (sni == null ? "" : sni) + "&insecure=1#" + urlEncode(remark);
+        String host = serverIp.contains(":") && !serverIp.startsWith("[") ? "[" + serverIp + "]" : serverIp;
+        return "hysteria2://" + uriComponent(password) + "@" + host + ":" + port
+                + "?sni=" + uriComponent(sni) + "&insecure=1#" + uriComponent(remark);
+    }
+
+    // URI components use percent escapes, not form encoding (where a space becomes '+').
+    private static String uriComponent(String value) {
+        return java.net.URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8)
+                .replace("+", "%20").replace("*", "%2A").replace("%7E", "~");
     }
 
     /** TUIC 客户端链接 */

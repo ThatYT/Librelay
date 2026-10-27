@@ -58,6 +58,7 @@ public class SchemaMigration implements ApplicationRunner {
         addColumnIfMissing("user", "billing_download_remainder", "ALTER TABLE `user` ADD COLUMN `billing_download_remainder` DECIMAL(5,4) NOT NULL DEFAULT 0");
         addColumnIfMissing("user", "billing_upload_remainder", "ALTER TABLE `user` ADD COLUMN `billing_upload_remainder` DECIMAL(5,4) NOT NULL DEFAULT 0");
         addColumnIfMissing("forward", "quota_paused", "ALTER TABLE `forward` ADD COLUMN `quota_paused` TINYINT(1) NOT NULL DEFAULT 0");
+        addColumnIfMissing("node", "warp_routing", "ALTER TABLE `node` ADD COLUMN `warp_routing` TEXT NULL");
         backfillLegacyServerIp();
         addColumnIfMissing("inbound", "public_listen",
                 "ALTER TABLE `inbound` ADD COLUMN `public_listen` TINYINT(1) NOT NULL DEFAULT 0");

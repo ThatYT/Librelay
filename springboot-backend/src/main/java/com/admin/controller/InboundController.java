@@ -28,6 +28,23 @@ public class InboundController extends BaseController {
     @Autowired
     private InboundService inboundService;
 
+    @Autowired
+    private com.admin.service.WarpRoutingService warpRoutingService;
+
+    @LogAnnotation
+    @RequireRole
+    @PostMapping("/warp/test")
+    public R testWarp(@Validated @RequestBody com.admin.common.dto.NodeWarpDto dto) {
+        return warpRoutingService.test(dto);
+    }
+
+    @LogAnnotation
+    @RequireRole
+    @PostMapping("/warp")
+    public R warp(@Validated @RequestBody com.admin.common.dto.NodeWarpDto dto) {
+        return warpRoutingService.save(dto);
+    }
+
     @LogAnnotation
     @RequireRole
     @PostMapping("/create")

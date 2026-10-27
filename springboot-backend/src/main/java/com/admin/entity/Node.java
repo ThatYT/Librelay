@@ -60,6 +60,9 @@ public class Node extends BaseEntity {
     @com.baomidou.mybatisplus.annotation.TableField(exist = false)
     private String singboxInstallErr;
 
+    /** Persisted Google/custom-domain WARP routing policy; null means disabled. */
+    private String warpRouting;
+
     private String version;
 
     private Integer portSta;
