@@ -84,6 +84,7 @@ function isTokenExpired(response: ApiResponse) {
  */
 const SLOW_PATHS = [
   '/user/protocol-access/save',
+  '/inbound/warp',
   '/inbound/assign-all',
   '/inbound/assign-self',
   '/inbound/assign',

@@ -36,6 +36,7 @@ class DatabaseBootstrapMysqlTest {
                 statement.executeUpdate("ALTER TABLE tunnel ADD COLUMN in_port_sta INT DEFAULT 2222");
                 statement.executeUpdate("ALTER TABLE forward ADD COLUMN proxy_protocol INT DEFAULT 1");
                 statement.executeUpdate("INSERT INTO node (id,name,secret,ip,server_ip,port_sta,port_end,created_time,updated_time,status) VALUES (7,'legacy-node','fixture','192.0.2.7','192.0.2.7',1000,65535,1,1,0)");
+                statement.executeUpdate("ALTER TABLE node DROP COLUMN warp_routing");
                 statement.executeUpdate("ALTER TABLE node DROP COLUMN server_ip");
                 statement.executeUpdate("ALTER TABLE node DROP COLUMN port_sta");
                 statement.executeUpdate("ALTER TABLE user DROP COLUMN unified_limits, DROP COLUMN speed_mbps, DROP COLUMN limit_nodes, DROP COLUMN billing_mode, DROP COLUMN traffic_multiplier, DROP COLUMN billing_download_remainder, DROP COLUMN billing_upload_remainder");
@@ -61,7 +62,9 @@ class DatabaseBootstrapMysqlTest {
                 assertEquals("both", scalar(statement, "SELECT billing_mode FROM user WHERE id=1"));
                 assertEquals("1.0000", scalar(statement, "SELECT traffic_multiplier FROM user WHERE id=1"));
                 statement.executeUpdate("UPDATE user SET billing_mode='download',traffic_multiplier=0.5,billing_download_remainder=0.25 WHERE id=1");
+                statement.executeUpdate("UPDATE node SET warp_routing='{\"enabled\":true,\"port\":31000,\"domains\":[\"google.com\"]}' WHERE id=7");
                 migration.run(null);
+                assertEquals("{\"enabled\":true,\"port\":31000,\"domains\":[\"google.com\"]}", scalar(statement, "SELECT warp_routing FROM node WHERE id=7"));
                 assertEquals("download", scalar(statement, "SELECT billing_mode FROM user WHERE id=1"));
                 assertEquals("0.5000", scalar(statement, "SELECT traffic_multiplier FROM user WHERE id=1"));
                 assertEquals("0.2500", scalar(statement, "SELECT billing_download_remainder FROM user WHERE id=1"));

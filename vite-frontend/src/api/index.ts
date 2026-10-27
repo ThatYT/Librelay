@@ -155,3 +155,6 @@ export interface ProtocolAccessSnapshot {
 export const getUserProtocolAccess = (userId: number | null) => Network.post("/user/protocol-access", { userId });
 export const saveUserProtocolAccess = (userId: number | null, inboundIds: number[], revision: string) =>
   Network.post("/user/protocol-access/save", { userId, inboundIds, revision });
+
+export const saveNodeWarp = (nodeId: number, policy: { enabled: boolean; port: number; domains: string[] }) =>
+  Network.post("/inbound/warp", { nodeId, ...policy });

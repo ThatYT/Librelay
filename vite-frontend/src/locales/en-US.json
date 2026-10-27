@@ -1144,5 +1144,20 @@
   "access.error.pendingSave": "Could not persist pending protocol access",
   "access.error.ackSave": "Could not persist node acknowledgement",
   "access.error.revokeSave": "Could not remove revoked assignment",
-  "access.error.sync": "Node synchronization failed"
+  "access.error.sync": "Node synchronization failed",
+  "warp.title": "WARP routing",
+  "warp.enable": "Enable WARP routing for this VPS",
+  "warp.description": "Matching domains use WARP for all protocols on this VPS. Settings survive later configuration pushes.",
+  "warp.port": "Local WARP SOCKS port",
+  "warp.endpoint": "Proxy address: 127.0.0.1",
+  "warp.domains": "Domain suffixes (one per line)",
+  "warp.requirement": "WARP must already be installed and connected on this VPS. This option does not install WARP or report its health.",
+  "warp.behavior": "Matching TCP traffic uses WARP after user accounting and takes priority over a landing route. Matching UDP is blocked so clients can fall back to TCP. If WARP is unavailable, matching traffic fails without switching to the native exit. IP-only destinations do not match domain rules.",
+  "warp.save": "Save and apply",
+  "warp.saved": "WARP settings saved and applied",
+  "warp.failed": "Could not confirm WARP settings were applied. Reload settings and retry Push configuration.",
+  "warp.invalid": "Enter a port from 1 to 65535 and between 1 and 100 domain suffixes.",
+  "warp.invalidStored": "Stored WARP settings are invalid. Review the replacement settings before saving.",
+  "warp.chooseNode": "Choose a VPS first",
+  "warp.configured": "WARP configured"
 }

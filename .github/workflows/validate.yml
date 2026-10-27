@@ -46,12 +46,15 @@ jobs:
           fixture_dir="$RUNNER_TEMP/librelay-protocol-fixtures"
           mkdir -p "$fixture_dir"
           openssl req -x509 -newkey rsa:2048 -nodes -keyout "$fixture_dir/self.key" -out "$fixture_dir/self.crt" -days 1 -subj /CN=localhost
-          mvn -B -f springboot-backend/pom.xml -Dtest=RealityPortTest \
+          mvn -B -f springboot-backend/pom.xml -Dtest=RealityPortTest,WarpRoutingTest \
             -Dtms.singbox.fixture="$fixture_dir/config.json" \
+            -Dlibrelay.warp.fixtures="$fixture_dir/warp" \
             -Dtms.singbox.cert="$fixture_dir/self.crt" -Dtms.singbox.key="$fixture_dir/self.key" test
           curl -fLsS https://github.com/SagerNet/sing-box/releases/download/v1.13.12/sing-box-1.13.12-linux-amd64.tar.gz -o "$fixture_dir/sing-box.tar.gz"
           tar -xzf "$fixture_dir/sing-box.tar.gz" -C "$fixture_dir"
           (cd go-gost/x && LIBRELAY_SINGBOX_TEST_BIN="$fixture_dir/sing-box-1.13.12-linux-amd64/sing-box" go test ./socket -run TestIdleConfigCompatibleWithSingbox -count=1)
+          (cd go-gost/x && LIBRELAY_SINGBOX_TEST_BIN="$fixture_dir/sing-box-1.13.12-linux-amd64/sing-box" \
+            LIBRELAY_WARP_FIXTURES="$fixture_dir/warp" go test ./socket -run TestWarpRoutingPaths -count=1 -v)
           for config in "$fixture_dir"/config.json*; do
             "$fixture_dir/sing-box-1.13.12-linux-amd64/sing-box" check -c "$config"
           done

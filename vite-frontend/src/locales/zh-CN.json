@@ -1144,5 +1144,20 @@
   "access.error.pendingSave": "无法保存待同步协议权限。",
   "access.error.ackSave": "无法保存节点同步确认。",
   "access.error.revokeSave": "无法删除已撤销的权限记录。",
-  "access.error.sync": "节点同步失败。"
+  "access.error.sync": "节点同步失败。",
+  "warp.title": "WARP 路由",
+  "warp.enable": "为此 VPS 启用 WARP 路由",
+  "warp.description": "此 VPS 的所有协议访问匹配域名时使用 WARP，后续下发配置也会保留设置。",
+  "warp.port": "本机 WARP SOCKS 端口",
+  "warp.endpoint": "代理地址：127.0.0.1",
+  "warp.domains": "域名后缀（每行一个）",
+  "warp.requirement": "此 VPS 必须已安装并连接 WARP。此选项不会安装 WARP，也不代表 WARP 当前连接正常。",
+  "warp.behavior": "匹配的 TCP 流量经过用户计量后使用 WARP，优先于落地路由。匹配的 UDP 被阻止，以便客户端回退到 TCP。WARP 不可用时匹配流量会失败，不会切换到原生出口。仅有 IP 的目标不匹配域名规则。",
+  "warp.save": "保存并应用",
+  "warp.saved": "WARP 设置已保存并应用",
+  "warp.failed": "无法确认 WARP 设置已应用，请重新加载设置并重试下发配置。",
+  "warp.invalid": "请输入 1–65535 的端口和 1–100 个域名后缀。",
+  "warp.invalidStored": "已保存的 WARP 设置无效，请检查替换设置后再保存。",
+  "warp.chooseNode": "请先选择 VPS",
+  "warp.configured": "WARP 已配置"
 }

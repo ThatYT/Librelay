@@ -7,11 +7,14 @@ import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import { Select, SelectItem } from "@heroui/select";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
+import { Switch } from "@heroui/switch";
+import { defaultWarpPolicy, readWarpPolicy, warpFormPolicy } from "@/utils/warp-routing";
 import { Chip } from "@heroui/chip";
 import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
 import toast from "@/utils/toast";
 import { toastResult } from "@/utils/partial-success";
 import {
+  saveNodeWarp,
   getInboundList,
   createInbound,
   updateInboundPort,
@@ -31,6 +34,37 @@ export default function InboundPage() {
   useTranslation();
   const [inbounds, setInbounds] = useState<any[]>([]);
   const [nodes, setNodes] = useState<any[]>([]);
+
+  const [warpOpen, setWarpOpen] = useState(false);
+  const [warpNodeId, setWarpNodeId] = useState<number | null>(null);
+  const [warpEnabled, setWarpEnabled] = useState(false);
+  const [warpPort, setWarpPort] = useState("31000");
+  const [warpDomains, setWarpDomains] = useState("");
+  const [warpSaving, setWarpSaving] = useState(false);
+  const [warpError, setWarpError] = useState("");
+  const selectWarpNode = (node: any) => {
+    setWarpNodeId(node?.id ?? null);
+    setWarpError("");
+    let policy = defaultWarpPolicy();
+    try { policy = readWarpPolicy(node?.warpRouting); }
+    catch { setWarpError(t("warp.invalidStored")); }
+    setWarpEnabled(policy.enabled); setWarpPort(String(policy.port));
+    setWarpDomains(policy.domains.join("\n"));
+  };
+  const openWarp = (node?: any) => { selectWarpNode(node); setWarpOpen(true); };
+  const saveWarp = async () => {
+    if (!warpNodeId) { setWarpError(t("warp.chooseNode")); return; }
+    const policy = warpFormPolicy(warpEnabled, warpPort, warpDomains);
+    if (!policy) { setWarpError(t("warp.invalid")); return; }
+    setWarpSaving(true); setWarpError("");
+    try {
+      const response = await saveNodeWarp(warpNodeId, policy);
+      await loadAll();
+      if (response.code === 0) { toast.success(t("warp.saved")); setWarpOpen(false); }
+      else setWarpError(response.msg || t("warp.failed"));
+    } catch { setWarpError(t("warp.failed")); }
+    finally { setWarpSaving(false); }
+  };
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState<any>({ nodeId: null, protocol: "vless", sni: DEFAULT_SNI, dest: "", remark: "", listenPort: "443" });
@@ -170,7 +204,8 @@ export default function InboundPage() {
     <div className="p-4 space-y-4">
       <div className="flex justify-between items-center">
         <h1 className="text-xl font-bold">{t("mcf676c020118")}</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="flat" onPress={() => openWarp()}>{t("warp.title")}</Button>
           <Button
             color="secondary"
             onPress={() => {
@@ -194,6 +229,8 @@ export default function InboundPage() {
         {machineNodes.map((n) => {
           const nodeInbounds = inbounds.filter((ib) => ib.nodeId === n.id && !ib.landingId);
           const online = n.status === 1;
+          let warpConfigured = false;
+          try { warpConfigured = readWarpPolicy(n.warpRouting).enabled; } catch { /* Reviewed in the WARP dialog. */ }
           const firstIp = n.ip ? String(n.ip).split(",")[0].trim() : (n.serverIp || "");
           return (
             <Card key={n.id}>
@@ -243,7 +280,10 @@ export default function InboundPage() {
                   ))}
                 </div>
                 <div className="text-xs text-default-400"> {t("mb953125f8d66")} </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="flat" color={warpConfigured ? "secondary" : "default"} onPress={() => openWarp(n)}>
+                    {t(warpConfigured ? "warp.configured" : "warp.title")}
+                  </Button>
                   <Button
                     size="sm"
                     variant="flat"
@@ -260,6 +300,33 @@ export default function InboundPage() {
       {machineNodes.length === 0 && (
         <div className="text-center text-default-400 py-8">{t("m32b8eb32a151")}</div>
       )}
+
+      <Modal size="lg" scrollBehavior="inside" isOpen={warpOpen} isDismissable={!warpSaving} onClose={() => { if (!warpSaving) setWarpOpen(false); }}>
+        <ModalContent>
+          <ModalHeader>{t("warp.title")}</ModalHeader>
+          <ModalBody className="space-y-3">
+            <Select label={t("mece969c3f881")} selectedKeys={warpNodeId ? [String(warpNodeId)] : []}
+              isDisabled={warpSaving}
+              onSelectionChange={(keys) => selectWarpNode(nodes.find((node) => node.id === Number(Array.from(keys)[0])))}>
+              {nodes.map((node) => <SelectItem key={node.id}>{node.name}</SelectItem>)}
+            </Select>
+            <Switch isSelected={warpEnabled} onValueChange={setWarpEnabled} isDisabled={warpSaving}>{t("warp.enable")}</Switch>
+            <p className="text-sm text-default-500">{t("warp.description")}</p>
+            <Input label={t("warp.port")} description={t("warp.endpoint")} type="number" min={1} max={65535}
+              value={warpPort} onValueChange={setWarpPort} isDisabled={warpSaving} />
+            <label className="text-sm" htmlFor="warp-domains">{t("warp.domains")}</label>
+            <textarea id="warp-domains" className="w-full rounded-lg bg-default-100 p-3 text-sm min-h-32"
+              value={warpDomains} onChange={(event) => setWarpDomains(event.target.value)} disabled={warpSaving} />
+            <p className="text-xs text-default-500">{t("warp.requirement")}</p>
+            <p className="text-xs text-default-500">{t("warp.behavior")}</p>
+            {warpError && <p role="alert" className="text-sm text-danger">{warpError}</p>}
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="light" isDisabled={warpSaving} onPress={() => setWarpOpen(false)}>{t("m2cd0f3be8738")}</Button>
+            <Button color="primary" isLoading={warpSaving} onPress={saveWarp}>{t("warp.save")}</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
 
       {/* 「我自己用」结果:直接把订阅链接给出来,不用再去用户管理找 */}
       <Modal isOpen={oneClickOpen} onClose={() => setOneClickOpen(false)}>
