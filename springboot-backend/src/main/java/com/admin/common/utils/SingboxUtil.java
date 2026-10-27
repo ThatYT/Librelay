@@ -530,8 +530,15 @@ public class SingboxUtil {
 
     /** Hysteria2 客户端链接 */
     public static String buildHysteria2Link(String password, String serverIp, Integer port, String sni, String remark) {
-        return "hysteria2://" + password + "@" + serverIp + ":" + port
-                + "?sni=" + (sni == null ? "" : sni) + "&insecure=1#" + urlEncode(remark);
+        String host = serverIp.contains(":") && !serverIp.startsWith("[") ? "[" + serverIp + "]" : serverIp;
+        return "hysteria2://" + uriComponent(password) + "@" + host + ":" + port
+                + "?sni=" + uriComponent(sni) + "&insecure=1#" + uriComponent(remark);
+    }
+
+    // URI components use percent escapes, not form encoding (where a space becomes '+').
+    private static String uriComponent(String value) {
+        return java.net.URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8)
+                .replace("+", "%20").replace("*", "%2A").replace("%7E", "~");
     }
 
     /** TUIC 客户端链接 */
