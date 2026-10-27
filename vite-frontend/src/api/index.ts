@@ -158,3 +158,5 @@ export const saveUserProtocolAccess = (userId: number | null, inboundIds: number
 
 export const saveNodeWarp = (nodeId: number, policy: { enabled: boolean; port: number; domains: string[] }) =>
   Network.post("/inbound/warp", { nodeId, ...policy });
+
+export const testNodeWarp = (nodeId: number, port: number) => Network.post("/inbound/warp/test", { nodeId, port });

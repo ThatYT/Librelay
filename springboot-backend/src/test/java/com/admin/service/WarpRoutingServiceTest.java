@@ -47,7 +47,24 @@ class WarpRoutingServiceTest {
         request.setPort(31000); assertNotEquals(0,service.save(request).getCode());
         verify(nodes,never()).update(any(),any()); verifyNoInteractions(inbounds);
     }
+    @Test void warpTestIsReadOnlyAndDistinguishesAgentFailureFromProxyFailure() {
+        WarpRoutingService service = new WarpRoutingService(); NodeMapper nodes = mock(NodeMapper.class);
+        InboundService inbounds = mock(InboundService.class);
+        com.admin.common.utils.NodeCommandClient commands = mock(com.admin.common.utils.NodeCommandClient.class);
+        ReflectionTestUtils.setField(service,"nodes",nodes); ReflectionTestUtils.setField(service,"inbounds",inbounds);
+        ReflectionTestUtils.setField(service,"commands",commands);
+        Node node = new Node(); node.setId(7L); when(nodes.selectById(7L)).thenReturn(node);
+        NodeWarpDto request = new NodeWarpDto(); request.setNodeId(7L);
+        com.admin.common.dto.GostDto response = new com.admin.common.dto.GostDto(); response.setMsg("OK");
+        response.setData(java.util.Map.of("ok",false,"reason","unreachable"));
+        when(commands.send(eq(7L),any(),eq("TestWarp"))).thenReturn(response);
+        R result = service.test(request); assertEquals(0,result.getCode()); assertEquals(response.getData(),result.getData());
+        verifyNoInteractions(inbounds); verify(nodes,never()).update(any(),any());
+        response.setMsg("Unknown command"); assertNotEquals(0,service.test(request).getCode());
+    }
     @Test void endpointRequiresAdministratorAndValidNodeId() throws Exception {
+        assertNotNull(InboundController.class.getMethod("testWarp",NodeWarpDto.class)
+                .getAnnotation(com.admin.common.annotation.RequireRole.class));
         assertNotNull(InboundController.class.getMethod("warp",NodeWarpDto.class)
                 .getAnnotation(com.admin.common.annotation.RequireRole.class));
         try (var factory = javax.validation.Validation.buildDefaultValidatorFactory()) {

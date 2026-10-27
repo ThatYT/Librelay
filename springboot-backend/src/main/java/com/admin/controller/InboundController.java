@@ -33,6 +33,13 @@ public class InboundController extends BaseController {
 
     @LogAnnotation
     @RequireRole
+    @PostMapping("/warp/test")
+    public R testWarp(@Validated @RequestBody com.admin.common.dto.NodeWarpDto dto) {
+        return warpRoutingService.test(dto);
+    }
+
+    @LogAnnotation
+    @RequireRole
     @PostMapping("/warp")
     public R warp(@Validated @RequestBody com.admin.common.dto.NodeWarpDto dto) {
         return warpRoutingService.save(dto);

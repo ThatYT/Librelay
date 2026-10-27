@@ -8,13 +8,14 @@ import { Input } from "@heroui/input";
 import { Select, SelectItem } from "@heroui/select";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
 import { Switch } from "@heroui/switch";
-import { defaultWarpPolicy, readWarpPolicy, warpFormPolicy } from "@/utils/warp-routing";
+import { defaultWarpPolicy, readWarpPolicy, warpFormPolicy, warpSetupCommands } from "@/utils/warp-routing";
 import { Chip } from "@heroui/chip";
 import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
 import toast from "@/utils/toast";
 import { toastResult } from "@/utils/partial-success";
 import {
   saveNodeWarp,
+  testNodeWarp,
   getInboundList,
   createInbound,
   updateInboundPort,
@@ -42,7 +43,30 @@ export default function InboundPage() {
   const [warpDomains, setWarpDomains] = useState("");
   const [warpSaving, setWarpSaving] = useState(false);
   const [warpError, setWarpError] = useState("");
+  const [warpTesting, setWarpTesting] = useState(false);
+  const [warpTest, setWarpTest] = useState<any>(null);
+  const warpBusy = warpSaving || warpTesting;
+  const warpCommands = /^\d+$/.test(warpPort) && Number(warpPort) >= 1 && Number(warpPort) <= 65535
+    ? warpSetupCommands(Number(warpPort)) : null;
+  useEffect(() => { setWarpTest(null); }, [warpNodeId, warpPort]);
+  const testWarp = async () => {
+    if (!warpNodeId) { setWarpError(t("warp.chooseNode")); return; }
+    if (!/^\d+$/.test(warpPort) || Number(warpPort) < 1 || Number(warpPort) > 65535) {
+      setWarpError(t("warp.invalid")); return;
+    }
+    setWarpTesting(true); setWarpTest(null); setWarpError("");
+    try {
+      const response = await testNodeWarp(warpNodeId, Number(warpPort));
+      setWarpTest(response.code === 0 && response.data ? response.data : { ok: false, reason: "agent_unavailable" });
+    } catch { setWarpTest({ ok: false, reason: "agent_unavailable" }); }
+    finally { setWarpTesting(false); }
+  };
+  const copyWarpCommands = async () => {
+    try { await navigator.clipboard.writeText(warpSetupCommands(Number(warpPort))); toast.success(t("warp.commandsCopied")); }
+    catch { toast.error(t("warp.copyFailed")); }
+  };
   const selectWarpNode = (node: any) => {
+    setWarpTest(null);
     setWarpNodeId(node?.id ?? null);
     setWarpError("");
     let policy = defaultWarpPolicy();
@@ -301,29 +325,40 @@ export default function InboundPage() {
         <div className="text-center text-default-400 py-8">{t("m32b8eb32a151")}</div>
       )}
 
-      <Modal size="lg" scrollBehavior="inside" isOpen={warpOpen} isDismissable={!warpSaving} onClose={() => { if (!warpSaving) setWarpOpen(false); }}>
+      <Modal size="lg" scrollBehavior="inside" isOpen={warpOpen} isDismissable={!warpBusy} onClose={() => { if (!warpBusy) setWarpOpen(false); }}>
         <ModalContent>
           <ModalHeader>{t("warp.title")}</ModalHeader>
           <ModalBody className="space-y-3">
             <Select label={t("mece969c3f881")} selectedKeys={warpNodeId ? [String(warpNodeId)] : []}
-              isDisabled={warpSaving}
+              isDisabled={warpBusy}
               onSelectionChange={(keys) => selectWarpNode(nodes.find((node) => node.id === Number(Array.from(keys)[0])))}>
               {nodes.map((node) => <SelectItem key={node.id}>{node.name}</SelectItem>)}
             </Select>
-            <Switch isSelected={warpEnabled} onValueChange={setWarpEnabled} isDisabled={warpSaving}>{t("warp.enable")}</Switch>
+            <Switch isSelected={warpEnabled} onValueChange={setWarpEnabled} isDisabled={warpBusy}>{t("warp.enable")}</Switch>
             <p className="text-sm text-default-500">{t("warp.description")}</p>
             <Input label={t("warp.port")} description={t("warp.endpoint")} type="number" min={1} max={65535}
-              value={warpPort} onValueChange={setWarpPort} isDisabled={warpSaving} />
+              value={warpPort} onValueChange={setWarpPort} isDisabled={warpBusy} />
+            <Button variant="flat" isLoading={warpTesting} isDisabled={warpSaving || !warpNodeId} onPress={testWarp}>{t("warp.test")}</Button>
             <label className="text-sm" htmlFor="warp-domains">{t("warp.domains")}</label>
             <textarea id="warp-domains" className="w-full rounded-lg bg-default-100 p-3 text-sm min-h-32"
-              value={warpDomains} onChange={(event) => setWarpDomains(event.target.value)} disabled={warpSaving} />
+              value={warpDomains} onChange={(event) => setWarpDomains(event.target.value)} disabled={warpBusy} />
+            {warpTest?.ok === true && <p role="status" className="text-sm text-success">{t("warp.testHealthy", { ip: warpTest.exitIp, country: warpTest.country, colo: warpTest.colo })}</p>}
+            {warpTest && warpTest.ok !== true && <div className="space-y-2 rounded-lg bg-warning/10 p-3">
+              <p role="alert" className="text-sm">{t(warpTest.reason === "agent_unavailable" ? "warp.testAgent" : "warp.testFailed")}</p>
+              <p className="text-xs text-default-500">{t("warp.installHelp")}</p>
+              <a className="text-sm underline" href="https://pkg.cloudflareclient.com/" target="_blank" rel="noreferrer">{t("warp.officialInstructions")}</a>
+              <p className="text-xs text-default-500">{t("warp.terms")} <a className="underline" href="https://developers.cloudflare.com/warp-client/legal/" target="_blank" rel="noreferrer">{t("warp.legal")}</a></p>
+              <pre className="max-h-64 overflow-auto whitespace-pre rounded bg-default-100 p-3 text-xs">{warpCommands}</pre>
+              <Button size="sm" variant="flat" isDisabled={!warpCommands} onPress={copyWarpCommands}>{t("warp.copyCommands")}</Button>
+              <p className="text-xs text-default-500">{t("warp.retest")}</p>
+            </div>}
             <p className="text-xs text-default-500">{t("warp.requirement")}</p>
             <p className="text-xs text-default-500">{t("warp.behavior")}</p>
             {warpError && <p role="alert" className="text-sm text-danger">{warpError}</p>}
           </ModalBody>
           <ModalFooter>
-            <Button variant="light" isDisabled={warpSaving} onPress={() => setWarpOpen(false)}>{t("m2cd0f3be8738")}</Button>
-            <Button color="primary" isLoading={warpSaving} onPress={saveWarp}>{t("warp.save")}</Button>
+            <Button variant="light" isDisabled={warpBusy} onPress={() => setWarpOpen(false)}>{t("m2cd0f3be8738")}</Button>
+            <Button color="primary" isLoading={warpSaving} isDisabled={warpTesting} onPress={saveWarp}>{t("warp.save")}</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

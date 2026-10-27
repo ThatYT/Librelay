@@ -18,8 +18,16 @@ Defaults match the earlier VMISS deployment:
   match this policy. No global DNS, interface or default-route changes are made.
 
 WARP must already be installed and connected in local proxy mode on the VPS.
-This option manages sing-box routing; it does not install/register WARP, change
-its service or report its connection health. **WARP configured** describes the
+This option manages sing-box routing; it never installs/registers WARP or changes
+its service automatically. **Test WARP** performs a read-only HTTPS Cloudflare
+trace request through the selected VPS's loopback SOCKS port, requiring
+`warp=on` or `warp=plus` and a valid exit IP. It does not change routing settings.
+Failed checks show copyable commands for manual installation/configuration using
+the official signed Cloudflare APT repository on supported Debian/Ubuntu versions.
+The commands use proxy mode, the selected port and retain an existing registration;
+review Cloudflare's terms before running the displayed `--accept-tos` commands.
+An unavailable/older node agent is reported separately from an unhealthy proxy.
+A successful check verifies the proxy, not any application's route through it. **WARP configured** describes the
 saved policy, not a live WARP connection check.
 
 ## Persistence and routing order
@@ -100,8 +108,8 @@ mvn -B -f springboot-backend/pom.xml \
   go test ./socket -run TestWarpRoutingPaths -count=1 -v)
 ```
 
-Deploy the updated **backend and frontend** together. An agent update is not
-required. On VMISS, enable the policy with port `31000`, then verify an actual
+Deploy the updated **backend and frontend** together. An agent update is required for the new **Test WARP** command; routing itself
+continues to work with the existing configuration command. On VMISS, enable the policy with port `31000`, then verify an actual
 client request and repeat after a normal panel config push. Existing subscriptions
 and credentials do not need refreshing. Config application restarts sing-box and
 may interrupt active connections.

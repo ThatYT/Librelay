@@ -14,6 +14,20 @@ import javax.annotation.Resource;
 public class WarpRoutingService {
     @Resource private NodeMapper nodes;
     @Resource private InboundService inbounds;
+    @Resource private com.admin.common.utils.NodeCommandClient commands;
+
+    public R test(NodeWarpDto request) {
+        if (request.getPort() == null || request.getPort() < 1 || request.getPort() > 65535)
+            return R.err("WARP proxy port must be between 1 and 65535");
+        if (nodes.selectById(request.getNodeId()) == null) return R.err("Node does not exist");
+        com.alibaba.fastjson.JSONObject payload = new com.alibaba.fastjson.JSONObject();
+        payload.put("port", request.getPort());
+        com.admin.common.dto.GostDto response = commands.send(request.getNodeId(), payload, "TestWarp");
+        if (response == null || !"OK".equals(response.getMsg()) || response.getData() == null)
+            return R.err("Could not test WARP. Ensure the node is online and its agent supports Test WARP.");
+        return R.ok(response.getData());
+    }
+
 
     public R save(NodeWarpDto request) {
         final WarpRoutingPolicy policy;

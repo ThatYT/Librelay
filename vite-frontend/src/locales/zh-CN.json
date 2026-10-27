@@ -1151,7 +1151,7 @@
   "warp.port": "本机 WARP SOCKS 端口",
   "warp.endpoint": "代理地址：127.0.0.1",
   "warp.domains": "域名后缀（每行一个）",
-  "warp.requirement": "此 VPS 必须已安装并连接 WARP。此选项不会安装 WARP，也不代表 WARP 当前连接正常。",
+  "warp.requirement": "此 VPS 必须已安装并连接 WARP。可点击测试 WARP 检查本地代理，测试成功不代表具体应用的路由已验证。",
   "warp.behavior": "匹配的 TCP 流量经过用户计量后使用 WARP，优先于落地路由。匹配的 UDP 被阻止，以便客户端回退到 TCP。WARP 不可用时匹配流量会失败，不会切换到原生出口。仅有 IP 的目标不匹配域名规则。",
   "warp.save": "保存并应用",
   "warp.saved": "WARP 设置已保存并应用",
@@ -1159,5 +1159,17 @@
   "warp.invalid": "请输入 1–65535 的端口和 1–100 个域名后缀。",
   "warp.invalidStored": "已保存的 WARP 设置无效，请检查替换设置后再保存。",
   "warp.chooseNode": "请先选择 VPS",
-  "warp.configured": "WARP 已配置"
+  "warp.configured": "WARP 已配置",
+  "warp.test": "测试 WARP",
+  "warp.testHealthy": "已通过 VPS 代理验证 WARP。出口：{{ip}} · {{country}} · {{colo}}",
+  "warp.testAgent": "无法执行测试，请确认 VPS 在线，并更新至支持测试 WARP 的 Librelay 节点端。此结果不代表 WARP 未安装。",
+  "warp.testFailed": "无法通过此本地代理验证 WARP，可能未安装、未连接、端口不同，或无法访问 Cloudflare。",
+  "warp.installHelp": "请在所选 VPS 上以 root 身份手动执行以下命令，安装或配置 WARP 本地代理模式。支持 Debian 12/13、Ubuntu 22.04/24.04/26.04。请先检查监听端口是否被占用。",
+  "warp.officialInstructions": "Cloudflare 官方安装说明",
+  "warp.terms": "命令中的 --accept-tos 表示接受 Cloudflare 条款，请先阅读官方条款。面板不会执行这些命令。",
+  "warp.copyCommands": "复制设置命令",
+  "warp.commandsCopied": "设置命令已复制",
+  "warp.copyFailed": "自动复制失败，请手动选择并复制命令。",
+  "warp.retest": "看到 warp=on 或 warp=plus 后，请再次点击测试 WARP。测试不会启用路由或保存设置。",
+  "warp.legal": "Cloudflare 法律信息"
 }
